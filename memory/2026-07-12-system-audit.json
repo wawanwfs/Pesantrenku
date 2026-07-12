@@ -89,7 +89,8 @@
     "php_format": "vendor/bin/pint --test passed",
     "composer": "composer validate --strict and composer audit --locked passed",
     "npm": "npm audit --audit-level=high passed with 0 vulnerabilities",
-    "docker_compose": "docker compose -f docker-compose.yml config --quiet passed"
+    "docker_compose": "docker compose -f docker-compose.yml config --quiet passed",
+    "github_actions": "Pesantrenku CI completed successfully for implementation commit db236f7 (run 29201337614) and audit handoff commit a0eb458 (run 29201390932)."
   },
   "known_limits": [
     "Docker image build was not executed because the local Docker API pipe returned permission denied; Compose configuration was validated.",
