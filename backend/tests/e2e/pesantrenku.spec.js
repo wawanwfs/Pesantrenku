@@ -155,8 +155,12 @@ test('workflow endpoints and queued export are operational', async ({ page }, te
   if (await reject.isVisible({ timeout: 2000 }).catch(() => false)) {
     await reject.click();
     await page.locator('textarea').fill('Catatan E2E wajib.');
-    await page.getByRole('button', { name: 'Simpan Status' }).click();
-    await expect(page.getByRole('status').filter({ hasText: /Status berhasil|ditolak/i })).toBeVisible();
+    const [transitionResponse] = await Promise.all([
+      page.waitForResponse((response) => response.url().includes('/web-actions/workflow/') && response.request().method() === 'POST'),
+      page.getByRole('button', { name: 'Simpan Status' }).click(),
+    ]);
+    expect(transitionResponse.ok()).toBeTruthy();
+    await expect(page.getByRole('status').filter({ hasText: /Status berhasil|ditolak/i })).toBeVisible({ timeout: 20_000 });
   }
 
   await login(page, 'keuangan', 'keuangan@pesantenku.test');

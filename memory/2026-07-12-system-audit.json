@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-12T10:46:10Z",
+  "generated_at": "2026-07-12T11:06:50Z",
   "project": "Pesantenku",
   "branch": "main",
   "remote": "https://github.com/wawanwfs/Pesantrenku.git",
@@ -49,8 +49,8 @@
     ]
   },
   "validation": {
-    "phpunit": "37 passed, 1 skipped, 366 assertions",
-    "playwright": "30 passed across desktop Chromium and Pixel 7 viewport with no retries or flaky checks",
+    "phpunit": "42 passed, 1 skipped, 3343 assertions after integrating the latest main optimizations",
+    "playwright": "30 passed across desktop Chromium and Pixel 7 viewport; the focused workflow suite passes with --retries=0",
     "frontend_build": "Vite production build passed with 2810 modules",
     "php_format": "vendor/bin/pint --test passed",
     "composer": "composer validate --strict and composer audit --locked passed",
