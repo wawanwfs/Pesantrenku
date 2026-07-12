@@ -3,12 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Events\NotificationChanged;
-use App\Services\OperationStorage;
 use App\Services\BackupCipher;
 use App\Services\BackupRestoreService;
+use App\Services\OperationStorage;
 use App\Services\RestoreApprovalService;
-use App\Services\TotpService;
 use App\Services\TenantContext;
+use App\Services\TotpService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
@@ -201,7 +201,7 @@ class ActionController extends Controller
                 'note' => $note,
                 'actor_role' => $user->role_names,
             ]);
-        $this->notifyWorkflowParticipants($resource, $transition, $after, $note);
+            $this->notifyWorkflowParticipants($resource, $transition, $after, $note);
         });
 
         return response()->json([
@@ -245,7 +245,7 @@ class ActionController extends Controller
             ->latest('id')
             ->limit(50)
             ->get()
-            ->map(fn ($job) => $this->formatJob($job));
+            ->map(fn ($job) => $this->formatJob($request, $job));
 
         return response()->json([
             'data' => $jobs,
@@ -267,7 +267,7 @@ class ActionController extends Controller
 
         abort_unless($job, 404);
 
-        return response()->json($this->formatJob($job));
+        return response()->json($this->formatJob($request, $job));
     }
 
     public function downloadJob(Request $request, string $uuid)
@@ -305,6 +305,7 @@ class ActionController extends Controller
         $operations = $this->jobQueryForUser($request)->get();
         $failed = ($user->hasRole('super_admin') ? DB::table('failed_jobs')->latest('id')->limit(25)->get() : collect())->map(function ($row) {
             $payload = json_decode((string) $row->payload, true) ?: [];
+
             return [
                 'id' => $row->id,
                 'uuid' => $row->uuid,
@@ -374,9 +375,11 @@ class ActionController extends Controller
         ];
     }
 
-    private function formatJob(object $job): array
+    private function formatJob(Request $request, object $job): array
     {
         $path = $job->output_path ?: $job->file_path;
+        $downloadPrefix = $request->is('api/*') ? '/api/v1' : '/web-actions';
+
         return [
             'uuid' => $job->uuid,
             'type' => $job->type,
@@ -389,7 +392,7 @@ class ActionController extends Controller
             'file_path' => $job->file_path,
             'file_name' => $path ? basename($path) : null,
             'file_size' => $path && $this->operationStorage->exists($path) ? $this->operationStorage->size($path) : null,
-            'download_url' => $job->status === 'completed' && $path ? "/web-actions/jobs/{$job->uuid}/download" : null,
+            'download_url' => $job->status === 'completed' && $path ? "{$downloadPrefix}/jobs/{$job->uuid}/download" : null,
             'signed_url' => $job->status === 'completed' && $path
                 ? $this->operationStorage->temporaryUrl($path, (int) config('pesantrenku.operations.signed_url_minutes', 10))
                 : null,
@@ -593,7 +596,7 @@ class ActionController extends Controller
                 $query->where('pesantren_id', $tenantId);
             }
 
-            $data[$table] = $query->limit(1000)->get();
+            $data[$table] = $query->orderBy('id')->get();
         }
 
         return [

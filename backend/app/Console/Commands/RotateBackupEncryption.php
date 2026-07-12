@@ -24,11 +24,13 @@ class RotateBackupEncryption extends Command
         foreach ($backups as $backup) {
             if (! $storage->exists($backup->file_path)) {
                 $this->warn("Backup {$backup->id} dilewati karena file tidak ditemukan.");
+
                 continue;
             }
             $encrypted = $cipher->encrypt($cipher->decrypt($storage->get($backup->file_path)));
             if (! $storage->put($backup->file_path, $encrypted['contents'])) {
                 $this->error("Backup {$backup->id} gagal ditulis ulang.");
+
                 continue;
             }
             DB::table('backups')->where('id', $backup->id)->update([

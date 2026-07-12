@@ -1,11 +1,10 @@
 <?php
 
+use App\Services\OperationStorage;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schedule;
-use Illuminate\Support\Facades\Storage;
-use App\Services\OperationStorage;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());

@@ -1,4 +1,5 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import { QRCodeSVG } from 'qrcode.react';
 import { Link, router, icons } from '../lib/deps.jsx';
 
 const DashboardLineVisualization = lazy(() => import('../components/DashboardCharts.jsx').then((module) => ({ default: module.DashboardLineVisualization })));
@@ -158,8 +159,16 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
           <nav className="mt-7 flex-1 space-y-1 overflow-y-auto">
             {config.menu.map(([label, icon, href]) => <SideItem key={label} label={label} icon={icon} href={label === 'Dashboard' ? `/dashboard/${panel}` : href} active={(screen === 'dashboard' && label === 'Dashboard') || href?.endsWith(`/module/${module}`) || module === slug(label)} light={config.light} collapsed={collapsed} />)}
           </nav>
-          {!collapsed && !config.light && <div className="rounded-2xl bg-white/10 p-4 text-sm"><div className="font-semibold">Server Status</div><div className="mt-3 flex justify-between text-xs"><span>Online</span><span className="text-green-300">100%</span></div><div className="mt-3 h-2 rounded-full bg-white/15"><div className="h-2 w-full rounded-full bg-primary-500" /></div></div>}
-          <button onClick={() => setCollapsed(!collapsed)} className={`mt-3 rounded-xl px-3 py-2 text-xs ${config.light ? 'bg-neutral-100' : 'bg-white/10'}`}>{collapsed ? '>>' : '<<'}</button>
+          <button
+            type="button"
+            onClick={() => setCollapsed(!collapsed)}
+            aria-label={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
+            aria-expanded={!collapsed}
+            title={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
+            className={`mt-3 rounded-xl px-3 py-2 text-xs ${config.light ? 'bg-neutral-100' : 'bg-white/10'}`}
+          >
+            {collapsed ? '>>' : '<<'}
+          </button>
         </div>
       </aside>
       {mobileNavOpen && (
@@ -366,7 +375,9 @@ function RoleModule({ panel, module, dashboard, shared }) {
 }
 
 function QrTool({ rows, shared }) {
-  const [code, setCode] = useState(rowsOf(rows)[0]?.kode || '');
+  const initialQr = rowsOf(rows)[0] || {};
+  const [code, setCode] = useState(initialQr.code || initialQr.kode || '');
+  const [expiresAt, setExpiresAt] = useState(initialQr.expires_at || '');
   const [scanCode, setScanCode] = useState('');
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
@@ -381,6 +392,7 @@ function QrTool({ rows, shared }) {
     try {
       const json = await apiJson('/web-actions/qr/generate', { method: 'GET' });
       setCode(json.code);
+      setExpiresAt(json.expires_at || '');
       setScanCode(json.code);
       setMessage('QR berhasil dibuat dan dicatat di audit log.');
       router.reload({ only: ['shared'], preserveScroll: true });
@@ -414,12 +426,11 @@ function QrTool({ rows, shared }) {
     <section className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
       <PanelCard title="QR Aktif">
         {(message || error) && <div className="mb-4"><Alert tone={error ? 'error' : 'success'}>{error || message}</Alert></div>}
-        <div className="grid aspect-square max-w-xs place-items-center rounded-2xl border border-neutral-200 bg-neutral-50 p-6">
-          <div className="grid h-full w-full grid-cols-5 grid-rows-5 gap-2">
-            {Array.from({ length: 25 }).map((_, index) => <span key={index} className={`rounded ${((code.charCodeAt(index % Math.max(code.length, 1)) || index) + index) % 3 ? 'bg-neutral-900' : 'bg-white'}`} />)}
-          </div>
+        <div className="grid aspect-square max-w-xs place-items-center rounded-2xl border border-neutral-200 bg-white p-6">
+          {code ? <QRCodeSVG value={code} size={240} level="M" marginSize={2} title="QR identitas Pesantenku" /> : <div className="text-center text-sm text-neutral-500">Generate kode untuk menampilkan QR yang dapat dipindai.</div>}
         </div>
         <div className="mt-4 break-all rounded-xl bg-neutral-50 p-3 font-mono text-xs">{code || 'Belum ada kode QR.'}</div>
+        {expiresAt && <div className="mt-2 text-xs text-neutral-500">Berlaku sampai {formatCell(expiresAt, 'expires_at', shared)}</div>}
         <button type="button" onClick={generate} disabled={loading} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
           {loading ? <icons.Loader2 className="h-4 w-4 animate-spin" /> : <QrIcon className="h-4 w-4" />}
           Generate QR
@@ -851,8 +862,8 @@ function CrudModule({ meta, shared }) {
       {(message || error) && <Alert tone={error ? 'error' : 'success'}>{error || message}</Alert>}
       <PanelCard>
         <div className="mb-5 flex flex-col gap-3 2xl:flex-row 2xl:items-start 2xl:justify-between">
-          <div className="grid flex-1 gap-3 md:grid-cols-[minmax(220px,1fr)_150px_150px_150px_150px]">
-            <div className="relative max-w-lg flex-1"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary-600" placeholder={`Cari ${meta.title.toLowerCase()}...`} /></div>
+          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="relative w-full"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary-600" placeholder={`Cari ${meta.title.toLowerCase()}...`} /></div>
             <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm"><option>Semua Status</option>{statusOptions.map((item) => <option key={item}>{item}</option>)}</select>
             {meta.enableFilters !== false && <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm" title="Tanggal mulai" />}
             {meta.enableFilters !== false && <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm" title="Tanggal akhir" />}
@@ -863,7 +874,7 @@ function CrudModule({ meta, shared }) {
               </select>
             )}
             {meta.enableFilters !== false && (
-              <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm md:col-start-2">
+              <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm">
                 <option value="">Semua Santri</option>
                 {rowsOf(shared.students).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
@@ -915,13 +926,25 @@ function CrudModule({ meta, shared }) {
 
 function SystemModule({ meta, shared }) {
   const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
   const [message, setMessage] = useState('');
   const [detail, setDetail] = useState(null);
+  const [health, setHealth] = useState(null);
   const rows = useMemo(() => {
     const term = search.toLowerCase();
-    if (!term) return rowsOf(meta.rows);
-    return rowsOf(meta.rows).filter((row) => Object.values(row).some((value) => String(value ?? '').toLowerCase().includes(term)));
-  }, [meta.rows, search]);
+    return rowsOf(meta.rows).filter((row) => {
+      const matchesSearch = !term || Object.values(row).some((value) => String(value ?? '').toLowerCase().includes(term));
+      const rowStatus = String(row.status || row.level || '').toLowerCase();
+      return matchesSearch && (!status || rowStatus.includes(status));
+    });
+  }, [meta.rows, search, status]);
+
+  useEffect(() => {
+    fetch('/health', { headers: { Accept: 'application/json' }, credentials: 'same-origin' })
+      .then((response) => response.ok ? response.json() : Promise.reject(new Error('Health endpoint gagal')))
+      .then(setHealth)
+      .catch(() => setHealth({ status: 'error', database: 'error', storage: 'error', queue_table: 'missing' }));
+  }, []);
 
   const exportRows = () => {
     exportRowsToCsv(rows, meta.title);
@@ -939,11 +962,11 @@ function SystemModule({ meta, shared }) {
         <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div className="flex flex-1 gap-3">
             <div className="relative max-w-xl flex-1"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary-600" placeholder={meta.searchPlaceholder} /></div>
-            <select className="rounded-xl border border-neutral-200 px-3 text-sm"><option>Semua Status</option><option>Berhasil</option><option>Peringatan</option><option>Diblokir</option><option>Error</option></select>
+            <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm"><option value="">Semua Status</option><option value="berhasil">Berhasil</option><option value="peringatan">Peringatan</option><option value="diblokir">Diblokir</option><option value="error">Error</option></select>
           </div>
           <div className="flex gap-2">
             <button onClick={exportRows} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.Download className="h-4 w-4" /> Export CSV</button>
-            <button onClick={() => setMessage('Data berhasil direfresh.')} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.RefreshCcw className="h-4 w-4" /> Refresh</button>
+            <button onClick={() => router.reload({ only: ['shared', 'dashboard'], preserveScroll: true })} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.RefreshCcw className="h-4 w-4" /> Refresh</button>
           </div>
         </div>
         <Table rows={rows} columns={meta.columns} shared={shared} onView={meta.audit ? setDetail : null} />
@@ -957,12 +980,12 @@ function SystemModule({ meta, shared }) {
           <Table rows={shared.errorLogs} columns={['waktu', 'level', 'modul', 'pesan', 'status']} shared={shared} compact />
         </PanelCard>
         <PanelCard title="Kesehatan Sistem">
-          <ProgressList items={[
-            { name: 'Web Server', value: 100 },
-            { name: 'Database', value: 98 },
-            { name: 'Queue Worker', value: 96 },
-            { name: 'Storage', value: 82 },
-          ]} />
+          {health ? <ProgressList items={[
+            { name: 'Web Server', value: health.status === 'ok' ? 100 : 0 },
+            { name: 'Database', value: health.database === 'ok' ? 100 : 0 },
+            { name: 'Queue Table', value: health.queue_table === 'ok' ? 100 : 0 },
+            { name: 'Storage', value: health.storage === 'ok' ? 100 : 0 },
+          ]} /> : <div className="text-sm text-neutral-500">Memeriksa kesehatan layanan...</div>}
         </PanelCard>
       </section>
     </div>
@@ -977,7 +1000,7 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationState, setNotificationState] = useState({ data: rowsOf(shared?.notifications), unread: rowsOf(shared?.notifications).length });
   const [accountOpen, setAccountOpen] = useState(false);
-  const [academicYear, setAcademicYear] = useState('2024/2025');
+  const academicYear = app?.academic_year || 'Tahun ajaran belum diatur';
   const topbarRef = useRef(null);
   const menuItems = useMemo(() => (panels[panel]?.menu || []).map(([label, icon, href]) => ({ label, icon, href: label === 'Dashboard' ? `/dashboard/${panel}` : href })), [panel]);
   const searchResults = useMemo(() => {
@@ -1089,12 +1112,9 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
       method: 'POST',
       body: JSON.stringify({ ids: notifications.map((item) => item.id).filter(Boolean) }),
     });
-    setNotificationState((current) => ({
-      data: rowsOf(current.data).map((item) => ({ ...item, read_at: item.read_at || new Date().toISOString() })),
-      unread: 0,
-    }));
+    const fresh = await apiJson('/web-actions/notifications', { method: 'GET' });
+    setNotificationState({ data: rowsOf(fresh.data), unread: fresh.unread ?? 0 });
     setNotificationsOpen(false);
-    router.reload({ only: ['shared'], preserveScroll: true });
   };
 
   return (
@@ -1137,9 +1157,7 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
             {memberships.map((item) => <option key={`${item.id}-${item.role || item.role_label}`} value={item.id}>{item.name || item.pesantren} {item.role_label ? `- ${item.role_label}` : ''}</option>)}
           </select>
         )}
-        <select value={academicYear} onChange={(event) => setAcademicYear(event.target.value)} className="hidden rounded-xl border border-neutral-200 px-3 py-2 text-sm md:block">
-          {['2024/2025', '2025/2026', '2026/2027'].map((year) => <option key={year} value={year}>Tahun Ajaran {year}</option>)}
-        </select>
+        <div className="hidden rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600 md:block">{academicYear}</div>
         <div className="relative">
           <button type="button" onClick={() => { setNotificationsOpen((open) => !open); setAccountOpen(false); }} className="relative rounded-xl border border-neutral-200 p-2 hover:bg-neutral-50" aria-label="Buka notifikasi">
             <icons.Bell className="h-5 w-5" />
@@ -1223,7 +1241,7 @@ function PanelCard({ title, action, actionHref, onAction, children }) {
 
 function SideItem({ label, icon, href, active, light, collapsed, onClick }) {
   const Icon = icons[icon] || icons.CircleCheck;
-  return <Link href={href} onClick={onClick} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active ? light ? 'bg-primary-50 text-primary-700' : 'bg-blue-600/50 text-white' : light ? 'text-neutral-600 hover:bg-neutral-100' : 'text-white/80 hover:bg-white/10'}`}><Icon className="h-4 w-4" />{!collapsed && <span>{label}</span>}</Link>;
+  return <Link href={href} onClick={onClick} aria-label={collapsed ? label : undefined} title={collapsed ? label : undefined} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active ? light ? 'bg-primary-50 text-primary-700' : 'bg-blue-600/50 text-white' : light ? 'text-neutral-600 hover:bg-neutral-100' : 'text-white/80 hover:bg-white/10'}`}><Icon className="h-4 w-4" />{!collapsed && <span>{label}</span>}</Link>;
 }
 
 function DataPreview({ title, rows, shared, href }) {
@@ -1624,9 +1642,12 @@ function dashboardPreview(panel, shared) {
 function Table({ rows = [], compact = false, columns: preferredColumns, shared = {}, meta, loading = false, selectable = false, selectedIds = [], onToggleRow, onToggleAll, onView, onEdit, onDelete, customActions = [] }) {
   const normalized = Array.isArray(rows) ? rows : Object.values(rows || {});
   const fieldMap = useMemo(() => Object.fromEntries((meta?.fields || []).map((field) => [field.name, field])), [meta]);
-  const columns = useMemo(() => preferredColumns || Object.keys(normalized[0] || {}).filter(isVisibleTableColumn).slice(0, compact ? 5 : 7), [rows, preferredColumns, compact]);
+  const columns = useMemo(() => {
+    const candidates = preferredColumns || Object.keys(normalized[0] || {}).filter(isVisibleTableColumn).slice(0, compact ? 5 : 7);
+    return candidates.filter(isVisibleTableColumn);
+  }, [rows, preferredColumns, compact]);
   const hasActions = onView || onEdit || onDelete || customActions.length > 0;
-  const visibleRows = normalized.slice(0, compact ? 5 : 20);
+  const visibleRows = compact ? normalized.slice(0, 5) : normalized;
   const selectableIds = visibleRows.map((row) => row.id).filter(Boolean);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
   if (loading) return <div className="rounded-xl bg-neutral-50 p-8 text-center text-sm text-neutral-500">Memuat data...</div>;
@@ -1653,7 +1674,7 @@ function Table({ rows = [], compact = false, columns: preferredColumns, shared =
   );
 }
 
-const hiddenTableColumns = new Set(['id', 'created_at', 'updated_at', 'deleted_at', 'metadata', 'profile', 'password']);
+const hiddenTableColumns = new Set(['id', 'created_at', 'updated_at', 'deleted_at', 'metadata', 'profile', 'password', 'remember_token', 'mfa_secret']);
 
 const relationSelectTypes = {
   academic_year_id: 'select:academicYears',
@@ -1834,7 +1855,7 @@ function activityHref(panel) {
 
 function Alert({ tone: alertTone, children }) {
   const cls = alertTone === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700';
-  return <div className={`rounded-xl border px-4 py-3 text-sm ${cls}`}>{children}</div>;
+  return <div role={alertTone === 'error' ? 'alert' : 'status'} aria-live={alertTone === 'error' ? 'assertive' : 'polite'} className={`rounded-xl border px-4 py-3 text-sm ${cls}`}>{children}</div>;
 }
 
 function PaginationControls({ pagination, page, setPage, perPage, setPerPage }) {
@@ -2304,7 +2325,7 @@ function PdfTemplateModal({ shared, onClose, onSaved }) {
                 </div>
                 <div className="mt-5 text-sm font-medium">{draft.header}</div>
                 <div className="mt-4 space-y-2 text-xs text-neutral-500">
-                  <div>Santri: Najwa Karimah</div>
+                  <div>Santri: Contoh Nama Santri</div>
                   <div>Status: Lunas / Disetujui</div>
                   <div>Tanggal: {new Date().toLocaleDateString('id-ID')}</div>
                 </div>
@@ -2663,34 +2684,15 @@ function fieldsFor(resource, rows = []) {
     .map((key) => parseField(relationSelectTypes[key] ? [key, relationSelectTypes[key]] : key));
 }
 
-function defaultFormData(meta, shared = {}) {
-  const suffix = Date.now().toString().slice(-6);
-  return Object.fromEntries(meta.fields.map((field) => [field.name, defaultValue(field, meta, suffix, shared)]));
+function defaultFormData(meta) {
+  return Object.fromEntries(meta.fields.map((field) => [field.name, defaultValue(field)]));
 }
 
-function defaultValue(field, meta, suffix, shared = {}) {
-  if (field.type?.startsWith('select')) {
-    const first = optionsFor(field, shared)[0];
-    if (first) return first.value;
-  }
-  if (field.type === 'number') return field.name.includes('score') ? 80 : field.name.includes('amount') || field.name.includes('balance') || field.name.includes('price') ? 100000 : 0;
+function defaultValue(field) {
+  if (field.type === 'select:status') return 'active';
+  if (field.type?.startsWith('select')) return '';
   if (field.type === 'boolean') return false;
-  if (field.type === 'date') return new Date().toISOString().slice(0, 10);
-  if (field.type === 'datetime-local') return new Date().toISOString().slice(0, 16);
-  if (field.name === 'email') return `demo.${suffix}@pesantenku.test`;
-  if (field.name === 'username') return `demo_${suffix}`;
-  if (field.name === 'password') return 'password';
-  if (field.name === 'code') return `${meta.resource?.slice(0, 3).toUpperCase() || 'KD'}-${suffix}`;
-  if (field.name === 'invoice_number') return `INV/WEB/${suffix}`;
-  if (field.name === 'number') return `NO/WEB/${suffix}`;
-  if (field.name === 'nis') return `WEB${suffix}`;
-  if (field.name === 'period') return 'Juli 2026';
-  if (field.name === 'semester') return 'Genap 2026/2027';
-  if (field.name === 'status') return 'active';
-  if (field.name === 'type') return 'general';
-  if (field.name.includes('_id')) return 1;
-  if (field.type === 'textarea') return '';
-  return `${titleFromSlug(field.name)} ${suffix}`;
+  return '';
 }
 
 function formDataFromRow(row, meta) {
@@ -2920,11 +2922,15 @@ function moduleResource(module, panel) {
 
 function moduleMeta(module, shared, panel) {
   const title = titleFromSlug(module);
+  const activities = rowsOf(shared.systemActivities);
+  const logins = rowsOf(shared.loginMonitoring);
+  const errors = rowsOf(shared.errorLogs);
+  const warnings = activities.filter((row) => /peringatan|warning|blocked|diblokir/i.test(String(row.status || row.aktivitas || '')));
   const systemStats = [
-    { label: 'Event Hari Ini', value: '128', trend: '24 event kritikal dipantau', icon: 'Activity', tone: 'info' },
-    { label: 'Login Berhasil', value: '96', trend: '4 role aktif hari ini', icon: 'Shield', tone: 'success' },
-    { label: 'Peringatan', value: '7', trend: 'Perlu review admin', icon: 'TriangleAlert', tone: 'warning' },
-    { label: 'Error Kritis', value: '0', trend: 'Tidak ada insiden aktif', icon: 'CircleCheck', tone: 'success' },
+    { label: 'Event Tercatat', value: String(activities.length), trend: 'Data terbaru dari audit sistem', icon: 'Activity', tone: 'info' },
+    { label: 'Aktivitas Login', value: String(logins.length), trend: 'Riwayat autentikasi tersedia', icon: 'Shield', tone: 'success' },
+    { label: 'Peringatan', value: String(warnings.length), trend: 'Event yang memerlukan review', icon: 'TriangleAlert', tone: 'warning' },
+    { label: 'Error Tercatat', value: String(errors.length), trend: errors.length ? 'Perlu tindak lanjut admin' : 'Tidak ada error pada data terbaru', icon: errors.length ? 'TriangleAlert' : 'CircleCheck', tone: errors.length ? 'error' : 'success' },
   ];
 
   if (module === 'aktivitas-sistem') {

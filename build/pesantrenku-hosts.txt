@@ -1,1 +1,0 @@
-127.0.0.1 pesantrenku.test www.pesantrenku.test api.pesantrenku.test ws.pesantrenku.test monitor.pesantrenku.test db.pesantrenku.test

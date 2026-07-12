@@ -13,7 +13,24 @@ const commonEnv = {
   OTEL_PHP_AUTOLOAD_ENABLED: 'false',
   PESANTRENKU_NOTIFICATION_SSE: 'false',
   PESANTRENKU_NOTIFICATION_WEBSOCKET: 'true',
+  REVERB_APP_ID: 'pesantenku-e2e',
+  REVERB_APP_KEY: 'pesantenku-e2e-key',
+  REVERB_APP_SECRET: 'pesantenku-e2e-secret',
+  REVERB_ALLOWED_ORIGINS: '127.0.0.1,localhost',
 };
+
+const allRoles = [
+  'super-admin',
+  'owner',
+  'keuangan',
+  'akademik',
+  'tu',
+  'santri',
+  'wali-murid',
+  'guru',
+  'musyrif',
+  'klinik',
+];
 
 export default defineConfig({
   testDir: './tests/e2e',
@@ -31,6 +48,7 @@ export default defineConfig({
       port: 8080,
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
+      env: { ...commonEnv, REVERB_SERVER_HOST: '127.0.0.1', REVERB_SERVER_PORT: '8080' },
     },
     {
       command: 'php artisan serve --host=127.0.0.1 --port=8100',
@@ -48,7 +66,15 @@ export default defineConfig({
     },
   ],
   projects: [
-    { name: 'chromium', use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8100' } },
-    { name: 'mobile-chromium', use: { ...devices['Pixel 7'], baseURL: 'http://127.0.0.1:8101' } },
+    {
+      name: 'chromium',
+      metadata: { roles: allRoles, workflows: true },
+      use: { ...devices['Desktop Chrome'], baseURL: 'http://127.0.0.1:8100' },
+    },
+    {
+      name: 'mobile-chromium',
+      metadata: { roles: allRoles, workflows: true },
+      use: { ...devices['Pixel 7'], baseURL: 'http://127.0.0.1:8101' },
+    },
   ],
 });

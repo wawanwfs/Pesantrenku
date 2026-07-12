@@ -1,0 +1,8 @@
+# Generated local runtime and recovery artifacts.
+/build/
+/php_errors.log
+/backend/test-results/
+/backend/playwright-report/
+
+# Local agent handoff memory is intentionally versioned; ignore only scratch files.
+/memory/*.tmp

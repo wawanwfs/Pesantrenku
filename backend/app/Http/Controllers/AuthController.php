@@ -36,12 +36,13 @@ class AuthController extends Controller
             ->orWhere('phone', $login)
             ->first();
 
-        if (! $user || ! Hash::check($request->string('password')->toString(), $user->password)) {
+        if (! $user || $user->status !== 'active' || ! Hash::check($request->string('password')->toString(), $user->password)) {
             throw ValidationException::withMessages(['login' => 'Email/username/telepon atau password salah.']);
         }
 
         if ($request->is('api/*')) {
             $memberships = $this->membershipData($user);
+            $user->tokens()->where('name', 'mobile')->delete();
 
             return response()->json([
                 'token' => $user->createToken('mobile')->plainTextToken,
@@ -137,6 +138,7 @@ class AuthController extends Controller
             ->join('roles', 'pesantren_user.role_id', '=', 'roles.id')
             ->where('pesantren_user.user_id', $user->id)
             ->where('pesantren_user.status', 'active')
+            ->where('pesantrens.status', 'active')
             ->whereNull('pesantrens.deleted_at')
             ->select([
                 'pesantrens.id',

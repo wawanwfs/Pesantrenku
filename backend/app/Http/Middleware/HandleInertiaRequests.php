@@ -4,6 +4,7 @@ namespace App\Http\Middleware;
 
 use App\Services\TenantContext;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
@@ -16,6 +17,7 @@ class HandleInertiaRequests extends Middleware
         $tenantContext = app(TenantContext::class);
         $memberships = $user ? $tenantContext->memberships($request) : collect();
         $activePesantren = null;
+        $academicYear = null;
         $websocketOrigin = parse_url((string) config('pesantrenku.notifications.websocket_origin')) ?: [];
         $websocketScheme = match ($websocketOrigin['scheme'] ?? null) {
             'wss' => 'https',
@@ -25,6 +27,13 @@ class HandleInertiaRequests extends Middleware
 
         if ($user && ($user->hasRole('super_admin') || $memberships->isNotEmpty())) {
             $activePesantren = $tenantContext->activePesantren($request);
+            if ($activePesantren) {
+                $academicYear = DB::table('academic_years')
+                    ->where('pesantren_id', $activePesantren->id)
+                    ->orderByDesc('is_active')
+                    ->orderByDesc('start_date')
+                    ->value('name');
+            }
         }
 
         return [
@@ -37,7 +46,9 @@ class HandleInertiaRequests extends Middleware
             ],
             'app' => [
                 'name' => 'Pesantenku',
-                'academic_year' => '2024/2025',
+                'environment' => app()->environment(),
+                'demo_enabled' => app()->environment(['local', 'demo']),
+                'academic_year' => $academicYear,
                 'notifications' => [
                     'sse_enabled' => config('pesantrenku.notifications.sse_enabled'),
                     'websocket_enabled' => config('pesantrenku.notifications.websocket_enabled'),

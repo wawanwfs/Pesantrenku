@@ -2,10 +2,10 @@
 
 namespace App\Providers;
 
+use App\Events\NotificationChanged;
 use App\Services\MetricRegistry;
 use App\Services\RequestTelemetry;
 use App\Services\TelemetryService;
-use App\Events\NotificationChanged;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
@@ -24,6 +24,7 @@ class AppServiceProvider extends ServiceProvider
     private array $queueSpans = [];
 
     private array $queueStartedAt = [];
+
     /**
      * Register any application services.
      */

@@ -31,7 +31,12 @@ class BackupRestoreService
                         continue;
                     }
                     $columns = Schema::getColumnListing($table);
-                    foreach ($snapshot['tables'][$table] ?? [] as $row) {
+                    $rows = $snapshot['tables'][$table] ?? [];
+
+                    // Restore the selected tenant to the exact snapshot state for each managed table.
+                    DB::table($table)->where('pesantren_id', $backup->pesantren_id)->delete();
+
+                    foreach ($rows as $row) {
                         $data = collect((array) $row)->only($columns)->all();
                         if ((int) ($data['pesantren_id'] ?? 0) !== (int) $backup->pesantren_id || empty($data['id'])) {
                             continue;

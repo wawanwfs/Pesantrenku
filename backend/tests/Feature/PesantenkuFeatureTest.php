@@ -7,6 +7,7 @@ use App\Services\TotpService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -699,5 +700,138 @@ class PesantenkuFeatureTest extends TestCase
 
         $reports = Storage::disk('local')->allFiles('dr-drills');
         $this->assertCount(1, $reports);
+    }
+
+    public function test_user_credentials_are_redacted_from_crud_audit_and_exports(): void
+    {
+        $this->seed();
+        Storage::fake('local');
+        $superAdmin = User::where('email', 'superadmin@pesantenku.test')->firstOrFail();
+
+        $list = $this->actingAs($superAdmin)->getJson('/web-api/users?per_page=100')->assertOk();
+        foreach ($list->json('data') as $row) {
+            $this->assertArrayNotHasKey('password', $row);
+            $this->assertArrayNotHasKey('remember_token', $row);
+            $this->assertArrayNotHasKey('mfa_secret', $row);
+        }
+
+        $this->actingAs($superAdmin)->getJson("/web-api/users/{$superAdmin->id}")
+            ->assertOk()
+            ->assertJsonMissingPath('password')
+            ->assertJsonMissingPath('remember_token')
+            ->assertJsonMissingPath('mfa_secret');
+
+        $created = $this->actingAs($superAdmin)->postJson('/web-api/users', [
+            'name' => 'Credential Safe User',
+            'email' => 'credential-safe@example.test',
+            'password' => 'secret-password',
+            'mfa_secret' => 'must-not-be-accepted',
+            'remember_token' => 'must-not-be-accepted',
+            'status' => 'active',
+        ])->assertCreated();
+        $created->assertJsonMissingPath('password')
+            ->assertJsonMissingPath('remember_token')
+            ->assertJsonMissingPath('mfa_secret');
+
+        $userId = $created->json('id');
+        $this->assertNull(DB::table('users')->where('id', $userId)->value('mfa_secret'));
+        $this->assertNull(DB::table('users')->where('id', $userId)->value('remember_token'));
+        $audit = DB::table('audit_logs')->where('module', 'users')->latest('id')->value('metadata');
+        $this->assertStringNotContainsString('password', (string) $audit);
+        $this->assertStringNotContainsString('remember_token', (string) $audit);
+        $this->assertStringNotContainsString('mfa_secret', (string) $audit);
+
+        $syncExport = $this->actingAs($superAdmin)->get('/web-api/users/export?format=csv')->assertOk();
+        $header = strtok($syncExport->getContent(), "\n");
+        $this->assertStringNotContainsString('password', $header);
+        $this->assertStringNotContainsString('remember_token', $header);
+        $this->assertStringNotContainsString('mfa_secret', $header);
+
+        $jobUuid = $this->actingAs($superAdmin)->postJson('/web-api/users/export/queue', ['format' => 'csv'])
+            ->assertStatus(202)
+            ->json('job.uuid');
+        $job = DB::table('operation_jobs')->where('uuid', $jobUuid)->first();
+        $queuedHeader = strtok(Storage::disk('local')->get($job->output_path), "\n");
+        $this->assertStringNotContainsString('password', $queuedHeader);
+        $this->assertStringNotContainsString('remember_token', $queuedHeader);
+        $this->assertStringNotContainsString('mfa_secret', $queuedHeader);
+
+        $import = UploadedFile::fake()->createWithContent(
+            'users.csv',
+            "name,email,password\nImport User,import-user@example.test,plaintext-secret\n"
+        );
+        $preview = $this->actingAs($superAdmin)->post('/web-api/users/import/preview', [
+            'file' => $import,
+            'mapping' => json_encode(['name' => 'name', 'email' => 'email', 'password' => 'password']),
+        ])->assertOk();
+        $this->assertContains('password', $preview->json('columns'));
+        $this->assertSame('password', $preview->json('mapping.password'));
+
+        $import = UploadedFile::fake()->createWithContent(
+            'users.csv',
+            "name,email,password\nImport User,import-user@example.test,plaintext-secret\n"
+        );
+        $this->actingAs($superAdmin)->post('/web-api/users/import', [
+            'file' => $import,
+            'mapping' => json_encode(['name' => 'name', 'email' => 'email', 'password' => 'password']),
+        ])->assertOk()->assertJsonPath('inserted', 1);
+        $this->assertTrue(Hash::check('plaintext-secret', DB::table('users')->where('email', 'import-user@example.test')->value('password')));
+    }
+
+    public function test_owner_cannot_manage_or_read_protected_system_settings(): void
+    {
+        $this->seed();
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+        $tenantId = DB::table('pesantrens')->where('name', 'Pondok Pesantren Darul Hikmah')->value('id');
+        $protectedId = DB::table('system_settings')->insertGetId([
+            'pesantren_id' => $tenantId,
+            'key' => 'permissions.internal_test',
+            'value' => json_encode(['enabled' => true]),
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($owner)->postJson('/web-api/system-settings', [
+            'key' => 'permissions.matrix_override',
+            'value' => '{}',
+        ])->assertForbidden();
+        $this->actingAs($owner)->getJson("/web-api/system-settings/{$protectedId}")->assertNotFound();
+        $this->actingAs($owner)->getJson('/web-api/system-settings?per_page=100')
+            ->assertOk()
+            ->assertJsonMissing(['key' => 'permissions.internal_test']);
+
+        $this->actingAs($owner)->postJson('/web-api/system-settings', [
+            'key' => 'pdf.receipt_template',
+            'value' => json_encode(['title' => 'Kwitansi Tenant']),
+        ])->assertOk();
+    }
+
+    public function test_inactive_user_cannot_login(): void
+    {
+        $this->seed();
+        DB::table('users')->where('email', 'keuangan@pesantenku.test')->update(['status' => 'inactive']);
+
+        $this->postJson('/api/v1/auth/login', [
+            'login' => 'keuangan@pesantenku.test',
+            'password' => 'password',
+        ])->assertUnprocessable()->assertJsonMissingPath('token');
+    }
+
+    public function test_owner_queued_pesantren_export_is_limited_to_active_tenant(): void
+    {
+        $this->seed();
+        Storage::fake('local');
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+
+        $jobUuid = $this->actingAs($owner)->postJson('/web-api/pesantrens/export/queue', [
+            'format' => 'csv',
+            'search' => 'Pesantren',
+        ])->assertStatus(202)->json('job.uuid');
+
+        $job = DB::table('operation_jobs')->where('uuid', $jobUuid)->first();
+        $contents = Storage::disk('local')->get($job->output_path);
+        $this->assertStringContainsString('Pondok Pesantren Darul Hikmah', $contents);
+        $this->assertStringNotContainsString('Pesantren Al-Falah', $contents);
+        $this->assertSame(1, (int) $job->processed_rows);
     }
 }

@@ -36,7 +36,7 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ github.sha }}
           provenance: mode=max
           sbom: true
-      - uses: aquasecurity/trivy-action@0.28.0
+      - uses: aquasecurity/trivy-action@v0.28.0
         with:
           image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
           format: sarif

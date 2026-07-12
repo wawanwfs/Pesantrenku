@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-12T08:45:00Z",
+  "project": "Pesantenku",
+  "branch": "main",
+  "remote": "https://github.com/wawanwfs/Pesantrenku.git",
+  "objective": "Set up and audit the web backend, repair UI/data/workflow issues, harden security, validate the system, and prepare a handoff for future agents.",
+  "runtime": {
+    "backend": "Laravel 13 with Inertia React 19",
+    "database_local": "SQLite",
+    "php": "8.5.7 locally; CI standardized on 8.4",
+    "node": "24.18.0",
+    "mobile": "Flutter project present but Flutter CLI unavailable on this workstation"
+  },
+  "completed": [
+    "Installed Composer and npm dependencies, created backend/.env, generated APP_KEY, migrated and seeded SQLite, and enabled required local PHP extensions.",
+    "Redacted user password, remember_token, and mfa_secret from CRUD, Inertia shared props, audit metadata, and sync/queued exports.",
+    "Protected internal system setting prefixes from tenant owners and blocked permission self-escalation.",
+    "Bound CRUD authorization and personal data scopes to the active tenant membership role instead of global roles.",
+    "Restricted membership mutations to owner/super-admin, validated tenant_role_id, and rejected cross-tenant foreign keys.",
+    "Validated and normalized queued imports before dispatch; user import passwords remain supported and are hashed.",
+    "Rejected inactive and soft-deleted users, invalidated active sessions/tokens for deactivated accounts, rotated mobile tokens, and added Sanctum expiry.",
+    "Replaced hard-coded dashboard numbers, charts, profiles, activities, monitoring rows, and fake fallback values with database-backed aggregates or honest empty states.",
+    "Filtered private notifications by user and removed misleading academic-year and system-health controls.",
+    "Fixed table page-size behavior, dangerous dummy form defaults, notification count refresh, responsive filters, and accessibility labels/live regions.",
+    "Replaced the fake QR grid with a standards-compliant QRCodeSVG and displayed token expiry.",
+    "Made backup snapshots complete and restore listed tenant tables to the exact snapshot state; added integrity coverage above 1000 rows.",
+    "Fixed API job download URLs, production metrics fail-closed behavior, and reduced production health information disclosure.",
+    "Fixed CI Trivy tags, PHP version mismatch, Playwright metadata, Reverb E2E environment, full Pint gate, and added Flutter CI.",
+    "Updated Docker Compose to build the backend image and added a Redis queue worker.",
+    "Removed tracked recovery dumps, binlog, local certificate, host file, PHP error log, and Playwright result state; added root ignores.",
+    "Formatted the complete PHP codebase with Pint."
+  ],
+  "validation": {
+    "phpunit": "35 passed, 1 skipped, 354 assertions",
+    "playwright": "30 passed across desktop Chromium and Pixel 7 viewport",
+    "frontend_build": "Vite production build passed with 2808 modules",
+    "php_format": "vendor/bin/pint --test passed",
+    "composer": "composer validate --strict and composer audit --locked passed",
+    "npm": "npm audit --audit-level=high passed with 0 vulnerabilities",
+    "docker_compose": "docker compose config --quiet passed"
+  },
+  "known_limits": [
+    "Docker image build was not executed because the local Docker API pipe returned permission denied; Compose configuration was validated.",
+    "Flutter analyze/test could not run locally because Flutter is not installed; the new CI mobile job runs pub get, analyze, and test.",
+    "Backup generation is complete but still builds and encrypts the snapshot synchronously in memory; move large-tenant backups to a streamed queued archive in a future scalability pass.",
+    "S3 integration remains opt-in and requires RUN_S3_INTEGRATION plus an external S3-compatible service."
+  ],
+  "next_agent": [
+    "Check the latest GitHub Actions run on main before starting new feature work.",
+    "Preserve active membership role authorization and the centralized sensitive-column denylist when adding resources.",
+    "Add streamed queued backup creation before onboarding high-volume production tenants.",
+    "Run Flutter locally when the SDK is available and expand mobile API integration beyond the current dashboard shell."
+  ]
+}

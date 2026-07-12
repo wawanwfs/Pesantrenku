@@ -1,8 +1,13 @@
 import React, { useEffect } from 'react';
 import { router, useForm } from '../lib/deps.jsx';
 
-export default function Login({ auth }) {
-  const { data, setData, post, processing, errors } = useForm({ login: 'superadmin@pesantenku.test', password: 'password' });
+export default function Login({ auth, app }) {
+  const runtimeEnvironment = app?.environment || auth?.environment;
+  const demoEnabled = app?.demo_enabled ?? auth?.demo_enabled ?? (runtimeEnvironment ? ['local', 'demo'].includes(runtimeEnvironment) : import.meta.env.DEV);
+  const { data, setData, post, processing, errors } = useForm({
+    login: demoEnabled ? 'superadmin@pesantenku.test' : '',
+    password: demoEnabled ? 'password' : '',
+  });
   const home = dashboardHref(auth?.roles?.[0]);
 
   useEffect(() => {
@@ -39,22 +44,24 @@ export default function Login({ auth }) {
           <Logo large />
           <h1 className="mt-10 text-4xl font-semibold leading-tight">Pesantenku</h1>
           <p className="mt-4 text-sm leading-6 text-primary-50">Sistem manajemen pesantren modern untuk akademik, keuangan, tata usaha, asrama, guru, wali, santri, dan klinik.</p>
-          <div className="mt-10 max-h-56 space-y-3 overflow-y-auto pr-1 text-sm">
-            {['superadmin@pesantenku.test', 'owner@pesantenku.test', 'keuangan@pesantenku.test', 'akademik@pesantenku.test', 'tu@pesantenku.test', 'santri@pesantenku.test', 'wali@pesantenku.test', 'guru@pesantenku.test', 'musyrif@pesantenku.test', 'klinik@pesantenku.test'].map((email) => (
-              <button key={email} type="button" onClick={() => setData('login', email)} className="block rounded-lg bg-white/10 px-3 py-2 text-left hover:bg-white/20">{email}</button>
-            ))}
-          </div>
+          {demoEnabled && (
+            <div className="mt-10 max-h-56 space-y-3 overflow-y-auto pr-1 text-sm">
+              {['superadmin@pesantenku.test', 'owner@pesantenku.test', 'keuangan@pesantenku.test', 'akademik@pesantenku.test', 'tu@pesantenku.test', 'santri@pesantenku.test', 'wali@pesantenku.test', 'guru@pesantenku.test', 'musyrif@pesantenku.test', 'klinik@pesantenku.test'].map((email) => (
+                <button key={email} type="button" onClick={() => setData('login', email)} className="block rounded-lg bg-white/10 px-3 py-2 text-left hover:bg-white/20">{email}</button>
+              ))}
+            </div>
+          )}
         </div>
         <form onSubmit={submit} className="p-10">
           <p className="text-sm font-medium text-primary-700">Masuk Dashboard</p>
-          <h2 className="mt-2 text-2xl font-semibold">Gunakan akun demo</h2>
+          <h2 className="mt-2 text-2xl font-semibold">{demoEnabled ? 'Gunakan akun demo' : 'Masuk ke akun Anda'}</h2>
           <label className="mt-8 block text-sm font-medium">Email, username, atau telepon</label>
           <input autoComplete="username" value={data.login} onChange={(e) => setData('login', e.target.value)} className="mt-2 w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:border-primary-600" />
           {errors.login && <p className="mt-2 text-sm text-red-600">{errors.login}</p>}
           <label className="mt-5 block text-sm font-medium">Password</label>
           <input type="password" autoComplete="current-password" value={data.password} onChange={(e) => setData('password', e.target.value)} className="mt-2 w-full rounded-xl border border-neutral-200 px-4 py-3 outline-none focus:border-primary-600" />
           <button type="submit" disabled={processing} className="mt-8 w-full rounded-xl bg-primary-600 px-4 py-3 text-sm font-semibold text-white hover:bg-primary-700 disabled:opacity-60">Masuk</button>
-          <p className="mt-5 text-xs text-neutral-500">Password semua akun demo: <span className="font-semibold">password</span></p>
+          {demoEnabled && <p className="mt-5 text-xs text-neutral-500">Password semua akun demo: <span className="font-semibold">password</span></p>}
         </form>
       </section>
     </main>

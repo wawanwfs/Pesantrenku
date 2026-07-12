@@ -1,7 +1,8 @@
 <?php
 
-use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\CanonicalLocalHost;
+use App\Http\Middleware\EnsureActiveUser;
+use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\IdempotencyKey;
 use App\Http\Middleware\RequestObservability;
 use App\Http\Middleware\RoleMiddleware;
@@ -24,12 +25,13 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->web(append: [
             RequestObservability::class,
+            EnsureActiveUser::class,
             CanonicalLocalHost::class,
             SecurityHeaders::class,
             HandleInertiaRequests::class,
         ]);
 
-        $middleware->api(append: [RequestObservability::class]);
+        $middleware->api(append: [RequestObservability::class, EnsureActiveUser::class]);
 
         $middleware->alias([
             'role' => RoleMiddleware::class,

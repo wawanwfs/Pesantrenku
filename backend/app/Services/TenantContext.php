@@ -24,26 +24,27 @@ class TenantContext
             return $request->attributes->get($attribute);
         }
 
-        $memberships = Cache::remember($this->membershipCacheKey($user->id), now()->addSeconds(30), fn () => DB::table('pesantren_user')
-                ->join('pesantrens', 'pesantren_user.pesantren_id', '=', 'pesantrens.id')
-                ->join('roles', 'pesantren_user.role_id', '=', 'roles.id')
-                ->leftJoin('tenant_roles', 'pesantren_user.tenant_role_id', '=', 'tenant_roles.id')
-                ->where('pesantren_user.user_id', $user->id)
-                ->where('pesantren_user.status', 'active')
-                ->whereNull('pesantrens.deleted_at')
-                ->select([
-                    'pesantrens.id',
-                    'pesantrens.name',
-                    'pesantrens.city',
-                    'pesantrens.status',
-                    'roles.name as role',
-                    'roles.label as role_label',
-                    'tenant_roles.id as tenant_role_id',
-                    'tenant_roles.name as tenant_role',
-                    'tenant_roles.label as tenant_role_label',
-                ])
-                ->orderBy('pesantren_user.id')
-                ->get());
+        $memberships = DB::table('pesantren_user')
+            ->join('pesantrens', 'pesantren_user.pesantren_id', '=', 'pesantrens.id')
+            ->join('roles', 'pesantren_user.role_id', '=', 'roles.id')
+            ->leftJoin('tenant_roles', 'pesantren_user.tenant_role_id', '=', 'tenant_roles.id')
+            ->where('pesantren_user.user_id', $user->id)
+            ->where('pesantren_user.status', 'active')
+            ->where('pesantrens.status', 'active')
+            ->whereNull('pesantrens.deleted_at')
+            ->select([
+                'pesantrens.id',
+                'pesantrens.name',
+                'pesantrens.city',
+                'pesantrens.status',
+                'roles.name as role',
+                'roles.label as role_label',
+                'tenant_roles.id as tenant_role_id',
+                'tenant_roles.name as tenant_role',
+                'tenant_roles.label as tenant_role_label',
+            ])
+            ->orderBy('pesantren_user.id')
+            ->get();
 
         $memberships = collect($memberships);
         $request->attributes->set($attribute, $memberships);
@@ -102,14 +103,30 @@ class TenantContext
             return $request->attributes->get($attribute);
         }
 
-        $tenant = Cache::remember("pesantenku:tenant:{$id}", now()->addSeconds(30), fn () => DB::table('pesantrens')
-                ->select('id', 'name', 'city', 'address', 'phone', 'email', 'status', 'metadata')
-                ->where('id', $id)
-                ->whereNull('deleted_at')
-                ->first());
+        $tenant = DB::table('pesantrens')
+            ->select('id', 'name', 'city', 'address', 'phone', 'email', 'status', 'metadata')
+            ->where('id', $id)
+            ->whereNull('deleted_at')
+            ->first();
         $request->attributes->set($attribute, $tenant);
 
         return $tenant;
+    }
+
+    public function activeRole(Request $request): ?string
+    {
+        $user = $request->user();
+        if (! $user) {
+            return null;
+        }
+
+        if ($user->hasRole('super_admin')) {
+            return 'super_admin';
+        }
+
+        $tenantId = $this->activePesantrenId($request);
+
+        return $this->memberships($request)->firstWhere('id', $tenantId)?->role;
     }
 
     public function setActive(Request $request, int $pesantrenId): object

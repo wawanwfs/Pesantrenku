@@ -17,6 +17,10 @@ use Illuminate\Validation\Rule;
 
 class CrudController extends Controller
 {
+    private const USER_SENSITIVE_COLUMNS = ['password', 'remember_token', 'mfa_secret'];
+
+    private const PROTECTED_SETTING_PREFIXES = ['permissions.', 'security.', 'auth.', 'backup-security.'];
+
     private array $schemaColumns = [];
 
     private array $schemaTables = [];
@@ -96,6 +100,7 @@ class CrudController extends Controller
         $this->authorizeResourceAccess($request, $resource, 'write');
         $table = $this->table($resource);
         $data = $this->tenantContext->withTenantPayload($request, $table, $this->payload($request, $table));
+        $this->assertSystemSettingPayloadAllowed($request, $table, $data);
         $this->assertPersonalPayload($request, $table, $data);
         $this->assertOperationalPayload($request, $table, $data);
 
@@ -172,10 +177,12 @@ class CrudController extends Controller
     {
         $this->authorizeResourceAccess($request, $resource, 'write');
         $table = $this->table($resource);
+        $this->assertMembershipMutationAllowed($request, $table);
         $row = $this->scopedQuery($request, $table)->where("{$table}.id", $id)->first();
         abort_unless($row, 404);
 
         $data = $this->tenantContext->withTenantPayload($request, $table, $this->payload($request, $table, false));
+        $this->assertSystemSettingPayloadAllowed($request, $table, $data, $row);
         $this->assertPersonalPayload($request, $table, $data);
         $this->assertOperationalPayload($request, $table, $data);
         DB::table($table)->where('id', $id)->update($data);
@@ -190,8 +197,10 @@ class CrudController extends Controller
     {
         $this->authorizeResourceAccess($request, $resource, 'write');
         $table = $this->table($resource);
+        $this->assertMembershipMutationAllowed($request, $table);
         $row = $this->scopedQuery($request, $table)->where("{$table}.id", $id)->first();
         abort_unless($row, 404);
+        $this->assertSystemSettingPayloadAllowed($request, $table, [], $row);
 
         $this->hasColumn($table, 'deleted_at')
             ? DB::table($table)->where('id', $id)->update(['deleted_at' => now(), 'updated_at' => now()])
@@ -210,7 +219,7 @@ class CrudController extends Controller
         $this->applyRequestFilters($request, $query, $table);
         $this->applySearchFilter($request, $query, $table);
         $rows = $query->limit((int) config('pesantrenku.export.sync_limit', 1000))->get();
-        $columns = $this->columns($table);
+        $columns = $this->visibleColumns($table);
         $formatted = $this->formatRowsForExport($rows, $columns);
         $format = strtolower((string) $request->query('format', 'csv'));
 
@@ -367,7 +376,8 @@ class CrudController extends Controller
         $rows = $this->rowsFromImportFile($request->file('file')->getRealPath(), $extension);
         $schema = $this->columns($table);
         $headers = collect($rows)->flatMap(fn ($row) => array_keys($row))->unique()->values()->all();
-        $mapping = $this->importMapping($request->input('mapping'), $schema, $headers);
+        $mapping = $this->importMapping($request->input('mapping'), $schema, $headers, $table);
+        $this->assertImportRowsAllowed($request, $table, $rows, $schema, $mapping);
         $analysis = $this->analyzeImportRows($request, $table, $rows, $schema, $mapping);
 
         return response()->json([
@@ -400,7 +410,8 @@ class CrudController extends Controller
         $rows = $this->rowsFromImportFile($request->file('file')->getRealPath(), $extension);
         $schema = $this->columns($table);
         $headers = collect($rows)->flatMap(fn ($row) => array_keys($row))->unique()->values()->all();
-        $mapping = $this->importMapping($request->input('mapping'), $schema, $headers);
+        $mapping = $this->importMapping($request->input('mapping'), $schema, $headers, $table);
+        $this->assertImportRowsAllowed($request, $table, $rows, $schema, $mapping);
         $inserted = 0;
         $skipped = 0;
         $errors = [];
@@ -408,8 +419,41 @@ class CrudController extends Controller
         if ($request->boolean('queue')) {
             $user = $request->user();
             $tenantId = $user?->hasRole('super_admin') ? null : $this->tenantContext->activePesantrenId($request);
+            $preparedRows = [];
+            $queueErrors = [];
+            foreach ($rows as $rowNumber => $row) {
+                $raw = $this->mappedImportRow($row, $schema, $mapping);
+                $data = $this->tenantContext->withTenantPayload($request, $table, $this->preparePayload($request, $table, $raw));
+                $validator = Validator::make($data, $this->validationRules($request, $table, true), [], $this->validationAttributes());
+
+                try {
+                    $this->assertPersonalPayload($request, $table, $data);
+                    $this->assertOperationalPayload($request, $table, $data);
+                } catch (\Throwable $exception) {
+                    $queueErrors[] = ['row' => $rowNumber + 1, 'messages' => [$exception->getMessage() ?: 'Data di luar scope akses role.']];
+
+                    continue;
+                }
+
+                if ($validator->fails()) {
+                    $queueErrors[] = ['row' => $rowNumber + 1, 'messages' => $validator->errors()->all()];
+
+                    continue;
+                }
+
+                $preparedRows[] = $data;
+            }
+
+            if ($queueErrors !== []) {
+                return response()->json([
+                    'message' => 'Import antrian dibatalkan karena terdapat data tidak valid.',
+                    'errors' => array_slice($queueErrors, 0, 20),
+                ], 422);
+            }
+
             $uuid = (string) Str::uuid();
-            $sourcePath = $this->storeImportRows($uuid, $rows);
+            $sourcePath = $this->storeImportRows($uuid, $preparedRows);
+            $queuedMapping = collect($schema)->mapWithKeys(fn (string $column) => [$column => $column])->all();
             $jobId = DB::table('operation_jobs')->insertGetId([
                 'uuid' => $uuid,
                 'pesantren_id' => $tenantId,
@@ -418,13 +462,13 @@ class CrudController extends Controller
                 'resource' => $resource,
                 'status' => 'queued',
                 'progress' => 0,
-                'total_rows' => count($rows),
+                'total_rows' => count($preparedRows),
                 'processed_rows' => 0,
                 'queue_name' => 'imports',
                 'source_path' => $sourcePath,
                 'payload' => json_encode([
-                    'mapping' => $mapping,
-                    'row_count' => count($rows),
+                    'mapping' => $queuedMapping,
+                    'row_count' => count($preparedRows),
                     'file' => $request->file('file')->getClientOriginalName(),
                 ], JSON_UNESCAPED_UNICODE),
                 'expires_at' => now()->addDays((int) config('pesantrenku.operations.file_retention_days', 7)),
@@ -437,7 +481,7 @@ class CrudController extends Controller
                 $table,
                 $tenantId,
                 $sourcePath,
-                $mapping,
+                $queuedMapping,
                 0,
                 (int) config('pesantrenku.import.chunk_size', 250),
             )->onQueue('imports');
@@ -461,11 +505,13 @@ class CrudController extends Controller
 
                 if (! $raw) {
                     $skipped++;
+
                     continue;
                 }
 
                 if (in_array('name', $schema, true) && empty($raw['name']) && ! isset($raw['title'])) {
                     $skipped++;
+
                     continue;
                 }
 
@@ -476,6 +522,7 @@ class CrudController extends Controller
                     if (count($errors) < 10) {
                         $errors[] = ['row' => $rowNumber, 'messages' => $validator->errors()->all()];
                     }
+
                     continue;
                 }
 
@@ -487,6 +534,7 @@ class CrudController extends Controller
                     if (count($errors) < 10) {
                         $errors[] = ['row' => $rowNumber, 'messages' => [$exception->getMessage() ?: 'Data di luar scope akses role.']];
                     }
+
                     continue;
                 }
 
@@ -515,6 +563,7 @@ class CrudController extends Controller
         ]);
 
         $table = $this->table($resource);
+        $this->assertMembershipMutationAllowed($request, $table);
         $ids = collect($validated['ids'])->map(fn ($id) => (int) $id)->unique()->values();
         $rows = $this->scopedQuery($request, $table)->whereIn("{$table}.id", $ids->all())->get()->keyBy('id');
         abort_if($rows->isEmpty(), 404, 'Tidak ada data yang sesuai scope akses.');
@@ -528,6 +577,7 @@ class CrudController extends Controller
                         : DB::table($table)->where('id', $row->id)->delete();
                     $this->audit($request, 'bulk delete', $table, $row->id, $row, null);
                     $updated++;
+
                     continue;
                 }
 
@@ -643,6 +693,7 @@ class CrudController extends Controller
             ->get()
             ->map(function ($role) {
                 $permissions = json_decode((string) $role->permissions, true) ?: ['read' => [], 'write' => []];
+
                 return [
                     'id' => $role->id,
                     'name' => $role->name,
@@ -789,10 +840,7 @@ class CrudController extends Controller
 
     private function importableColumns(string $table): array
     {
-        return collect($this->columns($table))
-            ->reject(fn ($column) => in_array($column, ['id', 'pesantren_id', 'created_at', 'updated_at', 'deleted_at'], true))
-            ->values()
-            ->all();
+        return $this->importableColumnsFromSchema($this->columns($table), $table);
     }
 
     private function storeImportRows(string $uuid, array $rows): string
@@ -812,7 +860,7 @@ class CrudController extends Controller
         return $path;
     }
 
-    private function importMapping(mixed $mappingInput, array $schema, array $headers): array
+    private function importMapping(mixed $mappingInput, array $schema, array $headers, ?string $table = null): array
     {
         if (is_string($mappingInput) && trim($mappingInput) !== '') {
             $decoded = json_decode($mappingInput, true);
@@ -820,13 +868,14 @@ class CrudController extends Controller
         }
 
         $mappingInput = is_array($mappingInput) ? $mappingInput : [];
-        $allowedColumns = $this->importableColumnsFromSchema($schema);
+        $allowedColumns = $this->importableColumnsFromSchema($schema, $table);
         $mapping = [];
 
         foreach ($headers as $header) {
             $requested = $mappingInput[$header] ?? $mappingInput[$this->normalizeImportHeader($header)] ?? null;
             if ($requested && in_array($requested, $allowedColumns, true)) {
                 $mapping[$header] = $requested;
+
                 continue;
             }
 
@@ -837,10 +886,11 @@ class CrudController extends Controller
         return $mapping;
     }
 
-    private function importableColumnsFromSchema(array $schema): array
+    private function importableColumnsFromSchema(array $schema, ?string $table = null): array
     {
         return collect($schema)
             ->reject(fn ($column) => in_array($column, ['id', 'pesantren_id', 'created_at', 'updated_at', 'deleted_at'], true))
+            ->reject(fn ($column) => $table === 'users' && in_array($column, ['remember_token', 'mfa_secret'], true))
             ->values()
             ->all();
     }
@@ -871,6 +921,7 @@ class CrudController extends Controller
             $raw = $this->mappedImportRow($row, $schema, $mapping);
             if (! $raw) {
                 $blank++;
+
                 continue;
             }
 
@@ -890,6 +941,7 @@ class CrudController extends Controller
                 if (count($errors) < 10) {
                     $errors[] = ['row' => $rowNumber, 'messages' => array_values(array_merge($validator->errors()->all(), $scopeMessages))];
                 }
+
                 continue;
             }
 
@@ -937,7 +989,7 @@ class CrudController extends Controller
     {
         abort_unless(class_exists(\ZipArchive::class), 422, 'Import XLSX membutuhkan ekstensi PHP zip.');
 
-        $zip = new \ZipArchive();
+        $zip = new \ZipArchive;
         abort_unless($zip->open($path) === true, 422, 'File XLSX tidak dapat dibuka.');
 
         $sharedStrings = [];
@@ -1111,26 +1163,27 @@ class CrudController extends Controller
         $query = DB::table($table)->when($this->hasColumn($table, 'deleted_at'), fn ($q) => $q->whereNull("{$table}.deleted_at"));
 
         $query = $this->tenantContext->applyScope($request, $query, $table);
+        $this->applyProtectedSettingScope($request, $query, $table);
 
         return $this->applyPersonalScope($request, $query, $table);
     }
 
     private function applyPersonalScope(Request $request, $query, string $table)
     {
-        $user = $request->user()?->loadMissing('roles');
-        if (! $user) {
+        $role = $this->tenantContext->activeRole($request);
+        if (! $role) {
             return $query;
         }
 
-        if ($user->hasRole(['santri', 'wali_murid'])) {
+        if (in_array($role, ['santri', 'wali_murid'], true)) {
             return $this->applyStudentFamilyScope($request, $query, $table);
         }
 
-        if ($user->hasRole('guru')) {
+        if ($role === 'guru') {
             return $this->applyTeacherScope($request, $query, $table);
         }
 
-        if ($user->hasRole('musyrif')) {
+        if ($role === 'musyrif') {
             return $this->applyDormScope($request, $query, $table);
         }
 
@@ -1242,14 +1295,15 @@ class CrudController extends Controller
     private function accessibleStudentIds(Request $request): array
     {
         return $this->requestMemo($request, 'accessible-student-ids', function () use ($request) {
-            $user = $request->user()?->loadMissing('roles');
-            if (! $user) {
+            $user = $request->user();
+            $role = $this->tenantContext->activeRole($request);
+            if (! $user || ! $role) {
                 return [];
             }
 
             $tenantId = $this->tenantContext->activePesantrenId($request);
 
-            if ($user->hasRole('santri')) {
+            if ($role === 'santri') {
                 return DB::table('students')
                     ->where('pesantren_id', $tenantId)
                     ->where('user_id', $user->id)
@@ -1257,7 +1311,7 @@ class CrudController extends Controller
                     ->all();
             }
 
-            if ($user->hasRole('wali_murid')) {
+            if ($role === 'wali_murid') {
                 return DB::table('students')
                     ->join('guardians', 'students.guardian_id', '=', 'guardians.id')
                     ->where('students.pesantren_id', $tenantId)
@@ -1272,8 +1326,8 @@ class CrudController extends Controller
 
     private function assertPersonalPayload(Request $request, string $table, array $data): void
     {
-        $user = $request->user()?->loadMissing('roles');
-        if (! $user || ! $user->hasRole(['santri', 'wali_murid'])) {
+        $role = $this->tenantContext->activeRole($request);
+        if (! in_array($role, ['santri', 'wali_murid'], true)) {
             return;
         }
 
@@ -1302,12 +1356,15 @@ class CrudController extends Controller
 
     private function assertOperationalPayload(Request $request, string $table, array $data): void
     {
-        $user = $request->user()?->loadMissing('roles');
-        if (! $user) {
+        $role = $this->tenantContext->activeRole($request);
+        if (! $role) {
             return;
         }
 
-        if ($user->hasRole('guru')) {
+        $this->assertMembershipMutationAllowed($request, $table);
+        $this->assertTenantRelations($request, $table, $data);
+
+        if ($role === 'guru') {
             $scope = $this->teacherScope($request);
             if (isset($data['student_id'])) {
                 abort_unless(in_array((int) $data['student_id'], $scope['student_ids'], true), 403, 'Santri tidak berada dalam kelas guru.');
@@ -1320,7 +1377,7 @@ class CrudController extends Controller
             }
         }
 
-        if ($user->hasRole('musyrif')) {
+        if ($role === 'musyrif') {
             $scope = $this->dormScope($request);
             if (isset($data['student_id'])) {
                 abort_unless(in_array((int) $data['student_id'], $scope['student_ids'], true), 403, 'Santri tidak berada dalam binaan musyrif.');
@@ -1331,104 +1388,155 @@ class CrudController extends Controller
         }
     }
 
+    private function assertTenantRelations(Request $request, string $table, array $data): void
+    {
+        $tenantId = (int) ($data['pesantren_id'] ?? $this->tenantContext->activePesantrenId($request));
+        if (! $tenantId) {
+            return;
+        }
+
+        foreach ($this->relationTables() as $column => [$relationTable]) {
+            if ($column === 'pesantren_id' || ! isset($data[$column]) || $data[$column] === '') {
+                continue;
+            }
+
+            $relationId = (int) $data[$column];
+            if ($relationTable === 'users') {
+                $exists = $table === 'pesantren_user'
+                    ? DB::table('users')->where('id', $relationId)->whereNull('deleted_at')->exists()
+                    : DB::table('pesantren_user')
+                        ->where('pesantren_id', $tenantId)
+                        ->where('user_id', $relationId)
+                        ->where('status', 'active')
+                        ->exists();
+                abort_unless($exists, 422, 'Relasi user tidak berada pada tenant aktif.');
+
+                continue;
+            }
+
+            if (! $this->hasColumn($relationTable, 'pesantren_id')) {
+                continue;
+            }
+
+            $relation = DB::table($relationTable)
+                ->where('id', $relationId)
+                ->where('pesantren_id', $tenantId)
+                ->when($this->hasColumn($relationTable, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'));
+            abort_unless($relation->exists(), 422, 'Relasi data tidak berada pada tenant aktif.');
+        }
+    }
+
+    private function assertMembershipMutationAllowed(Request $request, string $table): void
+    {
+        if ($table !== 'pesantren_user') {
+            return;
+        }
+
+        abort_unless(
+            in_array($this->tenantContext->activeRole($request), ['super_admin', 'owner_pesantren'], true),
+            403,
+            'Hanya owner atau super admin yang dapat mengelola membership.'
+        );
+    }
+
     private function teacherScope(Request $request): array
     {
         return $this->requestMemo($request, 'teacher-scope', function () use ($request) {
-        $tenantId = $this->tenantContext->activePesantrenId($request);
-        $userId = $request->user()?->id;
-        $teachers = DB::table('teachers')->where('pesantren_id', $tenantId)->where('user_id', $userId)->get();
-        $teacherIds = $teachers->pluck('id')->all();
-        $teacherNames = $teachers->pluck('name')->filter()->values()->all();
-        $teacherSubjects = $teachers->pluck('subject')->filter()->values()->all();
+            $tenantId = $this->tenantContext->activePesantrenId($request);
+            $userId = $request->user()?->id;
+            $teachers = DB::table('teachers')->where('pesantren_id', $tenantId)->where('user_id', $userId)->get();
+            $teacherIds = $teachers->pluck('id')->all();
+            $teacherNames = $teachers->pluck('name')->filter()->values()->all();
+            $teacherSubjects = $teachers->pluck('subject')->filter()->values()->all();
 
-        $assignments = $this->hasTable('teacher_assignments')
-            ? DB::table('teacher_assignments')
-                ->where('pesantren_id', $tenantId)
-                ->where('status', 'active')
-                ->whereIn('teacher_id', $teacherIds ?: [0])
-                ->get()
-            : collect();
+            $assignments = $this->hasTable('teacher_assignments')
+                ? DB::table('teacher_assignments')
+                    ->where('pesantren_id', $tenantId)
+                    ->where('status', 'active')
+                    ->whereIn('teacher_id', $teacherIds ?: [0])
+                    ->get()
+                : collect();
 
-        if ($assignments->isNotEmpty()) {
-            $subjectIds = $assignments->pluck('subject_id')->filter()->unique()->values()->all();
-            $classIds = $assignments->pluck('class_id')->filter()->unique()->values()->all();
-        } else {
-            $subjectIds = DB::table('subjects')
+            if ($assignments->isNotEmpty()) {
+                $subjectIds = $assignments->pluck('subject_id')->filter()->unique()->values()->all();
+                $classIds = $assignments->pluck('class_id')->filter()->unique()->values()->all();
+            } else {
+                $subjectIds = DB::table('subjects')
+                    ->where('pesantren_id', $tenantId)
+                    ->where(function ($query) use ($teacherNames, $teacherSubjects) {
+                        $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
+                            ->orWhereIn('name', $teacherSubjects ?: ['__none__']);
+                    })
+                    ->pluck('id')
+                    ->all();
+
+                $classIds = DB::table('schedules')
+                    ->where('pesantren_id', $tenantId)
+                    ->where(function ($query) use ($teacherNames, $subjectIds) {
+                        $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
+                            ->orWhereIn('subject_id', $subjectIds ?: [0]);
+                    })
+                    ->pluck('class_id')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+
+            $studentIds = DB::table('students')
                 ->where('pesantren_id', $tenantId)
-                ->where(function ($query) use ($teacherNames, $teacherSubjects) {
-                    $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
-                        ->orWhereIn('name', $teacherSubjects ?: ['__none__']);
-                })
+                ->whereIn('class_id', $classIds ?: [0])
                 ->pluck('id')
                 ->all();
 
-            $classIds = DB::table('schedules')
-                ->where('pesantren_id', $tenantId)
-                ->where(function ($query) use ($teacherNames, $subjectIds) {
-                    $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
-                        ->orWhereIn('subject_id', $subjectIds ?: [0]);
-                })
-                ->pluck('class_id')
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
-        }
-
-        $studentIds = DB::table('students')
-            ->where('pesantren_id', $tenantId)
-            ->whereIn('class_id', $classIds ?: [0])
-            ->pluck('id')
-            ->all();
-
-        return [
-            'teacher_ids' => $teacherIds,
-            'teacher_names' => $teacherNames,
-            'subject_ids' => $subjectIds,
-            'class_ids' => $classIds,
-            'student_ids' => $studentIds,
-        ];
+            return [
+                'teacher_ids' => $teacherIds,
+                'teacher_names' => $teacherNames,
+                'subject_ids' => $subjectIds,
+                'class_ids' => $classIds,
+                'student_ids' => $studentIds,
+            ];
         });
     }
 
     private function dormScope(Request $request): array
     {
         return $this->requestMemo($request, 'dorm-scope', function () use ($request) {
-        $tenantId = $this->tenantContext->activePesantrenId($request);
-        $userId = $request->user()?->id;
-        $assignedRoomIds = $this->hasTable('musyrif_room_assignments')
-            ? DB::table('musyrif_room_assignments')
+            $tenantId = $this->tenantContext->activePesantrenId($request);
+            $userId = $request->user()?->id;
+            $assignedRoomIds = $this->hasTable('musyrif_room_assignments')
+                ? DB::table('musyrif_room_assignments')
+                    ->where('pesantren_id', $tenantId)
+                    ->where('user_id', $userId)
+                    ->where('status', 'active')
+                    ->pluck('room_id')
+                    ->filter()
+                    ->values()
+                    ->all()
+                : [];
+
+            $rooms = DB::table('rooms')
                 ->where('pesantren_id', $tenantId)
-                ->where('user_id', $userId)
-                ->where('status', 'active')
-                ->pluck('room_id')
-                ->filter()
-                ->values()
-                ->all()
-            : [];
+                ->when($assignedRoomIds, fn ($query) => $query->whereIn('id', $assignedRoomIds), function ($query) {
+                    $query->where(function ($query) {
+                        $query->where('block', 'like', '%Putri%')
+                            ->orWhere('name', 'like', 'C-%');
+                    });
+                })
+                ->get();
 
-        $rooms = DB::table('rooms')
-            ->where('pesantren_id', $tenantId)
-            ->when($assignedRoomIds, fn ($query) => $query->whereIn('id', $assignedRoomIds), function ($query) {
-                $query->where(function ($query) {
-                    $query->where('block', 'like', '%Putri%')
-                        ->orWhere('name', 'like', 'C-%');
-                });
-            })
-            ->get();
+            $roomNames = $rooms->pluck('name')->all();
+            $studentIds = DB::table('students')
+                ->where('pesantren_id', $tenantId)
+                ->whereIn('room', $roomNames ?: ['__none__'])
+                ->pluck('id')
+                ->all();
 
-        $roomNames = $rooms->pluck('name')->all();
-        $studentIds = DB::table('students')
-            ->where('pesantren_id', $tenantId)
-            ->whereIn('room', $roomNames ?: ['__none__'])
-            ->pluck('id')
-            ->all();
-
-        return [
-            'room_ids' => $rooms->pluck('id')->all(),
-            'room_names' => $roomNames,
-            'student_ids' => $studentIds,
-        ];
+            return [
+                'room_ids' => $rooms->pluck('id')->all(),
+                'room_names' => $roomNames,
+                'student_ids' => $studentIds,
+            ];
         });
     }
 
@@ -1457,7 +1565,7 @@ class CrudController extends Controller
 
         $columns = array_keys((array) $row);
         $maps = $this->relationMaps(collect([$row]), $columns);
-        $data = (array) $row;
+        $data = (array) $this->redactRow($table, $row);
 
         foreach ($maps as $column => $map) {
             $value = $row->{$column} ?? null;
@@ -1514,6 +1622,7 @@ class CrudController extends Controller
             'student_id' => ['students', 'name'],
             'subject_id' => ['subjects', 'name'],
             'teacher_id' => ['teachers', 'name'],
+            'tenant_role_id' => ['tenant_roles', 'label'],
             'user_id' => ['users', 'name'],
         ];
     }
@@ -1551,7 +1660,7 @@ class CrudController extends Controller
         foreach ($escapedLines as $line) {
             $content .= "({$line}) Tj\n0 -14 Td\n";
         }
-        $content .= "ET";
+        $content .= 'ET';
 
         $objects = [
             "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
@@ -1586,6 +1695,65 @@ class CrudController extends Controller
         return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $value);
     }
 
+    private function applyProtectedSettingScope(Request $request, $query, string $table): void
+    {
+        if ($table !== 'system_settings' || $request->user()?->hasRole('super_admin')) {
+            return;
+        }
+
+        foreach (self::PROTECTED_SETTING_PREFIXES as $prefix) {
+            $query->where('system_settings.key', 'not like', $prefix.'%');
+        }
+    }
+
+    private function assertSystemSettingPayloadAllowed(Request $request, string $table, array $data, ?object $current = null): void
+    {
+        if ($table !== 'system_settings' || $request->user()?->hasRole('super_admin')) {
+            return;
+        }
+
+        $key = (string) ($data['key'] ?? $current?->key ?? '');
+        abort_if($this->isProtectedSettingKey($key), 403, 'Pengaturan internal hanya dapat dikelola super admin.');
+    }
+
+    private function assertImportRowsAllowed(Request $request, string $table, array $rows, array $schema, array $mapping): void
+    {
+        if ($table !== 'system_settings' || $request->user()?->hasRole('super_admin')) {
+            return;
+        }
+
+        foreach ($rows as $row) {
+            $data = $this->mappedImportRow($row, $schema, $mapping);
+            if ($this->isProtectedSettingKey((string) ($data['key'] ?? ''))) {
+                abort(403, 'Import pengaturan internal hanya dapat dilakukan super admin.');
+            }
+        }
+    }
+
+    private function isProtectedSettingKey(string $key): bool
+    {
+        return collect(self::PROTECTED_SETTING_PREFIXES)->contains(
+            fn (string $prefix) => str_starts_with($key, $prefix)
+        );
+    }
+
+    private function redactRow(string $table, ?object $row): ?object
+    {
+        if (! $row || $table !== 'users') {
+            return $row;
+        }
+
+        return (object) collect((array) $row)->except(self::USER_SENSITIVE_COLUMNS)->all();
+    }
+
+    private function visibleColumns(string $table): array
+    {
+        return collect($this->columns($table))
+            ->reject(fn (string $column) => $table === 'users' && in_array($column, self::USER_SENSITIVE_COLUMNS, true))
+            ->values()
+            ->all();
+    }
+
     private function audit(Request $request, string $action, string $table, ?int $rowId = null, ?object $before = null, ?object $after = null): void
     {
         $user = $request->user();
@@ -1603,8 +1771,8 @@ class CrudController extends Controller
             'ip_address' => $request->ip(),
             'metadata' => json_encode([
                 'row_id' => $rowId,
-                'before' => $before,
-                'after' => $after,
+                'before' => $this->redactRow($table, $before),
+                'after' => $this->redactRow($table, $after),
             ]),
             'created_at' => now(),
             'updated_at' => now(),
@@ -1641,7 +1809,7 @@ class CrudController extends Controller
     private function customRoleAccessForUser(Request $request): ?array
     {
         $user = $request->user();
-        if (! $user || $user->hasRole(['super_admin', 'owner_pesantren'])) {
+        if (! $user || in_array($this->tenantContext->activeRole($request), ['super_admin', 'owner_pesantren'], true)) {
             return null;
         }
 
@@ -1651,6 +1819,7 @@ class CrudController extends Controller
             ->where('pesantren_user.pesantren_id', $tenantId)
             ->where('pesantren_user.user_id', $user->id)
             ->where('pesantren_user.status', 'active')
+            ->where('tenant_roles.pesantren_id', $tenantId)
             ->where('tenant_roles.status', 'active')
             ->value('tenant_roles.permissions');
 
@@ -1797,10 +1966,13 @@ class CrudController extends Controller
                 ? array_unique(array_merge($customAccess['read'], $customAccess['write']))
                 : $customAccess['write'];
             abort_unless(in_array($resource, $resources, true), 403, 'Custom role tenant tidak memiliki akses ke resource ini.');
+
             return;
         }
 
-        $roles = $user->role_names;
+        $role = $this->tenantContext->activeRole($request);
+        abort_unless($role, 403, 'Membership tenant aktif tidak ditemukan.');
+        $roles = [$role];
         foreach ($roles as $role) {
             $access = $this->effectiveRoleAccess($request, $role);
 
@@ -1843,6 +2015,7 @@ class CrudController extends Controller
             ->when($includeCreatedAt && $this->hasColumn($table, 'created_at'), fn ($data) => $data->merge(['created_at' => $data->get('created_at', now())]));
 
         if ($table === 'users') {
+            $data->forget(['remember_token', 'mfa_secret']);
             if ($data->has('password') && filled($data->get('password'))) {
                 $data->put('password', Hash::make((string) $data->get('password')));
             } else {

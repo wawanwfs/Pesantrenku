@@ -27,6 +27,16 @@ php artisan serve
 
 Web panel tersedia di `http://127.0.0.1:8000`.
 
+Alternatif Docker (MySQL, Redis, Reverb, queue worker, dan MailHog):
+
+```bash
+docker compose build
+docker compose run --rm app php artisan migrate:fresh --seed --force
+docker compose up -d
+```
+
+Setelah container sehat, panel tersedia di `http://localhost:8000` dan MailHog di `http://localhost:8025`.
+
 Untuk mode development frontend:
 
 ```bash

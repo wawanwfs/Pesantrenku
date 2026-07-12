@@ -67,6 +67,7 @@ class ProcessResourceImportJob implements ShouldQueue
                 $row = json_decode(trim($line), true);
                 if (! is_array($row)) {
                     $skipped++;
+
                     continue;
                 }
 
@@ -75,12 +76,16 @@ class ProcessResourceImportJob implements ShouldQueue
                     if (! $target || ! in_array($target, $schema, true)) {
                         continue;
                     }
+                    if (! array_key_exists($source, $row)) {
+                        continue;
+                    }
                     $value = $row[$source] ?? null;
                     $data[$target] = $value === '' ? null : $value;
                 }
 
                 if (! $data || (in_array('name', $schema, true) && empty($data['name']) && empty($data['title']))) {
                     $skipped++;
+
                     continue;
                 }
 
@@ -125,6 +130,7 @@ class ProcessResourceImportJob implements ShouldQueue
             if ($read > 0 && $processed < (int) $job->total_rows) {
                 self::dispatch($this->jobId, $this->table, $this->tenantId, $this->sourcePath, $this->mapping, $processed, $this->chunkSize)
                     ->onQueue('imports');
+
                 return;
             }
 

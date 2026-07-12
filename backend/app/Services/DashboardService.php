@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -58,7 +59,6 @@ class DashboardService
                 'audit_logs.action as aktivitas',
                 'audit_logs.module as modul',
                 'audit_logs.ip_address as ip',
-                'audit_logs.metadata',
                 'audit_logs.created_at as waktu',
             ])
             ->latest('audit_logs.id')
@@ -89,7 +89,7 @@ class DashboardService
             'subscriptions' => $this->query($request, 'subscriptions')->select('id', 'pesantren_id', 'plan_id', 'status', 'starts_at', 'ends_at', 'amount')->latest('id')->limit(10)->get(),
             'plans' => DB::table('plans')->select('id', 'name', 'code', 'monthly_price', 'max_students', 'max_users', 'status')->limit(10)->get(),
             'modules' => $this->modules($request),
-            'settings' => $this->query($request, 'system_settings')->select('id', 'key as kunci', 'value as nilai', 'updated_at as diperbarui_pada')->limit(10)->get(),
+            'settings' => $this->settings($request),
             'auditLogs' => $auditLogs,
             'systemActivities' => $this->systemActivities(),
             'loginMonitoring' => $this->loginMonitoring(),
@@ -139,7 +139,7 @@ class DashboardService
             'sickLetters' => $this->query($request, 'sick_letters')->limit(10)->get(),
             'referrals' => $this->query($request, 'referrals')->limit(10)->get(),
             'announcements' => $this->query($request, 'announcements')->latest('id')->limit(5)->get(),
-            'notifications' => $this->query($request, 'notification_logs')->whereNull('read_at')->latest('id')->limit(5)->get(),
+            'notifications' => $this->notifications($request),
         ];
     }
 
@@ -324,7 +324,7 @@ class DashboardService
         if ($key === 'auditLogs') {
             return $this->query($request, 'audit_logs')
                 ->leftJoin('users', 'audit_logs.user_id', '=', 'users.id')
-                ->select('audit_logs.id', 'users.name as pengguna', 'audit_logs.action as aktivitas', 'audit_logs.module as modul', 'audit_logs.ip_address as ip', 'audit_logs.metadata', 'audit_logs.created_at as waktu')
+                ->select('audit_logs.id', 'users.name as pengguna', 'audit_logs.action as aktivitas', 'audit_logs.module as modul', 'audit_logs.ip_address as ip', 'audit_logs.created_at as waktu')
                 ->latest('audit_logs.id')->limit(10)->get();
         }
 
@@ -338,13 +338,15 @@ class DashboardService
 
         return match ($key) {
             'roles' => DB::table('roles')->select('id', 'name', 'label')->orderBy('label')->get(),
+            'users' => $this->query($request, 'users')->select('id', 'name', 'email', 'username', 'phone', 'status', 'address', 'created_at', 'updated_at')->latest('id')->limit($this->sharedLimit($key))->get(),
             'memberships' => $this->memberships($request),
             'pesantrens' => $this->pesantrens($request),
             'modules' => $this->modules($request),
             'systemActivities' => $this->systemActivities(),
             'loginMonitoring' => $this->loginMonitoring(),
             'errorLogs' => $this->errorLogs(),
-            'notifications' => $this->query($request, 'notification_logs')->whereNull('read_at')->latest('id')->limit(5)->get(),
+            'settings' => $this->settings($request),
+            'notifications' => $this->notifications($request),
             'announcements' => $this->query($request, 'announcements')->latest('id')->limit(5)->get(),
             default => $this->query($request, $this->sharedTable($key))->latest('id')->limit($this->sharedLimit($key))->get(),
         };
@@ -371,42 +373,66 @@ class DashboardService
         return in_array($key, ['teacherAssignments', 'musyrifRoomAssignments'], true) ? 20 : 10;
     }
 
+    private function settings(?Request $request)
+    {
+        $query = $this->query($request, 'system_settings');
+        if ($request && ! $request->user()?->hasRole('super_admin')) {
+            foreach (['permissions.', 'security.', 'auth.', 'backup-security.'] as $prefix) {
+                $query->where('key', 'not like', $prefix.'%');
+            }
+        }
+
+        return $query->select('id', 'key as kunci', 'value as nilai', 'updated_at as diperbarui_pada')->latest('id')->limit(10)->get();
+    }
+
+    private function notifications(?Request $request)
+    {
+        $query = $this->query($request, 'notification_logs')->whereNull('read_at');
+        if ($request?->user()) {
+            $userId = $request->user()->id;
+            $query->where(fn ($nested) => $nested->whereNull('user_id')->orWhere('user_id', $userId));
+        } else {
+            $query->whereNull('user_id');
+        }
+
+        return $query->latest('id')->limit(5)->get();
+    }
+
     private function superAdmin(): array
     {
+        $pesantrenCount = $this->query(null, 'pesantrens')->count();
+        $userCount = $this->query(null, 'users')->count();
+        $studentCount = $this->query(null, 'students')->count();
+        $monthlyPayments = $this->query(null, 'payments')
+            ->where('status', 'success')
+            ->where('paid_at', '>=', now()->startOfMonth())
+            ->get();
+        $monthlyRevenue = (float) $monthlyPayments->sum('amount');
+
         return [
             'role' => 'super_admin',
             'title' => 'Dashboard',
             'subtitle' => 'Ringkasan sistem Pesantenku',
             'stats' => [
-                ['label' => 'Total Pesantren', 'value' => '128', 'trend' => '+8 dari bulan lalu', 'icon' => 'School', 'tone' => 'info'],
-                ['label' => 'Total User', 'value' => '5.842', 'trend' => '+156 dari bulan lalu', 'icon' => 'Users', 'tone' => 'success'],
-                ['label' => 'Total Santri', 'value' => '34.782', 'trend' => '+1.248 dari bulan lalu', 'icon' => 'Box', 'tone' => 'purple'],
-                ['label' => 'Transaksi Bulan Ini', 'value' => 'Rp 3,24 M', 'trend' => '+12,6% dari bulan lalu', 'icon' => 'PieChart', 'tone' => 'warning'],
-                ['label' => 'Pendapatan Bulan Ini', 'value' => 'Rp 2,18 M', 'trend' => '+15,3% dari bulan lalu', 'icon' => 'Wallet', 'tone' => 'error'],
-                ['label' => 'Server Status', 'value' => '100%', 'trend' => 'Semua sistem normal', 'icon' => 'Server', 'tone' => 'info'],
+                ['label' => 'Total Pesantren', 'value' => number_format($pesantrenCount, 0, ',', '.'), 'trend' => 'Pesantren terdaftar', 'icon' => 'School', 'tone' => 'info'],
+                ['label' => 'Total User', 'value' => number_format($userCount, 0, ',', '.'), 'trend' => 'Akun platform tersimpan', 'icon' => 'Users', 'tone' => 'success'],
+                ['label' => 'Total Santri', 'value' => number_format($studentCount, 0, ',', '.'), 'trend' => 'Seluruh tenant', 'icon' => 'Box', 'tone' => 'purple'],
+                ['label' => 'Transaksi Bulan Ini', 'value' => number_format($monthlyPayments->count(), 0, ',', '.'), 'trend' => 'Pembayaran sukses', 'icon' => 'PieChart', 'tone' => 'warning'],
+                ['label' => 'Pendapatan Bulan Ini', 'value' => $this->rupiah($monthlyRevenue), 'trend' => 'Nilai transaksi sukses', 'icon' => 'Wallet', 'tone' => 'success'],
+                ['label' => 'Status Data', 'value' => 'Sinkron', 'trend' => 'Terhubung ke database aktif', 'icon' => 'Server', 'tone' => 'info'],
             ],
-            'lineChart' => [
-                ['month' => 'Des 2024', 'Pengguna Aktif' => 1600, 'Transaksi' => 900],
-                ['month' => 'Jan 2025', 'Pengguna Aktif' => 2600, 'Transaksi' => 1800],
-                ['month' => 'Feb 2025', 'Pengguna Aktif' => 3000, 'Transaksi' => 2200],
-                ['month' => 'Mar 2025', 'Pengguna Aktif' => 3800, 'Transaksi' => 2500],
-                ['month' => 'Apr 2025', 'Pengguna Aktif' => 3100, 'Transaksi' => 3800],
-                ['month' => 'Mei 2025', 'Pengguna Aktif' => 3800, 'Transaksi' => 2900],
-            ],
-            'donut' => [
-                ['name' => 'Santri', 'value' => 2987],
-                ['name' => 'Wali Santri', 'value' => 1245],
-                ['name' => 'Guru', 'value' => 685],
-                ['name' => 'Musyrif', 'value' => 365],
-                ['name' => 'TU', 'value' => 235],
-                ['name' => 'Keuangan', 'value' => 180],
-            ],
+            'lineChart' => $this->platformChart(),
+            'donut' => $this->roleDistribution(),
             'tables' => [
-                'pesantren' => [
-                    ['Nama Pesantren' => 'Pondok Pesantren Darul Hikmah', 'Kota' => 'Surabaya', 'Santri' => 320, 'Bergabung' => '10 Mei 2025', 'Status' => 'Aktif'],
-                    ['Nama Pesantren' => 'Pesantren Al-Falah', 'Kota' => 'Bandung', 'Santri' => 250, 'Bergabung' => '9 Mei 2025', 'Status' => 'Aktif'],
-                    ['Nama Pesantren' => 'Pesantren Nurul Huda', 'Kota' => 'Yogyakarta', 'Santri' => 180, 'Bergabung' => '8 Mei 2025', 'Status' => 'Aktif'],
-                ],
+                'pesantren' => $this->query(null, 'pesantrens')
+                    ->leftJoin('students', function ($join) {
+                        $join->on('students.pesantren_id', '=', 'pesantrens.id')->whereNull('students.deleted_at');
+                    })
+                    ->select('pesantrens.name as Nama Pesantren', 'pesantrens.city as Kota', DB::raw('COUNT(students.id) as Santri'), 'pesantrens.created_at as Bergabung', 'pesantrens.status as Status')
+                    ->groupBy('pesantrens.id', 'pesantrens.name', 'pesantrens.city', 'pesantrens.created_at', 'pesantrens.status')
+                    ->latest('pesantrens.id')
+                    ->limit(5)
+                    ->get(),
             ],
         ] + $this->sharedWidgets();
     }
@@ -433,48 +459,40 @@ class DashboardService
                 ['label' => 'Pendapatan', 'value' => $this->rupiah($income), 'trend' => 'Pembayaran sukses', 'icon' => 'Wallet', 'tone' => 'success'],
                 ['label' => 'Tunggakan', 'value' => $this->rupiah($arrears), 'trend' => 'Tagihan belum lunas', 'icon' => 'TriangleAlert', 'tone' => 'warning'],
             ],
-            'lineChart' => [
-                ['month' => 'Jan', 'User Aktif' => 180, 'Transaksi' => 86],
-                ['month' => 'Feb', 'User Aktif' => 220, 'Transaksi' => 112],
-                ['month' => 'Mar', 'User Aktif' => 245, 'Transaksi' => 148],
-                ['month' => 'Apr', 'User Aktif' => 270, 'Transaksi' => 175],
-                ['month' => 'Mei', 'User Aktif' => 312, 'Transaksi' => 203],
-                ['month' => 'Jun', 'User Aktif' => 340, 'Transaksi' => 226],
-            ],
-            'donut' => [
-                ['name' => 'Akademik', 'value' => 92],
-                ['name' => 'Keuangan', 'value' => 88],
-                ['name' => 'TU', 'value' => 81],
-                ['name' => 'Asrama', 'value' => 74],
-                ['name' => 'Klinik', 'value' => 63],
-            ],
+            'lineChart' => $this->tenantActivityChart($request),
+            'donut' => $this->moduleDistribution($request),
             'quickActions' => ['Tambah User', 'Modul Aktif', 'Paket & Subscription', 'Audit Tenant', 'Pengaturan'],
-        ] + $this->sharedWidgets();
+        ] + $this->sharedWidgets($request);
     }
 
     private function finance(?Request $request): array
     {
+        $income = (float) $this->query($request, 'payments')->where('status', 'success')->sum('amount');
+        $expenses = (float) $this->query($request, 'expenses')->sum('amount');
+        $arrearsQuery = $this->query($request, 'invoices')->where('status', 'unpaid');
+        $arrears = (float) (clone $arrearsQuery)->sum('amount');
+        $arrearsStudents = (clone $arrearsQuery)->distinct()->count('student_id');
+        $paidStudents = $this->query($request, 'payments')
+            ->where('status', 'success')
+            ->where('paid_at', '>=', now()->startOfMonth())
+            ->distinct()
+            ->count('student_id');
+
         return [
             'role' => 'admin_keuangan',
             'title' => 'Dashboard',
             'subtitle' => 'Ringkasan keuangan pesantren',
             'stats' => [
-                ['label' => 'Total Pemasukan', 'value' => 'Rp 3.245.780.000', 'trend' => '+12.5% dari bulan lalu', 'icon' => 'Wallet', 'tone' => 'success'],
-                ['label' => 'Total Pengeluaran', 'value' => 'Rp 1.256.340.000', 'trend' => '-4.2% dari bulan lalu', 'icon' => 'LogOut', 'tone' => 'error'],
-                ['label' => 'Saldo Kas', 'value' => 'Rp 1.989.440.000', 'trend' => '+8.7% dari bulan lalu', 'icon' => 'CreditCard', 'tone' => 'info'],
-                ['label' => 'Tunggakan', 'value' => 'Rp 622.780.000', 'trend' => '246 santri menunggak', 'icon' => 'TriangleAlert', 'tone' => 'warning'],
-                ['label' => 'Lunas Bulan Ini', 'value' => '458 Santri', 'trend' => '+18.6% dari bulan lalu', 'icon' => 'CircleCheck', 'tone' => 'purple'],
+                ['label' => 'Total Pemasukan', 'value' => $this->rupiah($income), 'trend' => 'Pembayaran sukses', 'icon' => 'Wallet', 'tone' => 'success'],
+                ['label' => 'Total Pengeluaran', 'value' => $this->rupiah($expenses), 'trend' => 'Pengeluaran tercatat', 'icon' => 'LogOut', 'tone' => 'error'],
+                ['label' => 'Saldo Kas', 'value' => $this->rupiah($income - $expenses), 'trend' => 'Pemasukan dikurangi pengeluaran', 'icon' => 'CreditCard', 'tone' => 'info'],
+                ['label' => 'Tunggakan', 'value' => $this->rupiah($arrears), 'trend' => number_format($arrearsStudents, 0, ',', '.').' santri menunggak', 'icon' => 'TriangleAlert', 'tone' => 'warning'],
+                ['label' => 'Lunas Bulan Ini', 'value' => number_format($paidStudents, 0, ',', '.').' Santri', 'trend' => 'Pembayar unik bulan berjalan', 'icon' => 'CircleCheck', 'tone' => 'purple'],
             ],
-            'lineChart' => $this->financeChart(),
-            'donut' => [
-                ['name' => 'SPP', 'value' => 1850450000],
-                ['name' => 'Uang Makan', 'value' => 780120000],
-                ['name' => 'Seragam', 'value' => 320000000],
-                ['name' => 'Kegiatan', 'value' => 180300000],
-                ['name' => 'Lain-lain', 'value' => 119910000],
-            ],
+            'lineChart' => $this->financeChart($request),
+            'donut' => $this->paymentMethodDistribution($request),
             'quickActions' => ['Tambah Tagihan', 'Tambah Pembayaran', 'Laporan Pemasukan', 'Laporan Tunggakan', 'Pengaturan Umum'],
-        ] + $this->sharedWidgets();
+        ] + $this->sharedWidgets($request);
     }
 
     private function academic(?Request $request): array
@@ -490,28 +508,17 @@ class DashboardService
             'title' => 'Dashboard',
             'subtitle' => 'Ringkasan aktivitas akademik pesantren',
             'stats' => [
-                ['label' => 'Total Siswa', 'value' => number_format($studentCount ?: 1248, 0, ',', '.'), 'trend' => '+32 dari bulan lalu', 'icon' => 'Users', 'tone' => 'success'],
-                ['label' => 'Total Guru', 'value' => number_format($teacherCount ?: 98, 0, ',', '.'), 'trend' => '+5 dari bulan lalu', 'icon' => 'GraduationCap', 'tone' => 'info'],
-                ['label' => 'Total Kelas', 'value' => number_format($classCount ?: 42, 0, ',', '.'), 'trend' => 'Tahun Ajaran 2024/2025', 'icon' => 'School', 'tone' => 'purple'],
-                ['label' => 'Mata Pelajaran', 'value' => number_format($subjectCount ?: 156, 0, ',', '.'), 'trend' => 'Semua jenjang', 'icon' => 'BookOpen', 'tone' => 'warning'],
-                ['label' => 'Kelas Aktif', 'value' => number_format($classCount ?: 38, 0, ',', '.'), 'trend' => 'Tahun Ajaran 2024/2025', 'icon' => 'BadgeCheck', 'tone' => 'success'],
-                ['label' => 'Rata-rata Nilai', 'value' => number_format($average ?: 82.45, 2, ',', '.'), 'trend' => 'Semua kelas', 'icon' => 'BarChart3', 'tone' => 'info'],
+                ['label' => 'Total Siswa', 'value' => number_format($studentCount, 0, ',', '.'), 'trend' => 'Data tenant aktif', 'icon' => 'Users', 'tone' => 'success'],
+                ['label' => 'Total Guru', 'value' => number_format($teacherCount, 0, ',', '.'), 'trend' => 'Guru terdaftar', 'icon' => 'GraduationCap', 'tone' => 'info'],
+                ['label' => 'Total Kelas', 'value' => number_format($classCount, 0, ',', '.'), 'trend' => 'Seluruh tahun ajaran', 'icon' => 'School', 'tone' => 'purple'],
+                ['label' => 'Mata Pelajaran', 'value' => number_format($subjectCount, 0, ',', '.'), 'trend' => 'Semua jenjang', 'icon' => 'BookOpen', 'tone' => 'warning'],
+                ['label' => 'Kelas Aktif', 'value' => number_format($this->query($request, 'classes')->where('status', 'active')->count(), 0, ',', '.'), 'trend' => 'Status aktif', 'icon' => 'BadgeCheck', 'tone' => 'success'],
+                ['label' => 'Rata-rata Nilai', 'value' => number_format($average, 2, ',', '.'), 'trend' => $average > 0 ? 'Dari nilai tersimpan' : 'Belum ada nilai', 'icon' => 'BarChart3', 'tone' => 'info'],
             ],
-            'lineChart' => [
-                ['month' => 'Jul', 'Siswa Masuk' => 650, 'Siswa Keluar' => 320, 'Total Aktif' => 850],
-                ['month' => 'Agu', 'Siswa Masuk' => 920, 'Siswa Keluar' => 450, 'Total Aktif' => 1100],
-                ['month' => 'Sep', 'Siswa Masuk' => 930, 'Siswa Keluar' => 430, 'Total Aktif' => 1105],
-                ['month' => 'Okt', 'Siswa Masuk' => 980, 'Siswa Keluar' => 510, 'Total Aktif' => 1120],
-                ['month' => 'Nov', 'Siswa Masuk' => 1200, 'Siswa Keluar' => 420, 'Total Aktif' => 1250],
-                ['month' => 'Des', 'Siswa Masuk' => 1190, 'Siswa Keluar' => 650, 'Total Aktif' => 1210],
-            ],
-            'donut' => [
-                ['name' => 'Tsanawiyah', 'value' => 18],
-                ['name' => 'Aliyah', 'value' => 16],
-                ['name' => 'Tahfidz', 'value' => 8],
-            ],
+            'lineChart' => $this->studentTrend($request),
+            'donut' => $this->classLevelDistribution($request),
             'quickActions' => ['Tambah Kelas', 'Input Nilai', 'Jadwal Pelajaran', 'Presensi', 'Laporan Nilai', 'Pengaturan'],
-        ] + $this->sharedWidgets();
+        ] + $this->sharedWidgets($request);
     }
 
     private function tu(?Request $request): array
@@ -528,44 +535,37 @@ class DashboardService
             'title' => 'Dashboard',
             'subtitle' => 'Ringkasan data pesantren',
             'stats' => [
-                ['label' => 'Total Santri', 'value' => number_format($studentCount ?: 1248, 0, ',', '.'), 'trend' => '+12 dari bulan lalu', 'icon' => 'Users', 'tone' => 'success'],
-                ['label' => 'Guru & Staf', 'value' => number_format($teacherStaffCount ?: 98, 0, ',', '.'), 'trend' => '+3 dari bulan lalu', 'icon' => 'UserCog', 'tone' => 'info'],
-                ['label' => 'Kamar', 'value' => number_format($roomCount ?: 156, 0, ',', '.'), 'trend' => 'Terisi 85%', 'icon' => 'Bed', 'tone' => 'purple'],
-                ['label' => 'Kelas', 'value' => number_format($classCount ?: 42, 0, ',', '.'), 'trend' => 'Tahun ajaran 2024/2025', 'icon' => 'School', 'tone' => 'warning'],
-                ['label' => 'Surat Keluar', 'value' => number_format($outgoingLetters ?: 76, 0, ',', '.'), 'trend' => 'Bulan ini', 'icon' => 'Send', 'tone' => 'success'],
-                ['label' => 'Surat Masuk', 'value' => number_format($incomingLetters ?: 34, 0, ',', '.'), 'trend' => 'Bulan ini', 'icon' => 'Inbox', 'tone' => 'info'],
+                ['label' => 'Total Santri', 'value' => number_format($studentCount, 0, ',', '.'), 'trend' => 'Data tenant aktif', 'icon' => 'Users', 'tone' => 'success'],
+                ['label' => 'Guru & Staf', 'value' => number_format($teacherStaffCount, 0, ',', '.'), 'trend' => 'Personel terdaftar', 'icon' => 'UserCog', 'tone' => 'info'],
+                ['label' => 'Kamar', 'value' => number_format($roomCount, 0, ',', '.'), 'trend' => 'Kamar terdaftar', 'icon' => 'Bed', 'tone' => 'purple'],
+                ['label' => 'Kelas', 'value' => number_format($classCount, 0, ',', '.'), 'trend' => 'Seluruh tahun ajaran', 'icon' => 'School', 'tone' => 'warning'],
+                ['label' => 'Surat Keluar', 'value' => number_format($outgoingLetters, 0, ',', '.'), 'trend' => 'Seluruh surat tercatat', 'icon' => 'Send', 'tone' => 'success'],
+                ['label' => 'Surat Masuk', 'value' => number_format($incomingLetters, 0, ',', '.'), 'trend' => 'Seluruh surat tercatat', 'icon' => 'Inbox', 'tone' => 'info'],
             ],
-            'lineChart' => [
-                ['month' => 'Des', 'Total Santri' => 1100],
-                ['month' => 'Jan', 'Total Santri' => 1160],
-                ['month' => 'Feb', 'Total Santri' => 1180],
-                ['month' => 'Mar', 'Total Santri' => 1150],
-                ['month' => 'Apr', 'Total Santri' => 1210],
-                ['month' => 'Mei', 'Total Santri' => 1260],
-            ],
+            'lineChart' => $this->studentTrend($request),
             'quickActions' => ['Tambah Santri', 'Surat Menyurat', 'Mutasi Santri', 'Kamar', 'Pengumuman', 'Pengaturan'],
-        ] + $this->sharedWidgets();
+        ] + $this->sharedWidgets($request);
     }
 
     private function mobile(string $role, ?Request $request): array
     {
-        $profile = [
-            'santri' => ['name' => 'Najwa Karimah', 'subtitle' => 'Kamar C-07 - Tsanawiyah 2A'],
-            'wali_murid' => ['name' => 'Bapak/Ibu Nur Azizah Ghafur', 'subtitle' => 'Wali dari Najwa Karimah'],
-            'musyrif' => ['name' => 'Ustadzah Siti Aisyah', 'subtitle' => 'Musyrifah Putri - Blok C'],
-            'guru' => ['name' => 'Ustadzah Siti Aisyah', 'subtitle' => 'Guru Bahasa Arab'],
-            'klinik' => ['name' => 'Najwa Karimah', 'subtitle' => 'Kelas Tsanawiyah 2A'],
-        ][$role];
+        $user = $request?->user();
+        $student = $this->query($request, 'students')->first();
+        $teacher = $role === 'guru' ? $this->query($request, 'teachers')->first() : null;
+        $profileName = $teacher?->name ?? $user?->name ?? 'Pengguna';
+        $profileSubtitle = match ($role) {
+            'santri' => collect([$student?->room, $student?->nis])->filter()->implode(' - ') ?: 'Profil santri',
+            'wali_murid' => $student ? 'Wali dari '.$student->name : 'Profil wali murid',
+            'guru' => $teacher?->subject ? 'Guru '.$teacher->subject : 'Profil guru',
+            'musyrif' => 'Pendamping asrama',
+            'klinik' => 'Petugas layanan kesehatan',
+            default => 'Pengguna Pesantenku',
+        };
 
         return [
             'role' => $role,
-            'profile' => $profile,
-            'summary' => [
-                ['label' => 'Nilai', 'value' => '85.6'],
-                ['label' => 'Hafalan', 'value' => '12 Juz'],
-                ['label' => 'Pelanggaran', 'value' => '2 poin'],
-                ['label' => 'Tagihan', 'value' => 'Lunas'],
-            ],
+            'profile' => ['name' => $profileName, 'subtitle' => $profileSubtitle],
+            'summary' => $this->mobileSummary($role, $request),
             'menu' => $this->mobileMenus($role),
             'announcements' => $this->query($request, 'announcements')->latest('id')->limit(5)->get(),
             'students' => $this->query($request, 'students')->limit(5)->get(),
@@ -576,34 +576,48 @@ class DashboardService
         ];
     }
 
-    private function sharedWidgets(): array
+    private function sharedWidgets(?Request $request = null): array
     {
+        $activities = $this->query($request, 'audit_logs')
+            ->leftJoin('users', 'audit_logs.user_id', '=', 'users.id')
+            ->select('audit_logs.action', 'audit_logs.module', 'audit_logs.created_at', 'users.name')
+            ->latest('audit_logs.id')
+            ->limit(5)
+            ->get()
+            ->map(fn ($row) => [
+                'title' => ucwords(str_replace('_', ' ', $row->action)),
+                'description' => trim(($row->module ? ucwords(str_replace('_', ' ', $row->module)) : 'Sistem').($row->name ? ' - '.$row->name : '')),
+                'time' => $this->dateLabel($row->created_at),
+            ])
+            ->all();
+
+        $moduleUsage = $this->query($request, 'tenant_modules')
+            ->select('module', DB::raw('COUNT(*) as total'))
+            ->where('is_enabled', true)
+            ->groupBy('module')
+            ->orderByDesc('total')
+            ->limit(6)
+            ->get()
+            ->map(fn ($row) => ['name' => ucwords(str_replace('_', ' ', $row->module)), 'value' => (int) $row->total])
+            ->all();
+
         return [
-            'activities' => [
-                ['title' => 'Pesantren Baru Didaftarkan', 'description' => 'Pondok Pesantren Darul Hikmah', 'time' => '10 Mei 2025 10:24'],
-                ['title' => 'Backup Sistem Berhasil', 'description' => 'Backup otomatis harian', 'time' => '10 Mei 2025 02:15'],
-                ['title' => 'Update Sistem', 'description' => 'Versi 1.0.0 berhasil diinstal', 'time' => '9 Mei 2025 21:30'],
-            ],
-            'moduleUsage' => [
-                ['name' => 'Akademik', 'value' => 85],
-                ['name' => 'Keuangan', 'value' => 78],
-                ['name' => 'Santri', 'value' => 72],
-                ['name' => 'Klinik', 'value' => 58],
-                ['name' => 'Presensi', 'value' => 55],
-            ],
+            'activities' => $activities,
+            'moduleUsage' => $moduleUsage,
             'quickActions' => ['Tambah Pesantren', 'Tambah User', 'Assign Role', 'Backup Sekarang', 'Clear Cache', 'System Update', 'Lihat Log Audit', 'Pengaturan Sistem', 'Dokumentasi'],
         ];
     }
 
     private function systemActivities(): array
     {
-        return [
-            ['waktu' => '10 Mei 2025 10:24', 'aktivitas' => 'Pesantren Baru Didaftarkan', 'modul' => 'Manajemen Sistem', 'pengguna' => 'Super Admin', 'ip' => '103.147.12.45', 'status' => 'Berhasil'],
-            ['waktu' => '10 Mei 2025 09:15', 'aktivitas' => 'User Baru Dibuat', 'modul' => 'User & Role', 'pengguna' => 'Super Admin', 'ip' => '103.147.12.45', 'status' => 'Berhasil'],
-            ['waktu' => '10 Mei 2025 02:15', 'aktivitas' => 'Backup Sistem Berhasil', 'modul' => 'Maintenance', 'pengguna' => 'Scheduler', 'ip' => '127.0.0.1', 'status' => 'Berhasil'],
-            ['waktu' => '9 Mei 2025 23:48', 'aktivitas' => 'Login Mencurigakan Diblokir', 'modul' => 'Login Monitoring', 'pengguna' => 'Firewall', 'ip' => '103.147.12.88', 'status' => 'Peringatan'],
-            ['waktu' => '9 Mei 2025 21:30', 'aktivitas' => 'Update Sistem Terpasang', 'modul' => 'System Update', 'pengguna' => 'Super Admin', 'ip' => '103.147.12.45', 'status' => 'Selesai'],
-        ];
+        return $this->query(null, 'audit_logs')
+            ->leftJoin('users', 'audit_logs.user_id', '=', 'users.id')
+            ->select('audit_logs.created_at as waktu', 'audit_logs.action as aktivitas', 'audit_logs.module as modul', 'users.name as pengguna', 'audit_logs.ip_address as ip')
+            ->latest('audit_logs.id')
+            ->limit(20)
+            ->get()
+            ->map(fn ($row) => (array) $row + ['status' => 'Tercatat'])
+            ->all();
     }
 
     private function systemModules(): array
@@ -620,34 +634,189 @@ class DashboardService
 
     private function loginMonitoring(): array
     {
-        return [
-            ['waktu' => '10 Mei 2025 10:30', 'pengguna' => 'Super Admin', 'role' => 'super_admin', 'ip' => '103.147.12.45', 'perangkat' => 'Edge / Windows', 'status' => 'Berhasil'],
-            ['waktu' => '10 Mei 2025 09:45', 'pengguna' => 'Keuangan Admin', 'role' => 'admin_keuangan', 'ip' => '103.147.12.46', 'perangkat' => 'Chrome / Windows', 'status' => 'Berhasil'],
-            ['waktu' => '10 Mei 2025 09:20', 'pengguna' => 'Ustadzah Siti Aisyah', 'role' => 'guru', 'ip' => '114.10.21.8', 'perangkat' => 'Android App', 'status' => 'Berhasil'],
-            ['waktu' => '9 Mei 2025 23:48', 'pengguna' => 'Tidak dikenal', 'role' => '-', 'ip' => '103.147.12.88', 'perangkat' => 'Unknown Browser', 'status' => 'Diblokir'],
-        ];
+        return $this->query(null, 'audit_logs')
+            ->leftJoin('users', 'audit_logs.user_id', '=', 'users.id')
+            ->where(function ($query) {
+                $query->where('audit_logs.module', 'auth')->orWhere('audit_logs.action', 'like', '%login%');
+            })
+            ->select('audit_logs.created_at as waktu', 'users.name as pengguna', 'audit_logs.ip_address as ip', 'audit_logs.action as status')
+            ->latest('audit_logs.id')
+            ->limit(20)
+            ->get()
+            ->map(fn ($row) => (array) $row + ['role' => '-', 'perangkat' => '-'])
+            ->all();
     }
 
     private function errorLogs(): array
     {
+        return $this->query(null, 'audit_logs')
+            ->where(function ($query) {
+                $query->where('action', 'like', '%fail%')->orWhere('action', 'like', '%error%');
+            })
+            ->select('created_at as waktu', 'module as modul', 'action as pesan')
+            ->latest('id')
+            ->limit(20)
+            ->get()
+            ->map(fn ($row) => (array) $row + ['level' => 'Error', 'status' => 'Tercatat'])
+            ->all();
+    }
+
+    private function financeChart(?Request $request): array
+    {
+        return $this->monthBuckets()->map(function (Carbon $month) use ($request) {
+            return [
+                'month' => $this->monthLabel($month),
+                'Pemasukan' => (float) $this->query($request, 'payments')->where('status', 'success')->whereBetween('paid_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->sum('amount'),
+                'Pengeluaran' => (float) $this->query($request, 'expenses')->whereBetween('date', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->sum('amount'),
+            ];
+        })->all();
+    }
+
+    private function platformChart(): array
+    {
+        return $this->monthBuckets()->map(fn (Carbon $month) => [
+            'month' => $this->monthLabel($month),
+            'Pengguna Baru' => $this->query(null, 'users')->whereBetween('created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->count(),
+            'Transaksi' => $this->query(null, 'payments')->where('status', 'success')->whereBetween('paid_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->count(),
+        ])->all();
+    }
+
+    private function tenantActivityChart(?Request $request): array
+    {
+        return $this->monthBuckets()->map(fn (Carbon $month) => [
+            'month' => $this->monthLabel($month),
+            'Santri Baru' => $this->query($request, 'students')->whereBetween('created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->count(),
+            'Transaksi' => $this->query($request, 'payments')->where('status', 'success')->whereBetween('paid_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->count(),
+        ])->all();
+    }
+
+    private function studentTrend(?Request $request): array
+    {
+        return $this->monthBuckets()->map(function (Carbon $month) use ($request) {
+            $end = $month->copy()->endOfMonth();
+
+            return [
+                'month' => $this->monthLabel($month),
+                'Santri Baru' => $this->query($request, 'students')->whereBetween('created_at', [$month->copy()->startOfMonth(), $end])->count(),
+                'Total Aktif' => $this->query($request, 'students')->where('status', 'active')->where('created_at', '<=', $end)->count(),
+            ];
+        })->all();
+    }
+
+    private function roleDistribution(): array
+    {
+        return DB::table('roles')
+            ->leftJoin('role_user', 'roles.id', '=', 'role_user.role_id')
+            ->select('roles.label as name', DB::raw('COUNT(role_user.user_id) as value'))
+            ->groupBy('roles.id', 'roles.label')
+            ->havingRaw('COUNT(role_user.user_id) > 0')
+            ->orderByDesc('value')
+            ->get()
+            ->map(fn ($row) => ['name' => $row->name, 'value' => (int) $row->value])
+            ->all();
+    }
+
+    private function moduleDistribution(?Request $request): array
+    {
+        return $this->query($request, 'tenant_modules')
+            ->select('module as name', DB::raw('COUNT(*) as value'))
+            ->where('is_enabled', true)
+            ->groupBy('module')
+            ->orderByDesc('value')
+            ->get()
+            ->map(fn ($row) => ['name' => ucwords(str_replace('_', ' ', $row->name)), 'value' => (int) $row->value])
+            ->all();
+    }
+
+    private function classLevelDistribution(?Request $request): array
+    {
+        return $this->query($request, 'classes')
+            ->select('level as name', DB::raw('COUNT(*) as value'))
+            ->groupBy('level')
+            ->orderByDesc('value')
+            ->get()
+            ->map(fn ($row) => ['name' => $row->name ?: 'Belum ditentukan', 'value' => (int) $row->value])
+            ->all();
+    }
+
+    private function paymentMethodDistribution(?Request $request): array
+    {
+        return $this->query($request, 'payments')
+            ->leftJoin('payment_methods', 'payments.payment_method_id', '=', 'payment_methods.id')
+            ->where('payments.status', 'success')
+            ->selectRaw("COALESCE(payment_methods.name, 'Lainnya') as name, SUM(payments.amount) as value")
+            ->groupBy('payment_methods.name')
+            ->orderByDesc('value')
+            ->get()
+            ->map(fn ($row) => ['name' => $row->name, 'value' => (float) $row->value])
+            ->all();
+    }
+
+    private function mobileSummary(string $role, ?Request $request): array
+    {
+        if ($role === 'guru') {
+            return [
+                ['label' => 'Kelas', 'value' => (string) $this->query($request, 'classes')->count()],
+                ['label' => 'Mapel', 'value' => (string) $this->query($request, 'subjects')->count()],
+                ['label' => 'Nilai', 'value' => number_format((float) $this->query($request, 'grades')->avg('average_score'), 1, ',', '.')],
+                ['label' => 'Tugas', 'value' => (string) $this->query($request, 'assignments')->count()],
+            ];
+        }
+
+        if ($role === 'musyrif') {
+            return [
+                ['label' => 'Santri', 'value' => (string) $this->query($request, 'students')->count()],
+                ['label' => 'Kamar', 'value' => (string) $this->query($request, 'rooms')->count()],
+                ['label' => 'Pelanggaran', 'value' => number_format((float) $this->query($request, 'violations')->sum('points'), 0, ',', '.').' poin'],
+                ['label' => 'Izin Aktif', 'value' => (string) $this->query($request, 'permits')->whereIn('status', ['pending', 'approved'])->count()],
+            ];
+        }
+
+        if ($role === 'klinik') {
+            return [
+                ['label' => 'Antrian', 'value' => (string) $this->query($request, 'medical_queues')->where('status', 'waiting')->count()],
+                ['label' => 'Rekam Medis', 'value' => (string) $this->query($request, 'medical_records')->count()],
+                ['label' => 'Obat', 'value' => (string) $this->query($request, 'medicines')->count()],
+                ['label' => 'Rujukan', 'value' => (string) $this->query($request, 'referrals')->count()],
+            ];
+        }
+
+        $average = (float) $this->query($request, 'grades')->avg('average_score');
+        $memorization = (int) $this->query($request, 'memorization_records')->max('juz');
+        $points = (float) $this->query($request, 'violations')->sum('points');
+        $arrears = (float) $this->query($request, 'invoices')->where('status', 'unpaid')->sum('amount');
+
         return [
-            ['waktu' => '10 Mei 2025 08:11', 'level' => 'Info', 'modul' => 'API', 'pesan' => 'Sinkronisasi dashboard selesai', 'status' => 'Selesai'],
-            ['waktu' => '9 Mei 2025 22:14', 'level' => 'Warning', 'modul' => 'Integrasi API', 'pesan' => 'Timeout gateway pembayaran, retry berhasil', 'status' => 'Dipantau'],
-            ['waktu' => '9 Mei 2025 02:15', 'level' => 'Info', 'modul' => 'Backup', 'pesan' => 'Backup database selesai tanpa error', 'status' => 'Selesai'],
-            ['waktu' => '8 Mei 2025 18:05', 'level' => 'Error', 'modul' => 'Import CSV', 'pesan' => '3 baris nilai ditolak karena format tidak valid', 'status' => 'Ditangani'],
+            ['label' => 'Nilai', 'value' => $average > 0 ? number_format($average, 1, ',', '.') : '-'],
+            ['label' => 'Hafalan', 'value' => $memorization > 0 ? $memorization.' Juz' : '-'],
+            ['label' => 'Pelanggaran', 'value' => number_format($points, 0, ',', '.').' poin'],
+            ['label' => 'Tagihan', 'value' => $arrears > 0 ? $this->rupiah($arrears) : 'Lunas'],
         ];
     }
 
-    private function financeChart(): array
+    private function monthBuckets()
     {
-        return [
-            ['month' => 'Des 2024', 'Pemasukan' => 260000000, 'Pengeluaran' => 130000000],
-            ['month' => 'Jan 2025', 'Pemasukan' => 410000000, 'Pengeluaran' => 320000000],
-            ['month' => 'Feb 2025', 'Pemasukan' => 540000000, 'Pengeluaran' => 220000000],
-            ['month' => 'Mar 2025', 'Pemasukan' => 750000000, 'Pengeluaran' => 370000000],
-            ['month' => 'Apr 2025', 'Pemasukan' => 590000000, 'Pengeluaran' => 310000000],
-            ['month' => 'Mei 2025', 'Pemasukan' => 890000000, 'Pengeluaran' => 500000000],
-        ];
+        return collect(range(5, 0))->map(fn (int $offset) => now()->startOfMonth()->subMonths($offset));
+    }
+
+    private function monthLabel(Carbon $month): string
+    {
+        $names = [1 => 'Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+
+        return $names[$month->month].' '.$month->year;
+    }
+
+    private function dateLabel(mixed $value): string
+    {
+        if (! $value) {
+            return '-';
+        }
+
+        try {
+            return Carbon::parse($value)->format('d/m/Y H:i');
+        } catch (\Throwable) {
+            return (string) $value;
+        }
     }
 
     private function query(?Request $request, string $table)
@@ -668,30 +837,32 @@ class DashboardService
 
     private function applyRoleScope(Request $request, $query, string $table): void
     {
-        $user = $request->user()?->loadMissing('roles');
-        if (! $user) {
+        $role = $this->tenantContext->activeRole($request);
+        if (! $role || $role === 'super_admin') {
             return;
         }
 
-        if ($user->hasRole(['santri', 'wali_murid'])) {
+        if (in_array($role, ['santri', 'wali_murid'], true)) {
             $this->applyPersonalScope($request, $query, $table);
+
             return;
         }
 
-        if ($user->hasRole('guru')) {
+        if ($role === 'guru') {
             $this->applyTeacherScope($request, $query, $table);
+
             return;
         }
 
-        if ($user->hasRole('musyrif')) {
+        if ($role === 'musyrif') {
             $this->applyDormScope($request, $query, $table);
         }
     }
 
     private function applyPersonalScope(Request $request, $query, string $table): void
     {
-        $user = $request->user()?->loadMissing('roles');
-        if (! $user || ! $user->hasRole(['santri', 'wali_murid'])) {
+        $role = $this->tenantContext->activeRole($request);
+        if (! in_array($role, ['santri', 'wali_murid'], true)) {
             return;
         }
 
@@ -702,16 +873,19 @@ class DashboardService
 
         if ($table === 'students') {
             $query->whereIn('students.id', $studentIds ?: [0]);
+
             return;
         }
 
         if ($this->hasColumn($table, 'student_id')) {
             $query->whereIn("{$table}.student_id", $studentIds ?: [0]);
+
             return;
         }
 
         if ($table === 'schedules') {
             $query->whereIn('schedules.class_id', $classIds ?: [0]);
+
             return;
         }
 
@@ -722,6 +896,7 @@ class DashboardService
                     ->whereColumn('invoices.id', "{$table}.invoice_id")
                     ->whereIn('invoices.student_id', $studentIds ?: [0]);
             });
+
             return;
         }
 
@@ -741,26 +916,31 @@ class DashboardService
 
         if ($table === 'teachers') {
             $query->whereIn('teachers.id', $scope['teacher_ids'] ?: [0]);
+
             return;
         }
 
         if ($table === 'students') {
             $query->whereIn('students.class_id', $scope['class_ids'] ?: [0]);
+
             return;
         }
 
         if ($table === 'classes') {
             $query->whereIn('classes.id', $scope['class_ids'] ?: [0]);
+
             return;
         }
 
         if ($table === 'subjects') {
             $query->whereIn('subjects.id', $scope['subject_ids'] ?: [0]);
+
             return;
         }
 
         if ($this->hasColumn($table, 'student_id')) {
             $query->whereIn("{$table}.student_id", $scope['student_ids'] ?: [0]);
+
             return;
         }
 
@@ -783,11 +963,13 @@ class DashboardService
 
         if ($table === 'rooms') {
             $query->whereIn('rooms.id', $scope['room_ids'] ?: [0]);
+
             return;
         }
 
         if ($table === 'students') {
             $query->whereIn('students.id', $scope['student_ids'] ?: [0]);
+
             return;
         }
 
@@ -803,132 +985,133 @@ class DashboardService
     private function accessibleStudentIds(Request $request): array
     {
         return $this->requestMemo($request, 'accessible-student-ids', function () use ($request) {
-        $user = $request->user()?->loadMissing('roles');
-        if (! $user) {
+            $user = $request->user();
+            $role = $this->tenantContext->activeRole($request);
+            if (! $user || ! $role) {
+                return [];
+            }
+
+            $tenantId = $this->tenantContext->activePesantrenId($request);
+
+            if ($role === 'santri') {
+                return DB::table('students')
+                    ->where('pesantren_id', $tenantId)
+                    ->where('user_id', $user->id)
+                    ->pluck('id')
+                    ->all();
+            }
+
+            if ($role === 'wali_murid') {
+                return DB::table('students')
+                    ->join('guardians', 'students.guardian_id', '=', 'guardians.id')
+                    ->where('students.pesantren_id', $tenantId)
+                    ->where('guardians.user_id', $user->id)
+                    ->pluck('students.id')
+                    ->all();
+            }
+
             return [];
-        }
-
-        $tenantId = $this->tenantContext->activePesantrenId($request);
-
-        if ($user->hasRole('santri')) {
-            return DB::table('students')
-                ->where('pesantren_id', $tenantId)
-                ->where('user_id', $user->id)
-                ->pluck('id')
-                ->all();
-        }
-
-        if ($user->hasRole('wali_murid')) {
-            return DB::table('students')
-                ->join('guardians', 'students.guardian_id', '=', 'guardians.id')
-                ->where('students.pesantren_id', $tenantId)
-                ->where('guardians.user_id', $user->id)
-                ->pluck('students.id')
-                ->all();
-        }
-
-        return [];
         });
     }
 
     private function teacherScope(Request $request): array
     {
         return $this->requestMemo($request, 'teacher-scope', function () use ($request) {
-        $tenantId = $this->tenantContext->activePesantrenId($request);
-        $userId = $request->user()?->id;
-        $teachers = DB::table('teachers')->where('pesantren_id', $tenantId)->where('user_id', $userId)->get();
-        $teacherIds = $teachers->pluck('id')->all();
-        $teacherNames = $teachers->pluck('name')->filter()->values()->all();
-        $teacherSubjects = $teachers->pluck('subject')->filter()->values()->all();
+            $tenantId = $this->tenantContext->activePesantrenId($request);
+            $userId = $request->user()?->id;
+            $teachers = DB::table('teachers')->where('pesantren_id', $tenantId)->where('user_id', $userId)->get();
+            $teacherIds = $teachers->pluck('id')->all();
+            $teacherNames = $teachers->pluck('name')->filter()->values()->all();
+            $teacherSubjects = $teachers->pluck('subject')->filter()->values()->all();
 
-        $assignments = $this->hasTable('teacher_assignments')
-            ? DB::table('teacher_assignments')
-                ->where('pesantren_id', $tenantId)
-                ->where('status', 'active')
-                ->whereIn('teacher_id', $teacherIds ?: [0])
-                ->get()
-            : collect();
+            $assignments = $this->hasTable('teacher_assignments')
+                ? DB::table('teacher_assignments')
+                    ->where('pesantren_id', $tenantId)
+                    ->where('status', 'active')
+                    ->whereIn('teacher_id', $teacherIds ?: [0])
+                    ->get()
+                : collect();
 
-        if ($assignments->isNotEmpty()) {
-            $subjectIds = $assignments->pluck('subject_id')->filter()->unique()->values()->all();
-            $classIds = $assignments->pluck('class_id')->filter()->unique()->values()->all();
-        } else {
-            $subjectIds = DB::table('subjects')
+            if ($assignments->isNotEmpty()) {
+                $subjectIds = $assignments->pluck('subject_id')->filter()->unique()->values()->all();
+                $classIds = $assignments->pluck('class_id')->filter()->unique()->values()->all();
+            } else {
+                $subjectIds = DB::table('subjects')
+                    ->where('pesantren_id', $tenantId)
+                    ->where(function ($query) use ($teacherNames, $teacherSubjects) {
+                        $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
+                            ->orWhereIn('name', $teacherSubjects ?: ['__none__']);
+                    })
+                    ->pluck('id')
+                    ->all();
+
+                $classIds = DB::table('schedules')
+                    ->where('pesantren_id', $tenantId)
+                    ->where(function ($query) use ($teacherNames, $subjectIds) {
+                        $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
+                            ->orWhereIn('subject_id', $subjectIds ?: [0]);
+                    })
+                    ->pluck('class_id')
+                    ->filter()
+                    ->unique()
+                    ->values()
+                    ->all();
+            }
+
+            $studentIds = DB::table('students')
                 ->where('pesantren_id', $tenantId)
-                ->where(function ($query) use ($teacherNames, $teacherSubjects) {
-                    $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
-                        ->orWhereIn('name', $teacherSubjects ?: ['__none__']);
-                })
+                ->whereIn('class_id', $classIds ?: [0])
                 ->pluck('id')
                 ->all();
 
-            $classIds = DB::table('schedules')
-                ->where('pesantren_id', $tenantId)
-                ->where(function ($query) use ($teacherNames, $subjectIds) {
-                    $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
-                        ->orWhereIn('subject_id', $subjectIds ?: [0]);
-                })
-                ->pluck('class_id')
-                ->filter()
-                ->unique()
-                ->values()
-                ->all();
-        }
-
-        $studentIds = DB::table('students')
-            ->where('pesantren_id', $tenantId)
-            ->whereIn('class_id', $classIds ?: [0])
-            ->pluck('id')
-            ->all();
-
-        return [
-            'teacher_ids' => $teacherIds,
-            'teacher_names' => $teacherNames,
-            'subject_ids' => $subjectIds,
-            'class_ids' => $classIds,
-            'student_ids' => $studentIds,
-        ];
+            return [
+                'teacher_ids' => $teacherIds,
+                'teacher_names' => $teacherNames,
+                'subject_ids' => $subjectIds,
+                'class_ids' => $classIds,
+                'student_ids' => $studentIds,
+            ];
         });
     }
 
     private function dormScope(Request $request): array
     {
         return $this->requestMemo($request, 'dorm-scope', function () use ($request) {
-        $tenantId = $this->tenantContext->activePesantrenId($request);
-        $userId = $request->user()?->id;
-        $assignedRoomIds = $this->hasTable('musyrif_room_assignments')
-            ? DB::table('musyrif_room_assignments')
+            $tenantId = $this->tenantContext->activePesantrenId($request);
+            $userId = $request->user()?->id;
+            $assignedRoomIds = $this->hasTable('musyrif_room_assignments')
+                ? DB::table('musyrif_room_assignments')
+                    ->where('pesantren_id', $tenantId)
+                    ->where('user_id', $userId)
+                    ->where('status', 'active')
+                    ->pluck('room_id')
+                    ->filter()
+                    ->values()
+                    ->all()
+                : [];
+
+            $rooms = DB::table('rooms')
                 ->where('pesantren_id', $tenantId)
-                ->where('user_id', $userId)
-                ->where('status', 'active')
-                ->pluck('room_id')
-                ->filter()
-                ->values()
-                ->all()
-            : [];
+                ->when($assignedRoomIds, fn ($query) => $query->whereIn('id', $assignedRoomIds), function ($query) {
+                    $query->where(function ($query) {
+                        $query->where('block', 'like', '%Putri%')
+                            ->orWhere('name', 'like', 'C-%');
+                    });
+                })
+                ->get();
 
-        $rooms = DB::table('rooms')
-            ->where('pesantren_id', $tenantId)
-            ->when($assignedRoomIds, fn ($query) => $query->whereIn('id', $assignedRoomIds), function ($query) {
-                $query->where(function ($query) {
-                    $query->where('block', 'like', '%Putri%')
-                        ->orWhere('name', 'like', 'C-%');
-                });
-            })
-            ->get();
+            $roomNames = $rooms->pluck('name')->all();
+            $studentIds = DB::table('students')
+                ->where('pesantren_id', $tenantId)
+                ->whereIn('room', $roomNames ?: ['__none__'])
+                ->pluck('id')
+                ->all();
 
-        $roomNames = $rooms->pluck('name')->all();
-        $studentIds = DB::table('students')
-            ->where('pesantren_id', $tenantId)
-            ->whereIn('room', $roomNames ?: ['__none__'])
-            ->pluck('id')
-            ->all();
-
-        return [
-            'room_ids' => $rooms->pluck('id')->all(),
-            'room_names' => $roomNames,
-            'student_ids' => $studentIds,
-        ];
+            return [
+                'room_ids' => $rooms->pluck('id')->all(),
+                'room_names' => $roomNames,
+                'student_ids' => $studentIds,
+            ];
         });
     }
 

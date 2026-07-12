@@ -1,17 +1,16 @@
 <?php
 
-use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ActionController;
+use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CrudController;
 use App\Http\Controllers\MetricsController;
-use App\Services\OperationStorage;
 use App\Http\Controllers\WebController;
+use App\Services\OperationStorage;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 Route::get('/', function (Request $request) {
@@ -46,23 +45,30 @@ Route::get('/health', function () {
             $operationStorage->delete($path);
 
             return 'ok';
-        } catch (\Throwable) {
+        } catch (Throwable) {
             return 'error';
         }
     });
 
-    return response()->json([
+    $health = [
         'status' => 'ok',
         'app' => config('app.name'),
-        'environment' => config('app.env'),
-        'debug' => config('app.debug'),
         'database' => DB::select('select 1 as ok')[0]->ok === 1 ? 'ok' : 'error',
         'queue_table' => Schema::hasTable('jobs') ? 'ok' : 'missing',
         'storage' => $storageStatus,
-        'storage_disk' => $operationDisk,
-        'broadcast' => config('broadcasting.default'),
         'checked_at' => now()->toIso8601String(),
-    ]);
+    ];
+
+    if (! app()->environment('production')) {
+        $health += [
+            'environment' => config('app.env'),
+            'debug' => config('app.debug'),
+            'storage_disk' => $operationDisk,
+            'broadcast' => config('broadcasting.default'),
+        ];
+    }
+
+    return response()->json($health);
 });
 Route::get('/metrics', MetricsController::class)->middleware('throttle:60,1');
 
