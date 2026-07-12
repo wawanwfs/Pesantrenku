@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-12T12:16:28Z",
+  "generated_at": "2026-07-12T12:24:34Z",
   "project": "Pesantenku",
   "branch": "main",
   "remote": "https://github.com/wawanwfs/Pesantrenku.git",
@@ -37,7 +37,8 @@
     "Simplified CRUD workflows by rendering only resource-relevant filters, grouping exports and advanced tools into compact menus, scoping permission/queue tools to relevant resources, and translating common fields and statuses to Indonesian.",
     "Hardened interaction accessibility with Escape/focus-trap/focus-restore behavior for the mobile drawer and primary dialogs, linked CRUD validation errors to fields, and added keyboard/outside-click lifecycle support to the landing mobile menu.",
     "Made CRUD search results race-safe by ignoring stale requests and loading list plus analytics concurrently; dashboard previews now use explicit human-oriented columns instead of arbitrary first fields.",
-    "Connected owner dashboard previews to enriched tenant membership, module, and subscription DTOs; mobile toolbar menus are viewport-safe and mutually exclusive, while row actions stay compact without sticky overlap."
+    "Connected owner dashboard previews to enriched tenant membership, module, and subscription DTOs; mobile toolbar menus are viewport-safe and mutually exclusive, while row actions stay compact without sticky overlap.",
+    "Made composer run dev cross-platform: Unix keeps Laravel Pail, while Windows automatically tails storage/logs/laravel.log without requiring the unavailable pcntl extension."
   ],
   "visual_redesign": {
     "public_entry": "Guest requests to / render Inertia Landing; authenticated users still redirect to their role dashboard.",
