@@ -549,6 +549,20 @@ function CrudModule({ meta, shared }) {
   }, [meta.resource, meta.title]);
 
   useEffect(() => {
+    const closeToolbarMenus = (event) => {
+      if (event.type === 'mousedown' && event.target.closest?.('.crud-toolbar')) return;
+      if (event.type === 'keydown' && event.key !== 'Escape') return;
+      document.querySelectorAll('.crud-toolbar details[open]').forEach((detail) => detail.removeAttribute('open'));
+    };
+    document.addEventListener('mousedown', closeToolbarMenus);
+    document.addEventListener('keydown', closeToolbarMenus);
+    return () => {
+      document.removeEventListener('mousedown', closeToolbarMenus);
+      document.removeEventListener('keydown', closeToolbarMenus);
+    };
+  }, []);
+
+  useEffect(() => {
     setPage(1);
   }, [search, status, dateFrom, dateTo, classFilter, studentFilter, perPage, meta.resource]);
 
@@ -897,7 +911,7 @@ function CrudModule({ meta, shared }) {
               </select></label>
             )}
           </div>
-          <div className="flex flex-wrap items-start gap-2 2xl:max-w-[48rem] 2xl:justify-end">
+          <div className="crud-toolbar relative flex flex-wrap items-start gap-2 2xl:max-w-[48rem] 2xl:justify-end" onToggle={(event) => { if (event.target.open) event.currentTarget.querySelectorAll('details[open]').forEach((detail) => { if (detail !== event.target) detail.removeAttribute('open'); }); }}>
             {meta.resource === 'backups' && <button onClick={runBackup} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Database className="h-4 w-4" /> Jalankan Backup</button>}
             {meta.resource === 'backups' && meta.panel === 'super-admin' && <button onClick={() => setRestoreApprovalOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Shield className="h-4 w-4" /> Persetujuan Restore</button>}
             {canImport && <button onClick={() => setImportOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><ImportIcon className="h-4 w-4" /> Import Excel</button>}
@@ -1614,16 +1628,16 @@ function dashboardPreview(panel, shared) {
   if (panel === 'super-admin') {
     return [
       { title: 'Pesantren Terbaru', rows: shared.pesantrens, columns: ['name', 'city', 'status'], href: '/super-admin/module/pesantrens' },
-      { title: 'Owner & User Platform', rows: shared.memberships, columns: ['user_id', 'role_id', 'status'], href: '/super-admin/module/owner' },
-      { title: 'Subscription Aktif', rows: shared.subscriptions, columns: ['pesantren_id', 'plan_id', 'status'], href: '/super-admin/module/subscriptions' },
+      { title: 'Owner & User Platform', rows: shared.memberships, columns: ['pengguna', 'role', 'status'], href: '/super-admin/module/owner' },
+      { title: 'Subscription Aktif', rows: shared.subscriptions, columns: ['pesantren_name', 'plan_name', 'status'], href: '/super-admin/module/subscriptions' },
     ];
   }
 
   if (panel === 'owner') {
     return [
-      { title: 'User & Role Tenant', rows: shared.memberships, columns: ['user_id', 'role_id', 'status'], href: '/owner/module/user-dan-role' },
-      { title: 'Modul Tenant', rows: shared.modules, columns: ['module', 'is_enabled'], href: '/owner/module/modul-aktif' },
-      { title: 'Paket & Subscription', rows: shared.subscriptions, columns: ['plan_id', 'status', 'ends_at'], href: '/owner/module/paket-dan-subscription' },
+      { title: 'User & Role Tenant', rows: shared.memberships, columns: ['pengguna', 'role', 'status'], href: '/owner/module/user-dan-role' },
+      { title: 'Modul Tenant', rows: shared.modules, columns: ['nama_modul', 'role_akses', 'status'], href: '/owner/module/modul-aktif' },
+      { title: 'Paket & Subscription', rows: shared.subscriptions, columns: ['plan_name', 'status', 'ends_at'], href: '/owner/module/paket-dan-subscription' },
     ];
   }
 
@@ -1740,6 +1754,7 @@ const fieldLabels = {
   ends_at: 'Tanggal Selesai', amount: 'Nominal', monthly_price: 'Harga Bulanan', max_students: 'Batas Santri',
   max_users: 'Batas Pengguna', is_enabled: 'Aktif', is_active: 'Aktif', role: 'Peran', module: 'Modul',
   invoice_number: 'Nomor Tagihan', due_date: 'Jatuh Tempo', paid_at: 'Waktu Bayar', created_at: 'Dibuat',
+  pengguna: 'Pengguna', pesantren_name: 'Pesantren', plan_name: 'Paket', nama_modul: 'Modul', role_akses: 'Akses',
 };
 
 function isVisibleTableColumn(key) {

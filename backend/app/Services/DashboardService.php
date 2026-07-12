@@ -86,7 +86,7 @@ class DashboardService
             'roles' => DB::table('roles')->select('id', 'name', 'label')->orderBy('label')->get(),
             'memberships' => $this->memberships($request),
             'pesantrens' => $this->pesantrens($request),
-            'subscriptions' => $this->query($request, 'subscriptions')->select('id', 'pesantren_id', 'plan_id', 'status', 'starts_at', 'ends_at', 'amount')->latest('id')->limit(10)->get(),
+            'subscriptions' => $this->subscriptions($request),
             'plans' => DB::table('plans')->select('id', 'name', 'code', 'monthly_price', 'max_students', 'max_users', 'status')->limit(10)->get(),
             'modules' => $this->modules($request),
             'settings' => $this->settings($request),
@@ -1157,25 +1157,53 @@ class DashboardService
             return collect();
         }
 
-        if (! $request->user()->hasRole('super_admin')) {
-            return $this->tenantContext->memberships($request);
-        }
-
-        return DB::table('pesantren_user')
+        $query = DB::table('pesantren_user')
             ->join('pesantrens', 'pesantren_user.pesantren_id', '=', 'pesantrens.id')
             ->join('users', 'pesantren_user.user_id', '=', 'users.id')
             ->join('roles', 'pesantren_user.role_id', '=', 'roles.id')
+            ->leftJoin('tenant_roles', 'pesantren_user.tenant_role_id', '=', 'tenant_roles.id')
             ->whereNull('pesantrens.deleted_at')
             ->select([
                 'pesantren_user.id',
+                'pesantren_user.pesantren_id',
+                'pesantren_user.user_id',
+                'pesantren_user.role_id',
                 'pesantrens.name as pesantren',
                 'users.name as pengguna',
                 'users.email',
                 'roles.label as role',
+                'tenant_roles.label as tenant_role',
                 'pesantren_user.status',
-            ])
+            ]);
+
+        if (! $request->user()->hasRole('super_admin')) {
+            $query->where('pesantren_user.pesantren_id', $this->tenantContext->activePesantrenId($request));
+        }
+
+        return $query
             ->latest('pesantren_user.id')
             ->limit(20)
+            ->get();
+    }
+
+    private function subscriptions(?Request $request)
+    {
+        return $this->query($request, 'subscriptions')
+            ->leftJoin('plans', 'subscriptions.plan_id', '=', 'plans.id')
+            ->leftJoin('pesantrens', 'subscriptions.pesantren_id', '=', 'pesantrens.id')
+            ->select([
+                'subscriptions.id',
+                'subscriptions.pesantren_id',
+                'subscriptions.plan_id',
+                'subscriptions.status',
+                'subscriptions.starts_at',
+                'subscriptions.ends_at',
+                'subscriptions.amount',
+                'plans.name as plan_name',
+                'pesantrens.name as pesantren_name',
+            ])
+            ->latest('subscriptions.id')
+            ->limit(10)
             ->get();
     }
 

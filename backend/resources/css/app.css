@@ -27,3 +27,36 @@ html {
 body {
     color: #0F172A;
 }
+
+td.sticky.right-0 {
+    min-width: 8rem;
+}
+
+td.sticky.right-0 > div {
+    flex-wrap: nowrap;
+}
+
+@media (max-width: 767px) {
+    .crud-toolbar details {
+        position: static;
+    }
+
+    .crud-toolbar details > div {
+        left: 0;
+        right: 0;
+        top: 100%;
+        min-width: 0;
+        width: 100%;
+        max-width: calc(100vw - 2rem);
+        margin-top: 0.5rem;
+    }
+
+    td.sticky.right-0 {
+        position: static;
+        min-width: 8rem;
+    }
+
+    td.sticky.right-0 > div {
+        flex-wrap: nowrap;
+    }
+}

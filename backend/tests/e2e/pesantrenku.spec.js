@@ -165,6 +165,39 @@ test('table cards do not widen the Pixel 7 viewport', async ({ page }, testInfo)
   expect(geometry.cardRight).toBeLessThanOrEqual(geometry.viewportWidth + 1);
   expect(geometry.scrollerLeft).toBeGreaterThanOrEqual(geometry.cardLeft - 1);
   expect(geometry.scrollerRight).toBeLessThanOrEqual(geometry.cardRight + 1);
+
+  const firstActionCell = card.locator('tbody td.sticky.right-0').first();
+  if (await firstActionCell.isVisible().catch(() => false)) {
+    const actionLayout = await firstActionCell.evaluate((element) => ({
+      position: getComputedStyle(element).position,
+      flexWrap: getComputedStyle(element.firstElementChild).flexWrap,
+      rowHeight: element.closest('tr').getBoundingClientRect().height,
+    }));
+    expect(actionLayout.position).not.toBe('sticky');
+    expect(actionLayout.flexWrap).toBe('nowrap');
+    expect(actionLayout.rowHeight).toBeLessThan(100);
+  }
+
+  await page.getByText('Ekspor', { exact: true }).click();
+  const exportMenu = page.getByRole('button', { name: 'Unduh CSV' }).locator('..');
+  await expect(exportMenu).toBeVisible();
+  const menuBox = await exportMenu.boundingBox();
+  expect(menuBox.x).toBeGreaterThanOrEqual(0);
+  expect(menuBox.x + menuBox.width).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+  await page.getByText('Lainnya', { exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Unduh CSV' })).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Hasil unduhan' })).toBeVisible();
+  await page.keyboard.press('Escape');
+});
+
+test('owner dashboard previews use human-readable connected data', async ({ page }) => {
+  await login(page, 'owner', 'owner@pesantenku.test');
+  const preview = page.getByRole('heading', { name: 'User & Role Tenant', exact: true }).locator('xpath=ancestor::section[1]');
+  await expect(preview).toBeVisible();
+  const values = await preview.locator('tbody td').allInnerTexts();
+  expect(values.length).toBeGreaterThan(0);
+  expect(values.some((value) => value.trim() && value.trim() !== '-' && !/^#\d+$/.test(value.trim()))).toBeTruthy();
+  await expect(page.getByRole('heading', { name: 'Modul Tenant', exact: true })).toBeVisible();
 });
 
 test('Escape closes the mobile navigation drawer', async ({ page }, testInfo) => {
