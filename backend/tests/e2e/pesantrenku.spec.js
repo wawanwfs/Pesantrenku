@@ -19,9 +19,14 @@ function navigate(page, url) {
 }
 
 async function login(page, panel, email) {
+  // Stop authenticated background requests before clearing cookies so a late
+  // Laravel response cannot restore the session while switching test users.
+  await page.goto('about:blank');
   await page.context().clearCookies();
   await navigate(page, '/login');
-  await page.locator('input[autocomplete="username"]').fill(email);
+  const username = page.locator('input[autocomplete="username"]');
+  await expect(username).toBeVisible({ timeout: 15_000 });
+  await username.fill(email);
   await page.locator('input[type="password"]').fill('password');
   await Promise.all([
     page.waitForURL(new RegExp(`/dashboard/${panel.replace('-', '\\-')}`), { waitUntil: 'domcontentloaded', timeout: 45_000 }),
