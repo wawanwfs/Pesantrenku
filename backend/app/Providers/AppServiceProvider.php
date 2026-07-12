@@ -23,6 +23,7 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
     private array $queueSpans = [];
+
     /**
      * Register any application services.
      */
