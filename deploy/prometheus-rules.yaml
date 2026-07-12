@@ -1,0 +1,68 @@
+groups:
+  - name: pesantenku-slo
+    rules:
+      - record: pesantenku:http_requests:rate5m
+        expr: sum(rate(pesantenku_http_requests_total[5m]))
+      - record: pesantenku:http_errors:ratio5m
+        expr: sum(rate(pesantenku_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(pesantenku_http_requests_total[5m])), 0.001)
+      - record: pesantenku:http_latency:average5m
+        expr: sum(rate(pesantenku_http_request_duration_sum_microseconds[5m])) / clamp_min(sum(rate(pesantenku_http_request_duration_count[5m])), 0.001) / 1000000
+      - record: pesantenku:queue_wait:average5m
+        expr: sum(rate(pesantenku_queue_wait_duration_sum_microseconds[5m])) / clamp_min(sum(rate(pesantenku_queue_wait_duration_count[5m])), 0.001) / 1000000
+      - record: pesantenku:slow_queries:rate5m
+        expr: sum(rate(pesantenku_database_slow_queries_total[5m]))
+      - alert: PesantenkuHighErrorRate
+        expr: pesantenku:http_errors:ratio5m > 0.01
+        for: 10m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: Pesantenku error rate exceeds 1 percent
+      - alert: PesantenkuHighAverageLatency
+        expr: pesantenku:http_latency:average5m > 0.75
+        for: 15m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: Pesantenku average request latency exceeds 750 ms
+      - alert: PesantenkuQueueFailures
+        expr: increase(pesantenku_queue_jobs_failed_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: critical
+          slo: durability
+        annotations:
+          summary: Queue jobs are failing
+      - alert: PesantenkuSlowQueryBurst
+        expr: pesantenku:slow_queries:rate5m > 1
+        for: 10m
+        labels:
+          severity: warning
+          slo: latency
+        annotations:
+          summary: More than one slow query per second is observed
+      - alert: PesantenkuQueueWaitHigh
+        expr: pesantenku:queue_wait:average5m > 30
+        for: 10m
+        labels:
+          severity: warning
+          slo: queue-latency
+        annotations:
+          summary: Average queue wait exceeds 30 seconds
+      - alert: PesantenkuRealtimeSilent
+        expr: sum(increase(pesantenku_reverb_events_total[30m])) == 0
+        for: 30m
+        labels:
+          severity: warning
+          slo: realtime
+        annotations:
+          summary: No realtime notification events observed in 30 minutes
+      - alert: PesantenkuMetricsStorageUnavailable
+        expr: pesantenku_metrics_storage_available == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Metrics cache backend is unavailable

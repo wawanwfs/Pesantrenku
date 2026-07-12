@@ -1,0 +1,163 @@
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+      grafana:
+        condition: service_started
+
+  app:
+    image: ${PESANTRENKU_IMAGE}
+    restart: unless-stopped
+    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    expose:
+      - "8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  queue:
+    image: ${PESANTRENKU_IMAGE}
+    restart: unless-stopped
+    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    command: php artisan queue:work redis --queue=default,imports,exports --sleep=1 --tries=3 --timeout=900
+    healthcheck:
+      disable: true
+    depends_on:
+      - mysql
+      - redis
+
+  scheduler:
+    image: ${PESANTRENKU_IMAGE}
+    restart: unless-stopped
+    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    command: php artisan schedule:work
+    healthcheck:
+      disable: true
+    depends_on:
+      - mysql
+      - redis
+
+  reverb:
+    image: ${PESANTRENKU_IMAGE}
+    restart: unless-stopped
+    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    healthcheck:
+      disable: true
+    expose:
+      - "8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    environment:
+      MYSQL_DATABASE: ${DB_DATABASE}
+      MYSQL_USER: ${DB_USERNAME}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.156.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./deploy/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    expose:
+      - "4317"
+      - "4318"
+      - "13133"
+    depends_on:
+      - tempo
+
+  tempo:
+    image: grafana/tempo:2.8.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./deploy/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data:/var/tempo
+    expose:
+      - "3200"
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yaml", "--storage.tsdb.path=/prometheus"]
+    volumes:
+      - ./deploy/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./deploy/prometheus-rules.yaml:/etc/prometheus/rules/pesantenku.yaml:ro
+      - prometheus-data:/prometheus
+    secrets:
+      - pesantenku_metrics_token
+    expose:
+      - "9090"
+    depends_on:
+      - app
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    restart: unless-stopped
+    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    environment:
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    expose:
+      - "3000"
+    depends_on:
+      - prometheus
+      - tempo
+
+volumes:
+  mysql-data:
+  redis-data:
+  tempo-data:
+  prometheus-data:
+  grafana-data:
+  caddy-data:
+  caddy-config:
+
+secrets:
+  pesantenku_metrics_token:
+    environment: PESANTRENKU_METRICS_TOKEN

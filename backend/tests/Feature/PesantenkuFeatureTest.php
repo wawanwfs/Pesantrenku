@@ -1,0 +1,703 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use App\Services\TotpService;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+use Tests\TestCase;
+
+class PesantenkuFeatureTest extends TestCase
+{
+    use RefreshDatabase;
+
+    public function test_reverse_proxy_https_generates_secure_asset_urls(): void
+    {
+        $response = $this
+            ->withServerVariables(['REMOTE_ADDR' => '172.20.0.2'])
+            ->withHeaders([
+                'Host' => 'pesantrenku.ai',
+                'X-Forwarded-Host' => 'pesantrenku.ai',
+                'X-Forwarded-Proto' => 'https',
+            ])
+            ->get('/login');
+
+        $response->assertOk()
+            ->assertSee('https://pesantrenku.ai/build/', false)
+            ->assertDontSee('http://pesantrenku.ai/build/', false);
+    }
+
+    public function test_api_login_returns_sanctum_token_and_roles(): void
+    {
+        $this->seed();
+
+        $response = $this->postJson('/api/v1/auth/login', [
+            'login' => 'superadmin@pesantenku.test',
+            'password' => 'password',
+        ]);
+
+        $response->assertOk()
+            ->assertJsonStructure(['token', 'user' => ['email'], 'roles'])
+            ->assertJsonPath('roles.0', 'super_admin');
+
+        $tenantResponse = $this->postJson('/api/v1/auth/login', [
+            'login' => 'keuangan@pesantenku.test',
+            'password' => 'password',
+        ]);
+
+        $tenantResponse->assertOk()
+            ->assertJsonPath('roles.0', 'admin_keuangan')
+            ->assertJsonPath('active_pesantren.name', 'Pondok Pesantren Darul Hikmah');
+    }
+
+    public function test_web_login_discards_stale_intended_url_from_another_role(): void
+    {
+        $this->seed();
+
+        $response = $this
+            ->withSession(['url.intended' => '/musyrif/module/perizinan'])
+            ->post('/login', [
+                'login' => 'keuangan@pesantenku.test',
+                'password' => 'password',
+            ]);
+
+        $response->assertRedirect('/dashboard/keuangan');
+        $this->assertAuthenticatedAs(User::where('email', 'keuangan@pesantenku.test')->firstOrFail());
+        $this->assertNull(session('url.intended'));
+    }
+
+    public function test_system_setting_create_is_idempotent_for_existing_tenant_key(): void
+    {
+        $this->seed();
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+        $tenantId = DB::table('pesantrens')->where('name', 'Pondok Pesantren Darul Hikmah')->value('id');
+        $value = json_encode(['title' => 'Kwitansi Audit'], JSON_THROW_ON_ERROR);
+
+        $this->actingAs($owner)
+            ->postJson('/web-api/system-settings', ['key' => 'pdf.receipt_template', 'value' => $value])
+            ->assertOk()
+            ->assertJsonPath('key', 'pdf.receipt_template');
+
+        $this->assertSame(1, DB::table('system_settings')->where('pesantren_id', $tenantId)->where('key', 'pdf.receipt_template')->count());
+        $this->assertSame($value, DB::table('system_settings')->where('pesantren_id', $tenantId)->where('key', 'pdf.receipt_template')->value('value'));
+    }
+
+    public function test_dashboard_endpoint_returns_seeded_stats(): void
+    {
+        $this->seed();
+        $token = $this->postJson('/api/v1/auth/login', [
+            'login' => 'akademik@pesantenku.test',
+            'password' => 'password',
+        ])->json('token');
+
+        $this->withToken($token)
+            ->getJson('/api/v1/dashboard/akademik')
+            ->assertOk()
+            ->assertJsonPath('data.stats.0.label', 'Total Siswa')
+            ->assertJsonPath('data.stats.5.label', 'Rata-rata Nilai');
+    }
+
+    public function test_invoice_attendance_and_grade_data_are_seeded(): void
+    {
+        $this->seed();
+
+        $darulId = DB::table('pesantrens')->where('name', 'Pondok Pesantren Darul Hikmah')->value('id');
+
+        $this->assertDatabaseHas('invoices', ['pesantren_id' => $darulId, 'invoice_number' => 'INV/DH/2025/05/001', 'status' => 'paid']);
+        $this->assertDatabaseHas('payments', ['pesantren_id' => $darulId, 'status' => 'pending']);
+        $this->assertGreaterThan(0, DB::table('grades')->where('average_score', '>=', 80)->count());
+
+        DB::table('attendances')->insert([
+            'pesantren_id' => $darulId,
+            'student_id' => 1,
+            'class_id' => 1,
+            'date' => '2025-05-21',
+            'session' => 'Bahasa Arab',
+            'status' => 'hadir',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->assertDatabaseHas('attendances', ['student_id' => 1, 'status' => 'hadir']);
+    }
+
+    public function test_tenant_admin_can_only_read_active_pesantren_data(): void
+    {
+        $this->seed();
+
+        $darulId = DB::table('pesantrens')->where('name', 'Pondok Pesantren Darul Hikmah')->value('id');
+        $falahId = DB::table('pesantrens')->where('name', 'Pesantren Al-Falah')->value('id');
+        $token = $this->postJson('/api/v1/auth/login', [
+            'login' => 'keuangan@pesantenku.test',
+            'password' => 'password',
+        ])->json('token');
+
+        $response = $this->withToken($token)->getJson('/api/v1/students');
+
+        $response->assertOk();
+        $this->assertNotEmpty($response->json('data'));
+        $this->assertTrue(collect($response->json('data'))->every(fn ($row) => $row['pesantren_id'] === $darulId));
+        $response->assertJsonMissing(['name' => 'Nabila Azizah']);
+
+        $forbiddenTenant = $this->withToken($token)
+            ->withHeader('X-Pesantren-Id', (string) $falahId)
+            ->getJson('/api/v1/students');
+        $this->assertSame(403, $forbiddenTenant->getStatusCode(), $forbiddenTenant->getContent());
+    }
+
+    public function test_owner_can_switch_between_owned_pesantrens(): void
+    {
+        $this->seed();
+
+        $falahId = DB::table('pesantrens')->where('name', 'Pesantren Al-Falah')->value('id');
+        $token = $this->postJson('/api/v1/auth/login', [
+            'login' => 'owner@pesantenku.test',
+            'password' => 'password',
+        ])->json('token');
+
+        $response = $this->withToken($token)
+            ->withHeader('X-Pesantren-Id', (string) $falahId)
+            ->getJson('/api/v1/students');
+
+        $response->assertOk();
+        $this->assertTrue(collect($response->json('data'))->every(fn ($row) => $row['pesantren_id'] === $falahId));
+        $response->assertJsonFragment(['name' => 'Nabila Azizah']);
+    }
+
+    public function test_web_panels_enforce_platform_and_tenant_roles(): void
+    {
+        $this->seed();
+
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+        $keuangan = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+
+        $this->actingAs($owner)->get('/dashboard/owner')->assertOk();
+        $ownerDenied = $this->actingAs($owner)->get('/dashboard/super-admin');
+        $this->assertSame(403, $ownerDenied->getStatusCode(), $ownerDenied->getContent());
+
+        $this->actingAs($keuangan)->get('/dashboard/keuangan')->assertOk();
+        $financeDenied = $this->actingAs($keuangan)->get('/dashboard/super-admin');
+        $this->assertSame(403, $financeDenied->getStatusCode(), $financeDenied->getContent());
+    }
+
+    public function test_operational_roles_can_create_allowed_records(): void
+    {
+        $this->seed();
+
+        $studentId = DB::table('students')->where('name', 'Najwa Karimah')->value('id');
+        $classId = DB::table('schedules')->where('teacher_name', 'Usth. Siti Aisyah')->value('class_id');
+        $subjectId = DB::table('subjects')->where('name', 'Bahasa Arab')->value('id');
+        $roomId = DB::table('rooms')->where('name', 'C-07')->value('id');
+        $invoiceId = DB::table('invoices')->where('student_id', $studentId)->value('id');
+        $paymentMethodId = DB::table('payment_methods')->where('name', 'Transfer Bank')->value('id');
+
+        $santri = User::where('email', 'santri@pesantenku.test')->firstOrFail();
+        $otherStudentId = DB::table('students')->where('id', '!=', $studentId)->value('id');
+
+        $this->actingAs($santri)
+            ->getJson('/web-api/students')
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonFragment(['name' => 'Najwa Karimah'])
+            ->assertJsonMissing(['name' => 'Ahmad Zaky']);
+
+        $this->actingAs($santri)->postJson('/web-api/permits', [
+            'student_id' => $studentId,
+            'type' => 'Izin Keluarga',
+            'start_at' => '2026-07-08 08:00:00',
+            'end_at' => '2026-07-08 17:00:00',
+            'reason' => 'Keperluan keluarga',
+            'status' => 'pending',
+        ])->assertCreated();
+
+        $invalidPermit = $this->actingAs($santri)->postJson('/web-api/permits', [
+            'student_id' => $otherStudentId,
+            'type' => 'Izin Tidak Sah',
+            'start_at' => '2026-07-08 08:00:00',
+            'end_at' => '2026-07-08 17:00:00',
+            'reason' => 'Harus ditolak',
+            'status' => 'pending',
+        ]);
+        $this->assertSame(403, $invalidPermit->getStatusCode(), $invalidPermit->getContent());
+
+        $deniedPlan = $this->actingAs($santri)->postJson('/web-api/plans', [
+            'name' => 'Tidak boleh',
+            'code' => 'DENIED',
+        ]);
+        $this->assertSame(403, $deniedPlan->getStatusCode(), $deniedPlan->getContent());
+
+        $wali = User::where('email', 'wali@pesantenku.test')->firstOrFail();
+        $this->actingAs($wali)->postJson('/web-api/payments', [
+            'invoice_id' => $invoiceId,
+            'student_id' => $studentId,
+            'payment_method_id' => $paymentMethodId,
+            'amount' => 125000,
+            'paid_at' => '2026-07-08 09:00:00',
+            'status' => 'pending',
+            'reference' => 'WALI-AUDIT-001',
+        ])->assertCreated();
+
+        $guru = User::where('email', 'guru@pesantenku.test')->firstOrFail();
+        $this->actingAs($guru)->postJson('/web-api/assignments', [
+            'class_id' => $classId,
+            'subject_id' => $subjectId,
+            'title' => 'Tugas Audit Browser',
+            'due_date' => '2026-07-20',
+            'status' => 'given',
+        ])->assertCreated();
+
+        $musyrif = User::where('email', 'musyrif@pesantenku.test')->firstOrFail();
+        $this->actingAs($musyrif)->postJson('/web-api/dorm-attendances', [
+            'student_id' => $studentId,
+            'room_id' => $roomId,
+            'date' => '2026-07-08',
+            'activity' => 'Apel malam',
+            'status' => 'hadir',
+        ])->assertCreated();
+
+        $klinik = User::where('email', 'klinik@pesantenku.test')->firstOrFail();
+        $this->actingAs($klinik)->postJson('/web-api/medical-queues', [
+            'student_id' => $studentId,
+            'queue_number' => 'AUD-001',
+            'status' => 'waiting',
+            'estimated_time' => '10:30',
+        ])->assertCreated();
+
+        $this->assertDatabaseHas('permits', ['student_id' => $studentId, 'type' => 'Izin Keluarga']);
+        $this->assertDatabaseHas('payments', ['reference' => 'WALI-AUDIT-001']);
+        $this->assertDatabaseHas('assignments', ['title' => 'Tugas Audit Browser']);
+        $this->assertDatabaseHas('dorm_attendances', ['activity' => 'Apel malam']);
+        $this->assertDatabaseHas('medical_queues', ['queue_number' => 'AUD-001']);
+    }
+
+    public function test_csv_import_notifications_and_backup_actions_are_stateful(): void
+    {
+        $this->seed();
+
+        $akademik = User::where('email', 'akademik@pesantenku.test')->firstOrFail();
+        $csv = UploadedFile::fake()->createWithContent('programs.csv', "name,code,level\nProgram Audit,AUDIT,Test\n");
+
+        $this->actingAs($akademik)
+            ->post('/web-api/programs/import', ['file' => $csv])
+            ->assertOk()
+            ->assertJsonPath('inserted', 1);
+
+        $this->assertDatabaseHas('programs', ['name' => 'Program Audit', 'code' => 'AUDIT']);
+
+        $santri = User::where('email', 'santri@pesantenku.test')->firstOrFail();
+        $notificationId = DB::table('notification_logs')->whereNull('read_at')->value('id');
+
+        $this->actingAs($santri)
+            ->postJson('/web-actions/notifications/read', ['ids' => [$notificationId]])
+            ->assertOk()
+            ->assertJsonPath('updated', 1);
+
+        $this->assertNotNull(DB::table('notification_logs')->where('id', $notificationId)->value('read_at'));
+
+        $qr = $this->actingAs($santri)->getJson('/web-actions/qr/generate')
+            ->assertOk()
+            ->assertJsonStructure(['code', 'expires_at'])
+            ->json('code');
+
+        $this->actingAs($santri)
+            ->postJson('/web-actions/qr/scan', ['code' => $qr])
+            ->assertOk()
+            ->assertJsonPath('status', 'success');
+
+        $this->assertDatabaseHas('qr_tokens', ['code' => $qr, 'status' => 'used']);
+
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+        Storage::fake('local');
+
+        $backupId = $this->actingAs($owner)
+            ->postJson('/web-actions/backup/run')
+            ->assertOk()
+            ->assertJsonPath('status', 'success')
+            ->json('backup_id');
+
+        $this->assertDatabaseHas('backups', ['status' => 'success']);
+        $filePath = DB::table('backups')->where('id', $backupId)->value('file_path');
+        Storage::disk('local')->assertExists($filePath);
+    }
+
+    public function test_workflow_transitions_filters_and_operational_scopes(): void
+    {
+        $this->seed();
+
+        $permit = DB::table('permits')->where('status', 'pending')->first();
+        $musyrif = User::where('email', 'musyrif@pesantenku.test')->firstOrFail();
+
+        $this->actingAs($musyrif)
+            ->postJson("/web-actions/workflow/permits/{$permit->id}/approve")
+            ->assertOk()
+            ->assertJsonPath('status', 'approved');
+
+        $this->assertDatabaseHas('permits', ['id' => $permit->id, 'status' => 'approved']);
+        $this->assertDatabaseHas('audit_logs', ['module' => 'permits', 'action' => 'APPROVE permits']);
+
+        $studentId = DB::table('students')->where('name', 'Najwa Karimah')->value('id');
+        $rejectPermitId = DB::table('permits')->insertGetId([
+            'pesantren_id' => DB::table('students')->where('id', $studentId)->value('pesantren_id'),
+            'student_id' => $studentId,
+            'type' => 'Izin Audit Ditolak',
+            'start_at' => now(),
+            'end_at' => now()->addHour(),
+            'reason' => 'Audit note wajib',
+            'status' => 'pending',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($musyrif)
+            ->postJson("/web-actions/workflow/permits/{$rejectPermitId}/reject")
+            ->assertStatus(422);
+
+        $this->actingAs($musyrif)
+            ->postJson("/web-actions/workflow/permits/{$rejectPermitId}/reject", ['note' => 'Dokumen izin belum lengkap.'])
+            ->assertOk()
+            ->assertJsonPath('status', 'rejected');
+
+        $this->assertDatabaseHas('notification_logs', ['title' => 'Perizinan ditolak']);
+
+        $this->actingAs($musyrif)
+            ->getJson("/web-api/permits/{$rejectPermitId}/timeline")
+            ->assertOk()
+            ->assertJsonFragment(['note' => 'Dokumen izin belum lengkap.']);
+
+        $payment = DB::table('payments')->where('status', 'pending')->first();
+        $paymentId = $payment->id;
+        $invoiceId = $payment->invoice_id;
+
+        $keuangan = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+        $this->actingAs($keuangan)
+            ->postJson("/web-actions/workflow/payments/{$paymentId}/verify")
+            ->assertOk()
+            ->assertJsonPath('status', 'success');
+
+        $this->assertDatabaseHas('payments', ['id' => $paymentId, 'status' => 'success']);
+        $this->assertDatabaseHas('invoices', ['id' => $invoiceId, 'status' => 'paid']);
+
+        $this->actingAs($keuangan)
+            ->getJson('/web-api/payments?status=success&date_from=2025-01-01&date_to=2026-12-31')
+            ->assertOk()
+            ->assertJsonFragment(['reference' => $payment->reference]);
+
+        $guru = User::where('email', 'guru@pesantenku.test')->firstOrFail();
+        $this->assertDatabaseHas('teacher_assignments', ['status' => 'active']);
+        $this->assertDatabaseHas('musyrif_room_assignments', ['status' => 'active']);
+
+        $teacherId = DB::table('teachers')->where('user_id', $guru->id)->value('id');
+        $assignment = DB::table('teacher_assignments')->where('teacher_id', $teacherId)->first();
+        $allowedClassId = $assignment->class_id;
+        $allowedSubjectId = $assignment->subject_id;
+        $otherStudent = DB::table('students')->where('name', 'Ahmad Zaky')->first();
+        $otherClassId = $otherStudent->class_id;
+        $otherStudentId = $otherStudent->id;
+
+        $this->actingAs($guru)
+            ->getJson('/web-api/classes')
+            ->assertOk()
+            ->assertJsonFragment(['id' => $allowedClassId])
+            ->assertJsonMissing(['id' => $otherClassId]);
+
+        $invalidGrade = $this->actingAs($guru)->postJson('/web-api/grades', [
+            'student_id' => $otherStudentId,
+            'class_id' => $otherClassId,
+            'subject_id' => $allowedSubjectId,
+            'semester' => 'Audit',
+            'assignment_score' => 80,
+            'midterm_score' => 80,
+            'final_score' => 80,
+            'attitude_score' => 80,
+            'average_score' => 80,
+            'grade' => 'B',
+        ]);
+        $this->assertSame(403, $invalidGrade->getStatusCode(), $invalidGrade->getContent());
+
+        $maleRoomId = DB::table('rooms')->where('name', 'A-01')->value('id');
+        $maleStudentId = DB::table('students')->where('room', 'A-01')->value('id');
+        $invalidDormAttendance = $this->actingAs($musyrif)->postJson('/web-api/dorm-attendances', [
+            'student_id' => $maleStudentId,
+            'room_id' => $maleRoomId,
+            'date' => '2026-07-09',
+            'activity' => 'Audit scope',
+            'status' => 'hadir',
+        ]);
+        $this->assertSame(403, $invalidDormAttendance->getStatusCode(), $invalidDormAttendance->getContent());
+
+        $this->actingAs($keuangan)
+            ->getJson('/web-api/payments/analytics?status=success&date_from=2025-01-01&date_to=2026-12-31')
+            ->assertOk()
+            ->assertJsonPath('completed', 3);
+
+        $this->actingAs($keuangan)
+            ->get('/web-api/payments/export?format=excel&status=success')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/vnd.ms-excel; charset=UTF-8');
+
+        $this->actingAs($keuangan)
+            ->get('/web-api/payments/export?format=pdf&status=success')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+    }
+
+    public function test_hardening_import_bulk_notifications_permission_matrix_and_relation_labels(): void
+    {
+        $this->seed();
+
+        $studentId = DB::table('students')->where('name', 'Najwa Karimah')->value('id');
+        $tu = User::where('email', 'tu@pesantenku.test')->firstOrFail();
+        $akademik = User::where('email', 'akademik@pesantenku.test')->firstOrFail();
+        $keuangan = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+        $santri = User::where('email', 'santri@pesantenku.test')->firstOrFail();
+
+        $this->actingAs($keuangan)
+            ->withHeaders(['Accept' => 'application/json', 'X-Requested-With' => 'XMLHttpRequest'])
+            ->postJson('/web-api/payments', ['student_id' => $studentId, 'status' => 'pending'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['amount']);
+
+        $xls = UploadedFile::fake()->createWithContent('students.xls', "nis\tname\tgender\tstatus\nIMP-001\tSantri Import Excel\tLaki-laki\tactive\n");
+        $this->actingAs($tu)
+            ->post('/web-api/students/import', ['file' => $xls])
+            ->assertOk()
+            ->assertJsonPath('inserted', 1)
+            ->assertJsonPath('skipped', 0);
+
+        $this->assertDatabaseHas('students', ['nis' => 'IMP-001', 'name' => 'Santri Import Excel']);
+
+        $teacherId = DB::table('teachers')->where('name', 'Ust. Ahmad Fauzi')->value('id');
+        $this->actingAs($akademik)
+            ->postJson('/web-api/teachers/bulk', [
+                'action' => 'status',
+                'status' => 'inactive',
+                'ids' => [$teacherId],
+            ])
+            ->assertOk()
+            ->assertJsonPath('updated', 1);
+
+        $this->assertDatabaseHas('teachers', ['id' => $teacherId, 'status' => 'inactive']);
+
+        $this->actingAs($santri)
+            ->getJson('/web-actions/notifications')
+            ->assertOk()
+            ->assertJsonStructure(['data', 'unread', 'polled_at']);
+
+        $this->actingAs($owner)
+            ->getJson('/web-api/permissions/matrix')
+            ->assertOk()
+            ->assertJsonPath('matrix.owner_pesantren.label', 'Owner Pesantren')
+            ->assertJsonFragment(['path' => '/web-api/payments/bulk']);
+
+        $matrixDenied = $this->actingAs($keuangan)
+            ->getJson('/web-api/permissions/matrix');
+        $this->assertSame(403, $matrixDenied->getStatusCode(), $matrixDenied->getContent());
+
+        $this->actingAs($keuangan)
+            ->getJson('/web-api/payments?per_page=5')
+            ->assertOk()
+            ->assertJsonStructure(['data' => [['student_name', 'invoice_name']]]);
+
+        $pdf = $this->actingAs($keuangan)
+            ->get('/web-api/payments/export?format=pdf')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'application/pdf');
+
+        $this->assertStringContainsString('Kwitansi Pembayaran', $pdf->getContent());
+    }
+
+    public function test_production_readiness_permission_editor_import_preview_jobs_sse_and_security_headers(): void
+    {
+        $this->seed();
+
+        $health = $this->getJson('/health')
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('queue_table', 'ok');
+
+        $this->assertSame('nosniff', $health->headers->get('X-Content-Type-Options'));
+        $this->assertSame('SAMEORIGIN', $health->headers->get('X-Frame-Options'));
+
+        $tu = User::where('email', 'tu@pesantenku.test')->firstOrFail();
+        $csv = UploadedFile::fake()->createWithContent('students.csv', "nis,nama_lengkap,gender,status\nPRV-001,Santri Preview,Laki-laki,active\n");
+
+        $this->actingAs($tu)
+            ->post('/web-api/students/import/preview', [
+                'file' => $csv,
+                'mapping' => json_encode(['nama_lengkap' => 'name']),
+            ])
+            ->assertOk()
+            ->assertJsonPath('summary.valid', 1)
+            ->assertJsonPath('mapping.nama_lengkap', 'name');
+
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+        $this->actingAs($owner)
+            ->patchJson('/web-api/permissions/matrix', [
+                'role' => 'guru',
+                'read' => ['students', 'classes', 'subjects'],
+                'write' => ['grades'],
+            ])
+            ->assertOk()
+            ->assertJsonPath('source', 'tenant');
+
+        $this->assertDatabaseHas('system_settings', ['key' => 'permissions.matrix_override']);
+
+        $keuangan = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+        $jobUuid = $this->actingAs($keuangan)
+            ->postJson('/web-api/payments/export/queue', ['format' => 'excel'])
+            ->assertStatus(202)
+            ->json('job.uuid');
+
+        $job = DB::table('operation_jobs')->where('uuid', $jobUuid)->first();
+        $this->assertNotNull($job);
+        $this->assertSame('export', $job->type);
+        $this->assertSame('payments', $job->resource);
+        $this->assertContains($job->status, ['queued', 'processing', 'completed']);
+
+        $this->actingAs($keuangan)
+            ->getJson("/web-actions/jobs/{$jobUuid}")
+            ->assertOk()
+            ->assertJsonPath('uuid', $jobUuid);
+
+        $stream = $this->actingAs($keuangan)
+            ->get('/web-actions/notifications/stream')
+            ->assertOk();
+
+        $this->assertStringContainsString('text/event-stream', $stream->headers->get('Content-Type'));
+        $this->assertStringContainsString('event: notifications', $stream->streamedContent());
+    }
+
+    public function test_scaling_download_chunked_import_custom_roles_queue_monitor_rate_limit_and_restore(): void
+    {
+        $this->seed();
+        Storage::fake('local');
+        config()->set('pesantrenku.import.chunk_size', 2);
+
+        $tu = User::where('email', 'tu@pesantenku.test')->firstOrFail();
+        $csv = UploadedFile::fake()->createWithContent('large-students.csv', "nis,name,gender,status\nCHK-001,Chunk Satu,Laki-laki,active\nCHK-002,Chunk Dua,Perempuan,active\nCHK-003,Chunk Tiga,Laki-laki,active\n");
+        $importUuid = $this->actingAs($tu)->post('/web-api/students/import', [
+            'file' => $csv,
+            'queue' => '1',
+            'mapping' => json_encode(['nis' => 'nis', 'name' => 'name', 'gender' => 'gender', 'status' => 'status']),
+        ])->assertStatus(202)->json('job.uuid');
+
+        $this->assertDatabaseHas('students', ['nis' => 'CHK-001']);
+        $this->assertDatabaseHas('students', ['nis' => 'CHK-003']);
+        $importJob = DB::table('operation_jobs')->where('uuid', $importUuid)->first();
+        $this->assertSame('completed', $importJob->status);
+        $this->assertSame(100, (int) $importJob->progress);
+        Storage::disk('local')->assertExists($importJob->source_path);
+        Storage::disk('local')->assertExists($importJob->output_path);
+        $this->actingAs($tu)->get("/web-actions/jobs/{$importUuid}/download")->assertOk();
+
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+        $customRoleId = $this->actingAs($owner)->postJson('/web-api/permissions/custom-roles', [
+            'name' => 'finance_viewer',
+            'label' => 'Finance Viewer',
+            'description' => 'Hanya melihat data santri.',
+            'read' => ['students'],
+            'write' => [],
+            'status' => 'active',
+        ])->assertCreated()->json('id');
+
+        $keuangan = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+        $membershipId = DB::table('pesantren_user')->where('user_id', $keuangan->id)->value('id');
+        $this->actingAs($owner)->postJson("/web-api/permissions/custom-roles/{$customRoleId}/assign", [
+            'membership_ids' => [$membershipId],
+        ])->assertOk()->assertJsonPath('assigned', 1);
+
+        $this->actingAs($keuangan)->getJson('/web-api/students')->assertOk();
+        $customDenied = $this->actingAs($keuangan)->getJson('/web-api/payments');
+        $this->assertSame(403, $customDenied->getStatusCode(), $customDenied->getContent());
+        $this->assertDatabaseHas('audit_logs', ['module' => 'tenant_roles']);
+
+        $this->actingAs($owner)->getJson('/web-actions/queue/monitor')
+            ->assertOk()
+            ->assertJsonStructure(['workers' => ['pending', 'reserved', 'failed'], 'operations', 'failed_jobs']);
+
+        $program = DB::table('programs')->first();
+        $backupId = $this->actingAs($owner)->postJson('/web-actions/backup/run')->assertOk()->json('backup_id');
+        $this->actingAs($owner)->get("/web-actions/backup/{$backupId}/download")->assertOk();
+        $this->assertDatabaseHas('backups', ['id' => $backupId, 'encryption_provider' => 'local', 'encryption_key_id' => 'app-key']);
+        DB::table('programs')->where('id', $program->id)->update(['name' => 'Nama Rusak']);
+        $ownerCode = app(TotpService::class)->currentCode($owner->fresh());
+        $restoreRequestId = $this->actingAs($owner)->postJson("/web-actions/backup/{$backupId}/restore", [
+            'confirmation' => 'RESTORE',
+            'mfa_code' => $ownerCode,
+            'reason' => 'Memulihkan data program setelah simulasi kerusakan.',
+        ])->assertStatus(202)->assertJsonPath('request.status', 'pending')->json('request.id');
+        $superAdmin = User::where('email', 'superadmin@pesantenku.test')->firstOrFail();
+        $superCode = app(TotpService::class)->currentCode($superAdmin);
+        $this->actingAs($superAdmin)->postJson("/web-actions/backup/restore-requests/{$restoreRequestId}/approve", ['mfa_code' => $superCode])
+            ->assertOk()
+            ->assertJsonPath('request.status', 'approved');
+        $this->actingAs($superAdmin)->postJson("/web-actions/backup/restore-requests/{$restoreRequestId}/execute", ['mfa_code' => $superCode])
+            ->assertOk()
+            ->assertJsonPath('message', 'Backup tenant berhasil dipulihkan.');
+        $this->assertDatabaseHas('programs', ['id' => $program->id, 'name' => $program->name]);
+        $this->assertDatabaseHas('backup_restore_requests', ['id' => $restoreRequestId, 'status' => 'executed']);
+
+        for ($attempt = 1; $attempt <= 11; $attempt++) {
+            $response = $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.77'])->postJson('/api/v1/auth/login', [
+                'login' => 'rate-limit@example.test',
+                'password' => 'wrong-password',
+            ]);
+        }
+        $this->assertSame(429, $response->getStatusCode(), $response->getContent());
+    }
+
+    public function test_observability_metrics_and_correlation_headers_are_available(): void
+    {
+        $response = $this->withHeader('X-Correlation-ID', 'test-correlation-1234')->get('/health');
+
+        $response->assertOk()
+            ->assertHeader('X-Correlation-ID', 'test-correlation-1234')
+            ->assertJsonStructure(['status', 'database', 'storage_disk', 'broadcast']);
+
+        $metrics = $this->get('/metrics')->assertOk();
+        $this->assertStringContainsString('pesantenku_http_requests_total', $metrics->getContent());
+        $this->assertStringContainsString('pesantenku_database_queries_total', $metrics->getContent());
+    }
+
+    public function test_payment_workflow_replays_the_same_idempotent_response(): void
+    {
+        $this->seed();
+        $keuangan = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+        $payment = DB::table('payments')->whereIn('status', ['pending', 'waiting', 'paid'])->first();
+        $this->assertNotNull($payment);
+        $key = 'payment-verification-test-1234';
+
+        $first = $this->actingAs($keuangan)
+            ->withHeader('Idempotency-Key', $key)
+            ->postJson("/web-actions/workflow/payments/{$payment->id}/verify")
+            ->assertOk();
+
+        $second = $this->actingAs($keuangan)
+            ->withHeader('Idempotency-Key', $key)
+            ->postJson("/web-actions/workflow/payments/{$payment->id}/verify")
+            ->assertOk()
+            ->assertHeader('Idempotency-Replayed', 'true');
+
+        $this->assertSame($first->json('status'), $second->json('status'));
+        $this->assertDatabaseCount('idempotency_keys', 1);
+    }
+
+    public function test_disaster_recovery_drill_validates_a_tenant_backup(): void
+    {
+        $this->seed();
+        Storage::fake('local');
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+        $backupId = $this->actingAs($owner)->postJson('/web-actions/backup/run')->assertOk()->json('backup_id');
+
+        $this->artisan('pesantenku:dr-drill', ['--backup-id' => $backupId])
+            ->expectsOutputToContain('Backup integrity')
+            ->assertSuccessful();
+
+        $reports = Storage::disk('local')->allFiles('dr-drills');
+        $this->assertCount(1, $reports);
+    }
+}

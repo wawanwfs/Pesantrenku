@@ -1,0 +1,38 @@
+{
+	admin off
+}
+
+(smoke_security) {
+	encode zstd gzip
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+	tls internal
+}
+
+pesantrenku.local {
+	import smoke_security
+	reverse_proxy app:8000
+}
+
+www.pesantrenku.local {
+	import smoke_security
+	redir https://pesantrenku.local{uri} permanent
+}
+
+api.pesantrenku.local {
+	import smoke_security
+	reverse_proxy app:8000
+}
+
+ws.pesantrenku.local {
+	import smoke_security
+	reverse_proxy reverb:8080
+}
+
+monitor.pesantrenku.local {
+	import smoke_security
+	reverse_proxy grafana:3000
+}

@@ -1,0 +1,27 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "panels": [
+    {"type":"stat","title":"Request Rate","targets":[{"expr":"sum(rate(pesantenku_http_requests_total[5m]))"}],"gridPos":{"h":6,"w":6,"x":0,"y":0}},
+    {"type":"stat","title":"5xx Error Ratio","targets":[{"expr":"pesantenku:http_errors:ratio5m"}],"fieldConfig":{"defaults":{"unit":"percentunit"}},"gridPos":{"h":6,"w":6,"x":6,"y":0}},
+    {"type":"stat","title":"Average Latency","targets":[{"expr":"pesantenku:http_latency:average5m"}],"fieldConfig":{"defaults":{"unit":"s"}},"gridPos":{"h":6,"w":6,"x":12,"y":0}},
+    {"type":"stat","title":"Queue Failures","targets":[{"expr":"sum(increase(pesantenku_queue_jobs_failed_total[1h]))"}],"gridPos":{"h":6,"w":6,"x":18,"y":0}},
+    {"type":"timeseries","title":"HTTP Requests by Status","targets":[{"expr":"sum by (status) (rate(pesantenku_http_requests_total[5m]))","legendFormat":"{{status}}"}],"gridPos":{"h":9,"w":12,"x":0,"y":6}},
+    {"type":"timeseries","title":"Database Query Duration","targets":[{"expr":"sum by (route) (rate(pesantenku_database_query_duration_sum_microseconds[5m])) / 1000000","legendFormat":"{{route}}"}],"gridPos":{"h":9,"w":12,"x":12,"y":6}},
+    {"type":"timeseries","title":"Queue Lifecycle","targets":[{"expr":"sum(rate(pesantenku_queue_jobs_started_total[5m]))","legendFormat":"started"},{"expr":"sum(rate(pesantenku_queue_jobs_completed_total[5m]))","legendFormat":"completed"},{"expr":"sum(rate(pesantenku_queue_jobs_failed_total[5m]))","legendFormat":"failed"}],"gridPos":{"h":9,"w":12,"x":0,"y":15}},
+    {"type":"timeseries","title":"Reverb Notification Events","targets":[{"expr":"sum(rate(pesantenku_reverb_events_total[5m]))"}],"gridPos":{"h":9,"w":12,"x":12,"y":15}},
+    {"type":"timeseries","title":"Slow Query Rate","targets":[{"expr":"sum by (route) (rate(pesantenku_database_slow_queries_total[5m]))","legendFormat":"{{route}}"}],"gridPos":{"h":9,"w":8,"x":0,"y":24}},
+    {"type":"timeseries","title":"Queries per Request","targets":[{"expr":"sum by (route) (rate(pesantenku_database_queries_total[5m])) / clamp_min(sum by (route) (rate(pesantenku_http_requests_total[5m])), 0.001)","legendFormat":"{{route}}"}],"gridPos":{"h":9,"w":8,"x":8,"y":24}},
+    {"type":"timeseries","title":"Queue Wait and Runtime","targets":[{"expr":"sum(rate(pesantenku_queue_wait_duration_sum_microseconds[5m])) / clamp_min(sum(rate(pesantenku_queue_wait_duration_count[5m])), 0.001) / 1000000","legendFormat":"wait"},{"expr":"sum(rate(pesantenku_queue_job_duration_sum_microseconds[5m])) / clamp_min(sum(rate(pesantenku_queue_job_duration_count[5m])), 0.001) / 1000000","legendFormat":"runtime"}],"fieldConfig":{"defaults":{"unit":"s"}},"gridPos":{"h":9,"w":8,"x":16,"y":24}},
+    {"type":"stat","title":"Reverb Connections","targets":[{"expr":"pesantenku_reverb_connections"}],"gridPos":{"h":6,"w":6,"x":0,"y":33}},
+    {"type":"timeseries","title":"Queue Depth by Queue","targets":[{"expr":"pesantenku_queue_redis_depth","legendFormat":"{{queue}}"}],"gridPos":{"h":6,"w":9,"x":6,"y":33}},
+    {"type":"timeseries","title":"Slowest Query by Route","targets":[{"expr":"sum by (route) (rate(pesantenku_database_slowest_query_sum_microseconds[5m])) / clamp_min(sum by (route) (rate(pesantenku_database_slowest_query_count[5m])), 0.001) / 1000000","legendFormat":"{{route}}"}],"fieldConfig":{"defaults":{"unit":"s"}},"gridPos":{"h":6,"w":9,"x":15,"y":33}}
+  ],
+  "schemaVersion": 39,
+  "tags": ["pesantenku", "production", "slo"],
+  "templating": {"list": []},
+  "time": {"from":"now-6h","to":"now"},
+  "title": "Pesantenku Production SLO",
+  "uid": "pesantenku-production",
+  "version": 1
+}

@@ -1,0 +1,76 @@
+name: Build Sign and Canary Deploy
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  security-events: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}/pesantenku
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          file: backend/Dockerfile
+          push: true
+          tags: ${{ env.IMAGE }}:${{ github.sha }}
+          provenance: mode=max
+          sbom: true
+      - uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+      - uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: trivy-results.sarif
+      - uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          format: cyclonedx-json
+          output-file: pesantenku-sbom.cdx.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pesantenku-sbom
+          path: pesantenku-sbom.cdx.json
+      - uses: sigstore/cosign-installer@v3.8.2
+      - run: cosign sign --yes $IMAGE@${{ steps.build.outputs.digest }}
+
+  canary:
+    runs-on: ubuntu-latest
+    needs: image
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-kubectl@v4
+      - run: mkdir -p ~/.kube && echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
+        env:
+          KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+      - run: bash deploy/scripts/canary-deploy.sh "$IMAGE@${{ needs.image.outputs.digest }}"
+        env:
+          IMAGE: ${{ env.IMAGE }}
+          CANARY_HEALTH_URL: ${{ vars.CANARY_HEALTH_URL }}
+          PROMETHEUS_URL: ${{ vars.PROMETHEUS_URL }}

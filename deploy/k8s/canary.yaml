@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pesantenku-canary
+  namespace: pesantenku
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pesantenku
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: pesantenku
+        track: canary
+    spec:
+      containers:
+        - name: app
+          image: ghcr.io/example/pesantenku@sha256:replace-me
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: pesantenku-production-env
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 250m, memory: 256Mi}
+            limits: {cpu: "1", memory: 768Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pesantenku-canary
+  namespace: pesantenku
+spec:
+  selector:
+    app: pesantenku
+    track: canary
+  ports:
+    - port: 80
+      targetPort: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pesantenku-canary
+  namespace: pesantenku
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-production
+    nginx.ingress.kubernetes.io/canary: "true"
+    nginx.ingress.kubernetes.io/canary-weight: "10"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - pesantrenku.ai
+      secretName: pesantrenku-ai-tls
+  rules:
+    - host: pesantrenku.ai
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: pesantenku-canary
+                port:
+                  number: 80

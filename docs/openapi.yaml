@@ -1,0 +1,180 @@
+openapi: 3.0.3
+info:
+  title: Pesantenku API
+  version: 1.0.0
+servers:
+  - url: http://127.0.0.1:8000/api/v1
+paths:
+  /auth/login:
+    post:
+      summary: Login dengan email, username, atau telepon
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [login, password]
+              properties:
+                login:
+                  type: string
+                  example: superadmin@pesantenku.test
+                password:
+                  type: string
+                  example: password
+      responses:
+        "200":
+          description: Token Sanctum dan profil user
+  /auth/me:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Profil user saat ini
+      responses:
+        "200":
+          description: Profil user
+  /tenant/switch:
+    post:
+      security:
+        - bearerAuth: []
+      summary: Ganti pesantren aktif untuk user multi-tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pesantren_id]
+              properties:
+                pesantren_id:
+                  type: integer
+                  example: 1
+      responses:
+        "200":
+          description: Pesantren aktif
+  /dashboard/{role}:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Data dashboard role
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+        - in: path
+          name: role
+          required: true
+          schema:
+            type: string
+            enum: [super-admin, owner, keuangan, akademik, tu, santri, wali-murid, musyrif, guru, klinik]
+      responses:
+        "200":
+          description: Statistik, chart, tabel, dan widget dashboard
+  /{resource}:
+    get:
+      security:
+        - bearerAuth: []
+      summary: List resource CRUD
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+        - in: path
+          name: resource
+          required: true
+          schema:
+            type: string
+            example: students
+        - in: query
+          name: search
+          schema:
+            type: string
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Data paginated
+    post:
+      security:
+        - bearerAuth: []
+      summary: Buat resource
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+        - in: path
+          name: resource
+          required: true
+          schema:
+            type: string
+      responses:
+        "201":
+          description: Resource dibuat
+  /{resource}/{id}:
+    get:
+      security:
+        - bearerAuth: []
+      summary: Detail resource
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+        - in: path
+          name: resource
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Detail data
+    patch:
+      security:
+        - bearerAuth: []
+      summary: Update resource
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+        - in: path
+          name: resource
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Resource diperbarui
+    delete:
+      security:
+        - bearerAuth: []
+      summary: Hapus resource
+      parameters:
+        - $ref: "#/components/parameters/TenantHeader"
+        - in: path
+          name: resource
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Resource dihapus
+components:
+  parameters:
+    TenantHeader:
+      in: header
+      name: X-Pesantren-Id
+      required: false
+      schema:
+        type: integer
+      description: Pesantren aktif untuk user yang punya lebih dari satu membership.
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum

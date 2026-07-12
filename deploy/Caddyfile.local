@@ -1,0 +1,73 @@
+{
+	admin off
+}
+
+(local_security) {
+	encode zstd gzip
+	header {
+		-Server
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+	}
+	tls internal
+}
+
+pesantrenku.localhost {
+	import local_security
+	reverse_proxy app:8000
+}
+
+www.pesantrenku.localhost {
+	import local_security
+	redir https://pesantrenku.localhost{uri} permanent
+}
+
+api.pesantrenku.localhost {
+	import local_security
+	reverse_proxy app:8000
+}
+
+ws.pesantrenku.localhost {
+	import local_security
+	reverse_proxy reverb:8080
+}
+
+monitor.pesantrenku.localhost {
+	import local_security
+	reverse_proxy grafana:3000
+}
+
+db.pesantrenku.localhost {
+	import local_security
+	reverse_proxy phpmyadmin:80
+}
+
+storage.pesantrenku.localhost {
+	import local_security
+	reverse_proxy minio:9000
+}
+
+e2e-desktop-a.pesantrenku.localhost {
+	import local_security
+	reverse_proxy app-e2e-desktop-a:8000
+}
+
+e2e-desktop-b.pesantrenku.localhost {
+	import local_security
+	reverse_proxy app-e2e-desktop-b:8000
+}
+
+e2e-mobile-a.pesantrenku.localhost {
+	import local_security
+	reverse_proxy app-e2e-mobile-a:8000
+}
+
+e2e-mobile-b.pesantrenku.localhost {
+	import local_security
+	reverse_proxy app-e2e-mobile-b:8000
+}
+
+pesantrenku.test, www.pesantrenku.test, api.pesantrenku.test, ws.pesantrenku.test, monitor.pesantrenku.test, db.pesantrenku.test, storage.pesantrenku.test {
+	import local_security
+	redir https://pesantrenku.localhost{uri} permanent
+}

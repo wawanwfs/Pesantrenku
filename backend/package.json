@@ -1,0 +1,31 @@
+{
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "vite",
+        "test:e2e": "node scripts/prepare-e2e.mjs && playwright test",
+        "test:e2e:local-domain": "playwright test --config=playwright.local-domain.config.js",
+        "test:e2e:local-domain:sharded": "powershell -ExecutionPolicy Bypass -File ../deploy/scripts/prepare-sharded-e2e.ps1 && playwright test --config=playwright.local-domain.config.js"
+    },
+    "devDependencies": {
+        "@playwright/test": "^1.61.1",
+        "@tailwindcss/vite": "^4.3.2",
+        "concurrently": "^9.0.1",
+        "laravel-vite-plugin": "^3.1",
+        "tailwindcss": "^4.3.2",
+        "vite": "^8.0.0"
+    },
+    "dependencies": {
+        "@inertiajs/react": "^3.6.0",
+        "@vitejs/plugin-react": "^6.0.3",
+        "clsx": "^2.1.1",
+        "laravel-echo": "^2.3.7",
+        "lucide-react": "^1.23.0",
+        "pusher-js": "^8.5.0",
+        "react": "^19.2.7",
+        "react-dom": "^19.2.7",
+        "recharts": "^3.9.2"
+    }
+}

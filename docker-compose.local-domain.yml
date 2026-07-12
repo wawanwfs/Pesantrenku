@@ -1,0 +1,367 @@
+name: pesantrenku-domain
+
+x-app-environment: &app-environment
+  APP_ENV: local
+  APP_DEBUG: "true"
+  APP_URL: https://pesantrenku.localhost
+  DB_CONNECTION: mysql
+  DB_HOST: mysql
+  DB_PORT: "3306"
+  DB_DATABASE: pesantenku
+  DB_USERNAME: pesantenku
+  DB_PASSWORD: pesantenku-local
+  CACHE_STORE: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: redis
+  REDIS_HOST: redis
+  REDIS_PORT: "6379"
+  PESANTRENKU_OTEL_ENABLED: "false"
+  OTEL_SDK_DISABLED: "true"
+  OTEL_PHP_AUTOLOAD_ENABLED: "false"
+  OTEL_PHP_EXPERIMENTAL_AUTO_ROOT_SPAN: "false"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+  PESANTRENKU_NOTIFICATION_SSE: "false"
+  PESANTRENKU_NOTIFICATION_WEBSOCKET: "true"
+  PESANTRENKU_WEBSOCKET_ORIGIN: wss://ws.pesantrenku.localhost
+  BROADCAST_CONNECTION: reverb
+  REVERB_HOST: reverb
+  REVERB_PORT: "8080"
+  REVERB_SCHEME: http
+  REVERB_ALLOWED_ORIGINS: pesantrenku.localhost,www.pesantrenku.localhost,pesantrenku.test,www.pesantrenku.test,e2e-desktop-a.pesantrenku.localhost,e2e-desktop-b.pesantrenku.localhost,e2e-mobile-a.pesantrenku.localhost,e2e-mobile-b.pesantrenku.localhost
+  REVERB_SERVER_HOST: 0.0.0.0
+  REVERB_SERVER_PORT: "8080"
+  REVERB_SCALING_ENABLED: "true"
+  REVERB_SCALING_CHANNEL: pesantrenku-local-reverb
+  FILESYSTEM_DISK: s3
+  PESANTRENKU_OPERATION_DISK: s3
+  PESANTRENKU_OPERATION_PUBLIC_ENDPOINT: https://storage.pesantrenku.localhost
+  AWS_ACCESS_KEY_ID: pesantenku
+  AWS_SECRET_ACCESS_KEY: pesantenku-secret
+  AWS_DEFAULT_REGION: us-east-1
+  AWS_BUCKET: pesantenku-local
+  AWS_ENDPOINT: http://minio:9000
+  AWS_USE_PATH_STYLE_ENDPOINT: "true"
+
+x-e2e-app: &e2e-app
+  image: ${PESANTRENKU_LOCAL_IMAGE:-pesantrenku:local-domain}
+  profiles: ["e2e"]
+  restart: unless-stopped
+  working_dir: /app
+  env_file: ./backend/.env
+  volumes:
+    - local-app-storage:/app/storage
+  expose:
+    - "8000"
+  command: frankenphp php-server --root public --listen :8000
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+    minio-init:
+      condition: service_completed_successfully
+
+services:
+  caddy:
+    image: caddy:2.10-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./deploy/Caddyfile.local:/etc/caddy/Caddyfile:ro
+      - local-caddy-data:/data
+      - local-caddy-config:/config
+    depends_on:
+      app:
+        condition: service_healthy
+      reverb:
+        condition: service_started
+      grafana:
+        condition: service_started
+      phpmyadmin:
+        condition: service_started
+      minio:
+        condition: service_healthy
+
+  app:
+    image: ${PESANTRENKU_LOCAL_IMAGE:-pesantrenku:local-domain}
+    restart: unless-stopped
+    working_dir: /app
+    env_file: ./backend/.env
+    environment:
+      <<: *app-environment
+    volumes:
+      - local-app-storage:/app/storage
+    expose:
+      - "8000"
+    command: frankenphp php-server --root public --listen :8000
+    healthcheck:
+      test: ["CMD", "php", "-r", "$$body = @file_get_contents('http://127.0.0.1:8000/up'); exit($$body === false ? 1 : 0);"]
+      interval: 15s
+      timeout: 15s
+      start_period: 30s
+      retries: 5
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+
+  queue:
+    image: ${PESANTRENKU_LOCAL_IMAGE:-pesantrenku:local-domain}
+    restart: unless-stopped
+    working_dir: /app
+    env_file: ./backend/.env
+    environment:
+      <<: *app-environment
+    volumes:
+      - local-app-storage:/app/storage
+    command: php artisan queue:work --queue=default,imports,exports --sleep=1 --tries=3 --timeout=900
+    healthcheck:
+      disable: true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  scheduler:
+    image: ${PESANTRENKU_LOCAL_IMAGE:-pesantrenku:local-domain}
+    restart: unless-stopped
+    working_dir: /app
+    env_file: ./backend/.env
+    environment:
+      <<: *app-environment
+    volumes:
+      - local-app-storage:/app/storage
+    command: php artisan schedule:work
+    healthcheck:
+      disable: true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  reverb:
+    image: ${PESANTRENKU_LOCAL_IMAGE:-pesantrenku:local-domain}
+    restart: unless-stopped
+    working_dir: /app
+    env_file: ./backend/.env
+    environment:
+      <<: *app-environment
+    volumes:
+      - local-app-storage:/app/storage
+    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    expose:
+      - "8080"
+    healthcheck:
+      disable: true
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  app-e2e-desktop-a:
+    <<: *e2e-app
+    environment:
+      <<: *app-environment
+      APP_URL: https://e2e-desktop-a.pesantrenku.localhost
+      DB_DATABASE: pesantenku_e2e_desktop_a
+      REDIS_DB: "2"
+      REDIS_CACHE_DB: "3"
+      REDIS_PREFIX: pesantenku-e2e-desktop-a-
+      CACHE_PREFIX: pesantenku-e2e-desktop-a-cache-
+      SESSION_COOKIE: pesantenku_e2e_desktop_a_session
+
+  app-e2e-desktop-b:
+    <<: *e2e-app
+    environment:
+      <<: *app-environment
+      APP_URL: https://e2e-desktop-b.pesantrenku.localhost
+      DB_DATABASE: pesantenku_e2e_desktop_b
+      REDIS_DB: "4"
+      REDIS_CACHE_DB: "5"
+      REDIS_PREFIX: pesantenku-e2e-desktop-b-
+      CACHE_PREFIX: pesantenku-e2e-desktop-b-cache-
+      SESSION_COOKIE: pesantenku_e2e_desktop_b_session
+
+  app-e2e-mobile-a:
+    <<: *e2e-app
+    environment:
+      <<: *app-environment
+      APP_URL: https://e2e-mobile-a.pesantrenku.localhost
+      DB_DATABASE: pesantenku_e2e_mobile_a
+      REDIS_DB: "6"
+      REDIS_CACHE_DB: "7"
+      REDIS_PREFIX: pesantenku-e2e-mobile-a-
+      CACHE_PREFIX: pesantenku-e2e-mobile-a-cache-
+      SESSION_COOKIE: pesantenku_e2e_mobile_a_session
+
+  app-e2e-mobile-b:
+    <<: *e2e-app
+    environment:
+      <<: *app-environment
+      APP_URL: https://e2e-mobile-b.pesantrenku.localhost
+      DB_DATABASE: pesantenku_e2e_mobile_b
+      REDIS_DB: "8"
+      REDIS_CACHE_DB: "9"
+      REDIS_PREFIX: pesantenku-e2e-mobile-b-
+      CACHE_PREFIX: pesantenku-e2e-mobile-b-cache-
+      SESSION_COOKIE: pesantenku_e2e_mobile_b_session
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: pesantenku
+      MYSQL_USER: pesantenku
+      MYSQL_PASSWORD: pesantenku-local
+      MYSQL_ROOT_PASSWORD: pesantenku-local-root
+    volumes:
+      - local-mysql-data:/var/lib/mysql
+    expose:
+      - "3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-ppesantenku-local-root"]
+      interval: 5s
+      timeout: 5s
+      start_period: 20s
+      retries: 30
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - local-redis-data:/data
+    expose:
+      - "6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio:
+    image: minio/minio:RELEASE.2025-06-13T11-33-47Z
+    restart: unless-stopped
+    command: server /data --console-address :9001
+    environment:
+      MINIO_ROOT_USER: pesantenku
+      MINIO_ROOT_PASSWORD: pesantenku-secret
+    volumes:
+      - local-minio-data:/data
+    expose:
+      - "9000"
+      - "9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:9000/minio/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  minio-init:
+    image: minio/mc:RELEASE.2025-05-21T01-59-54Z
+    restart: "no"
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        mc alias set local http://minio:9000 pesantenku pesantenku-secret &&
+        mc mb --ignore-existing local/pesantenku-local &&
+        mc ilm rule add --expire-days 7 --prefix imports/ local/pesantenku-local || true;
+        mc ilm rule add --expire-days 7 --prefix exports/ local/pesantenku-local || true;
+        mc ilm rule add --expire-days 30 --prefix backups/ local/pesantenku-local || true
+
+  phpmyadmin:
+    image: phpmyadmin:5-apache
+    restart: unless-stopped
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: "3306"
+      PMA_USER: pesantenku
+      PMA_PASSWORD: pesantenku-local
+      UPLOAD_LIMIT: 128M
+    expose:
+      - "80"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.156.0
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./deploy/otel-collector.yaml:/etc/otelcol/config.yaml:ro
+    expose:
+      - "4317"
+      - "4318"
+      - "8888"
+    depends_on:
+      - tempo
+
+  tempo:
+    image: grafana/tempo:2.8.1
+    restart: unless-stopped
+    command: ["-config.file=/etc/tempo.yaml"]
+    volumes:
+      - ./deploy/tempo.yaml:/etc/tempo.yaml:ro
+      - local-tempo-data:/var/tempo
+    expose:
+      - "3200"
+
+  prometheus:
+    image: prom/prometheus:v3.4.1
+    restart: unless-stopped
+    command: ["--config.file=/etc/prometheus/prometheus.yaml", "--storage.tsdb.path=/prometheus"]
+    volumes:
+      - ./deploy/prometheus.domain.yaml:/etc/prometheus/prometheus.yaml:ro
+      - ./deploy/prometheus-rules.yaml:/etc/prometheus/rules/pesantenku.yaml:ro
+      - local-prometheus-data:/prometheus
+    expose:
+      - "9090"
+    depends_on:
+      app:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:12.0.2
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_DOMAIN: monitor.pesantrenku.localhost
+      GF_SERVER_ROOT_URL: https://monitor.pesantrenku.localhost
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - local-grafana-data:/var/lib/grafana
+    expose:
+      - "3000"
+    depends_on:
+      - prometheus
+      - tempo
+
+volumes:
+  local-mysql-data:
+  local-redis-data:
+  local-app-storage:
+  local-caddy-data:
+  local-caddy-config:
+  local-tempo-data:
+  local-prometheus-data:
+  local-grafana-data:
+  local-minio-data:
