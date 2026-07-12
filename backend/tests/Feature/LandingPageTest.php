@@ -16,7 +16,9 @@ class LandingPageTest extends TestCase
         $this->get('/')
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Landing')
+                // The production resolver imports .jsx pages; Inertia's PHP
+                // test file finder does not recognize that extension on Linux.
+                ->component('Landing', false)
                 ->where('auth.user', null));
     }
 

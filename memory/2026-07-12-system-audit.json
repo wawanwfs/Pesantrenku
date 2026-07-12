@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-12T11:06:50Z",
+  "generated_at": "2026-07-12T11:10:34Z",
   "project": "Pesantenku",
   "branch": "main",
   "remote": "https://github.com/wawanwfs/Pesantrenku.git",
@@ -45,7 +45,8 @@
     "design_notes": [
       "Landing uses code-native CSS 3D scene construction and pointer tilt rather than a bitmap asset.",
       "External Google fonts were removed after CSP testing; landing typography falls back to bundled/existing fonts.",
-      "Modal content must not sit inside a lower z-index stacking context than the sticky topbar."
+      "Modal content must not sit inside a lower z-index stacking context than the sticky topbar.",
+      "Inertia PHP's Linux test page finder does not recognize this project's .jsx pages; LandingPageTest asserts the response component with file existence checking disabled."
     ]
   },
   "validation": {
