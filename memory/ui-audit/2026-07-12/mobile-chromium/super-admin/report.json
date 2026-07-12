@@ -1,0 +1,135 @@
+[
+  {
+    "route": "/dashboard/super-admin",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/pesantrens",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/owner",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/subscriptions",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/plans",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/users",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/modules",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/integrasi-api",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/aktivitas-sistem",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/audit-logs",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/login-monitoring",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/error-logs",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/laporan-penggunaan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/laporan-pesantren",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/laporan-keuangan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/backups",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/system-update",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/cache-management",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/super-admin/module/settings",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  }
+]

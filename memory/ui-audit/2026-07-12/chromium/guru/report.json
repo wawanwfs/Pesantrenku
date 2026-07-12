@@ -1,0 +1,86 @@
+[
+  {
+    "route": "/dashboard/guru",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/jadwal-mengajar",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/kelas-saya",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/presensi-kelas",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/nilai",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/tugas",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/materi",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/raport",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/catatan-siswa",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/pengumuman",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/profil",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/guru/module/pengaturan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  }
+]

@@ -1,0 +1,93 @@
+[
+  {
+    "route": "/dashboard/musyrif",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/santri-binaan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/kamar",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/absensi-asrama",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/perizinan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/pelanggaran",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/catatan-harian",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/mutasi-kamar",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/jadwal-piket",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/pengumuman",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/laporan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/pengaturan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/musyrif/module/profil",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  }
+]

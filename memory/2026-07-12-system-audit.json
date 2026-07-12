@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-12T12:37:40Z",
-  "project": "Pesantenku",
+  "generated_at": "2026-07-12T15:10:00Z",
+  "project": "Pesantrenku",
   "branch": "main",
   "remote": "https://github.com/wawanwfs/Pesantrenku.git",
   "objective": "Set up and audit the web backend, repair UI/data/workflow issues, harden security, validate the system, and prepare a handoff for future agents.",
@@ -40,6 +40,17 @@
     "Connected owner dashboard previews to enriched tenant membership, module, and subscription DTOs; mobile toolbar menus are viewport-safe and mutually exclusive, while row actions stay compact without sticky overlap.",
     "Made composer run dev cross-platform: Unix keeps Laravel Pail, while Windows automatically tails storage/logs/laravel.log without requiring the unavailable pcntl extension.",
     "Fixed local Vite CSP loading by deriving development sources from public/hot, allowing HMR connections only in local mode, and binding Vite/HMR to CSP-compatible 127.0.0.1; production CSP remains unchanged."
+    ,"Reduced shared Inertia payloads per dashboard/module, added tenant-role caching, and reduced representative dashboard queries from 232-630 to 19-36 with payload reductions of 67-86 percent."
+    ,"Fixed Redis tenant cache serialization so cache entries contain arrays/scalars instead of framework objects and Collections."
+    ,"Added CRUD contract coverage for create/read/update/delete, validation, relation labels, tenant isolation, and permission behavior across resources and roles."
+    ,"Added local MinIO integration for signed URLs, queued import/export, backup objects, and lifecycle validation; S3-compatible integration remains opt-in outside the local stack."
+    ,"Added isolated E2E databases/shards and Grafana monitoring for slow queries, queue latency/runtime/depth, error rate, and Reverb connections."
+    ,"Replaced the CSS pseudo-3D landing hero with a full-bleed procedural Three.js campus, scroll-linked camera, pointer parallax, reduced-motion behavior, WebGL fallback, and render suspension while outside the viewport."
+    ,"Refined login and every backend role/module into a denser operational visual system with responsive two-column mobile toolbars, stronger contrast, stable wrapping, compact cards, and accessible controls."
+    ,"Removed fabricated CRUD insight percentages and timestamps, fixed the owner profile route, added keyboard-complete tabs, and repaired modal focus trap, Escape, focus restoration, accessible names, and mobile drawer initial focus."
+    ,"Removed the workspace stacking context that placed CRUD and administration modals behind the sticky topbar and caused header elements to intercept modal actions."
+    ,"Enriched operational dashboard DTOs so schedules, invoices, students, and medical records display class, subject, student, room, and doctor text instead of raw relation IDs."
+    ,"Added a permanent screenshot audit runner that covers landing, login, every role dashboard, and every menu on desktop Chromium and Pixel 7 while checking status codes, document overflow, control clipping, and Three.js frame/scroll behavior."
   ],
   "visual_redesign": {
     "public_entry": "Guest requests to / render Inertia Landing; authenticated users still redirect to their role dashboard.",
@@ -50,26 +61,43 @@
     "dashboard_scope": "backend/resources/js/Pages/App.jsx",
     "login_scope": "backend/resources/js/Pages/Login.jsx",
     "design_notes": [
-      "Landing uses code-native CSS 3D scene construction and pointer tilt rather than a bitmap asset.",
+      "Landing uses a procedural Three.js campus with code-native geometry rather than a stock image or SVG illustration.",
+      "The WebGL renderer pauses outside the hero viewport and exposes scroll progress for deterministic visual testing.",
       "External Google fonts were removed after CSP testing; landing typography falls back to bundled/existing fonts.",
       "Modal content must not sit inside a lower z-index stacking context than the sticky topbar.",
-      "Inertia PHP's Linux test page finder does not recognize this project's .jsx pages; LandingPageTest asserts the response component with file existence checking disabled."
+      "Inertia PHP's Linux test page finder does not recognize this project's .jsx pages; LandingPageTest asserts the response component with file existence checking disabled.",
+      "Generated screenshot audit artifacts are stored under memory/ui-audit/2026-07-12; all 20 role/project JSON reports are retained with 14 representative PNGs."
     ]
   },
+  "performance_history": {
+    "dashboard_queries_before": "232-630 representative queries",
+    "dashboard_queries_after": "19-36 representative queries",
+    "inertia_payload_reduction": "67-86 percent depending on panel/module",
+    "current_frontend_build": "2812 transformed modules; Three.js landing chunk 554.36 kB minified / 141.21 kB gzip"
+  },
+  "visual_audit_artifacts": {
+    "root": "memory/ui-audit/2026-07-12",
+    "reports": 20,
+    "representative_screenshots": 14,
+    "size_mb": 5.73,
+    "coverage": "Landing, login, 10 roles, every menu route, desktop Chromium, and Pixel 7"
+  },
   "validation": {
-    "phpunit": "44 passed, 1 skipped, 3349 assertions after adding local/production CSP regression coverage",
-    "playwright": "35 passed and 3 desktop-only skips across desktop Chromium and Pixel 7 viewport, including clipping, toolbar geometry, compact row actions, connected preview data, and Escape regressions",
-    "frontend_build": "Vite production build passed with 2810 modules",
+    "phpunit": "45 passed, 1 skipped, 3366 assertions across 46 tests, including human-readable guru schedule DTO coverage",
+    "playwright": "Main E2E: 35 passed and 3 intentional desktop-only skips across desktop Chromium and Pixel 7. Dedicated visual audit: 24 passing cases (landing/login plus all 10 roles and every menu in both viewports), with impacted operational roles rerun after relation DTO changes.",
+    "frontend_build": "Vite production build passed with 2812 modules; the Three.js landing chunk emits a non-blocking over-500-kB warning",
     "php_format": "vendor/bin/pint --test passed",
     "composer": "composer validate --strict and composer audit --locked passed",
     "npm": "npm audit --audit-level=high passed with 0 vulnerabilities",
-    "docker_compose": "docker compose config --quiet passed"
+    "docker_compose": "docker compose -f docker-compose.yml config --quiet passed"
   },
   "known_limits": [
     "Docker image build was not executed because the local Docker API pipe returned permission denied; Compose configuration was validated.",
     "Flutter analyze/test could not run locally because Flutter is not installed; the new CI mobile job runs pub get, analyze, and test.",
     "Backup generation is complete but still builds and encrypts the snapshot synchronously in memory; move large-tenant backups to a streamed queued archive in a future scalability pass.",
-    "S3 integration remains opt-in and requires RUN_S3_INTEGRATION plus an external S3-compatible service."
+    "S3 integration remains opt-in and requires RUN_S3_INTEGRATION plus an external S3-compatible service.",
+    "The Three.js landing route is already lazy at page level, but its 554 kB minified chunk remains the largest frontend asset and can be reduced further with selective Three.js imports or additional chunk strategy.",
+    "The exhaustive screenshot audit intentionally runs sequentially per isolated viewport database to avoid login rate limiting; a full role/menu visual pass takes about nine minutes locally."
   ],
   "next_agent": [
     "Check the latest GitHub Actions run on main before starting new feature work.",
@@ -79,6 +107,10 @@
     "Add streamed queued backup creation before onboarding high-volume production tenants.",
     "Run Flutter locally when the SDK is available and expand mobile API integration beyond the current dashboard shell.",
     "When adding new dialogs, use the shared useDialogLifecycle pattern and keep primary actions visible while placing secondary administration tools under the compact menus.",
-    "Keep PanelCard and table wrappers min-w-0; the Pixel 7 regression tests intentionally measure child bounding boxes because root overflow can hide clipping."
+    "Keep PanelCard and table wrappers min-w-0; the Pixel 7 regression tests intentionally measure child bounding boxes because root overflow can hide clipping.",
+    "Run npm run audit:ui for exhaustive screenshots; the normal Playwright config intentionally ignores visual-audit.spec.js to keep standard CI duration bounded.",
+    "Do not add isolation, transform, opacity, or a low z-index to workspace-content because it can place fixed dialogs behind the sticky topbar.",
+    "Preserve the enriched mobile dashboard DTO aliases (kelas, mata_pelajaran, santri, kamar, dokter) so role dashboards never regress to raw IDs.",
+    "Review memory/ui-audit/2026-07-12 reports and representative screenshots before changing shared layout primitives."
   ]
 }

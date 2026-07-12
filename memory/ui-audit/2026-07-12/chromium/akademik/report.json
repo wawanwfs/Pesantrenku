@@ -1,0 +1,114 @@
+[
+  {
+    "route": "/dashboard/akademik",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/data-master",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/kurikulum",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/kelas",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/mata-pelajaran",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/guru",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/jadwal-pelajaran",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/presensi",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/penilaian",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/nilai-siswa",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/rapor",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/kalender-akademik",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/kelulusan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/laporan-akademik",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/laporan-nilai",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/akademik/module/pengaturan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  }
+]

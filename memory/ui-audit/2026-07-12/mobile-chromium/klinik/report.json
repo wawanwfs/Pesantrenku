@@ -1,0 +1,100 @@
+[
+  {
+    "route": "/dashboard/klinik",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/antrian",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/rekam-medis",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/pemeriksaan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/obat",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/riwayat-berobat",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/surat-sakit",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/rujukan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/jadwal-dokter",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/stok-obat",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/pengumuman",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/laporan-kesehatan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/profil",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  },
+  {
+    "route": "/klinik/module/pengaturan",
+    "status": 200,
+    "documentOverflow": 0,
+    "outside": [],
+    "clipped": []
+  }
+]
