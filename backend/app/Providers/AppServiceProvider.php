@@ -13,6 +13,7 @@ use Illuminate\Queue\Events\JobExceptionOccurred;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
@@ -22,9 +23,6 @@ use Illuminate\Support\ServiceProvider;
 class AppServiceProvider extends ServiceProvider
 {
     private array $queueSpans = [];
-
-    private array $queueStartedAt = [];
-
     /**
      * Register any application services.
      */
@@ -51,16 +49,19 @@ class AppServiceProvider extends ServiceProvider
             app(TelemetryService::class)->recordDatabase($query->connectionName, $query->sql, (float) $query->time);
         });
 
-        Queue::createPayloadUsing(fn () => array_filter(['otel_traceparent' => app(TelemetryService::class)->traceparent()]));
+        Queue::createPayloadUsing(fn () => array_filter([
+            'otel_traceparent' => app(TelemetryService::class)->traceparent(),
+            'pesantenku_queued_at' => microtime(true),
+        ]));
         Queue::before(function (JobProcessing $event): void {
             $labels = $this->queueLabels($event->job);
             app(MetricRegistry::class)->increment('pesantenku_queue_jobs_started_total', $labels);
             $payload = $event->job->payload();
-            $createdAt = (int) ($payload['createdAt'] ?? 0);
-            if ($createdAt > 0) {
-                app(MetricRegistry::class)->observeMilliseconds('pesantenku_queue_wait_duration', max(0, (microtime(true) - $createdAt) * 1000), $labels);
+            $queuedAt = (float) ($payload['pesantenku_queued_at'] ?? 0);
+            if ($queuedAt > 0) {
+                app(MetricRegistry::class)->observeMilliseconds('pesantenku_queue_wait_duration', max(0, (microtime(true) - $queuedAt) * 1000), $labels);
             }
-            $this->queueStartedAt[$this->queueKey($event->job)] = hrtime(true);
+            Cache::put($this->queueRuntimeKey($event->job), microtime(true), now()->addHour());
             $this->queueSpans[$this->queueKey($event->job)] = app(TelemetryService::class)->startQueueSpan(
                 (string) ($event->job->getQueue() ?: 'default'),
                 class_basename($event->job->resolveName()),
@@ -108,15 +109,18 @@ class AppServiceProvider extends ServiceProvider
 
     private function recordQueueDuration($job): void
     {
-        $key = $this->queueKey($job);
-        $startedAt = $this->queueStartedAt[$key] ?? null;
-        unset($this->queueStartedAt[$key]);
+        $startedAt = Cache::pull($this->queueRuntimeKey($job));
         if ($startedAt !== null) {
             app(MetricRegistry::class)->observeMilliseconds(
                 'pesantenku_queue_job_duration',
-                (hrtime(true) - $startedAt) / 1_000_000,
+                (microtime(true) - (float) $startedAt) * 1000,
                 $this->queueLabels($job),
             );
         }
+    }
+
+    private function queueRuntimeKey($job): string
+    {
+        return 'pesantenku:queue-runtime:'.$this->queueKey($job);
     }
 }

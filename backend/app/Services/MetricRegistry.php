@@ -65,13 +65,22 @@ class MetricRegistry
             }
             foreach (['default', 'imports', 'exports'] as $queue) {
                 $lines[] = '# TYPE pesantenku_queue_redis_depth gauge';
-                $lines[] = 'pesantenku_queue_redis_depth{queue="'.$queue.'"} '.(int) Redis::connection()->llen("queues:{$queue}");
+                try {
+                    $depth = (int) Redis::connection()->llen("queues:{$queue}");
+                } catch (\Throwable) {
+                    $depth = 0;
+                }
+                $lines[] = 'pesantenku_queue_redis_depth{queue="'.$queue.'"} '.$depth;
             }
             $lines[] = '# TYPE pesantenku_reverb_configured gauge';
             $lines[] = 'pesantenku_reverb_configured '.(config('broadcasting.default') === 'reverb' ? 1 : 0);
             $connections = 0;
             if (config('broadcasting.default') === 'reverb') {
-                $connections = (int) (Broadcast::connection('reverb')->getPusher()->get('/connections')->connections ?? 0);
+                try {
+                    $connections = (int) (Broadcast::connection('reverb')->getPusher()->get('/connections')->connections ?? 0);
+                } catch (\Throwable) {
+                    $connections = 0;
+                }
             }
             $lines[] = '# TYPE pesantenku_reverb_connections gauge';
             $lines[] = 'pesantenku_reverb_connections '.$connections;

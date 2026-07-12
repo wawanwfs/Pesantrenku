@@ -7,7 +7,8 @@
         "dev": "vite",
         "test:e2e": "node scripts/prepare-e2e.mjs && playwright test",
         "test:e2e:local-domain": "playwright test --config=playwright.local-domain.config.js",
-        "test:e2e:local-domain:sharded": "powershell -ExecutionPolicy Bypass -File ../deploy/scripts/prepare-sharded-e2e.ps1 && playwright test --config=playwright.local-domain.config.js"
+        "test:e2e:local-domain:sharded": "powershell -ExecutionPolicy Bypass -File ../deploy/scripts/prepare-sharded-e2e.ps1 && playwright test --config=playwright.local-domain.config.js",
+        "benchmark:local-domain": "node scripts/benchmark-local-domain.mjs"
     },
     "devDependencies": {
         "@playwright/test": "^1.61.1",

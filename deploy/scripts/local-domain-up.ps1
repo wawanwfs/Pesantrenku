@@ -84,7 +84,8 @@ $hostnames = @(
     'api.pesantrenku.test',
     'ws.pesantrenku.test',
     'monitor.pesantrenku.test',
-    'db.pesantrenku.test'
+    'db.pesantrenku.test',
+    'storage.pesantrenku.test'
 )
 $hostsLine = '127.0.0.1 ' + ($hostnames -join ' ')
 Set-Content -Path $hostsSnippet -Value $hostsLine
@@ -104,6 +105,7 @@ Write-Output '  https://api.pesantrenku.localhost'
 Write-Output '  wss://ws.pesantrenku.localhost'
 Write-Output '  https://monitor.pesantrenku.localhost'
 Write-Output '  https://db.pesantrenku.localhost'
+Write-Output '  https://storage.pesantrenku.localhost'
 
 if (-not $isAdmin) {
     Write-Output "Optional .test hosts entry is available at: $hostsSnippet"

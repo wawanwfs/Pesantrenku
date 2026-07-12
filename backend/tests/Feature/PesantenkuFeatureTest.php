@@ -657,11 +657,30 @@ class PesantenkuFeatureTest extends TestCase
 
         $response->assertOk()
             ->assertHeader('X-Correlation-ID', 'test-correlation-1234')
+            ->assertHeader('X-DB-Query-Count')
+            ->assertHeader('X-DB-Slow-Query-Count')
             ->assertJsonStructure(['status', 'database', 'storage_disk', 'broadcast']);
 
         $metrics = $this->get('/metrics')->assertOk();
         $this->assertStringContainsString('pesantenku_http_requests_total', $metrics->getContent());
         $this->assertStringContainsString('pesantenku_database_queries_total', $metrics->getContent());
+        $this->assertStringContainsString('pesantenku_database_slow_queries_total', $metrics->getContent());
+        $this->assertStringContainsString('pesantenku_queue_redis_depth', $metrics->getContent());
+        $this->assertStringContainsString('pesantenku_reverb_connections', $metrics->getContent());
+    }
+
+    public function test_queue_wait_and_runtime_metrics_are_recorded(): void
+    {
+        $this->seed();
+        $keuangan = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+
+        $this->actingAs($keuangan)
+            ->postJson('/web-api/payments/export/queue', ['format' => 'excel'])
+            ->assertAccepted();
+
+        $metrics = $this->get('/metrics')->assertOk()->getContent();
+        $this->assertStringContainsString('pesantenku_queue_wait_duration_count', $metrics);
+        $this->assertStringContainsString('pesantenku_queue_job_duration_count', $metrics);
     }
 
     public function test_payment_workflow_replays_the_same_idempotent_response(): void

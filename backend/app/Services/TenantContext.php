@@ -24,12 +24,13 @@ class TenantContext
             return $request->attributes->get($attribute);
         }
 
-        $memberships = DB::table('pesantren_user')
+        $memberships = Cache::remember($this->membershipCacheKey($user->id), now()->addSeconds(30), fn () => DB::table('pesantren_user')
             ->join('pesantrens', 'pesantren_user.pesantren_id', '=', 'pesantrens.id')
             ->join('roles', 'pesantren_user.role_id', '=', 'roles.id')
             ->leftJoin('tenant_roles', 'pesantren_user.tenant_role_id', '=', 'tenant_roles.id')
             ->where('pesantren_user.user_id', $user->id)
             ->where('pesantren_user.status', 'active')
+            ->where('pesantrens.status', 'active')
             ->where('pesantrens.status', 'active')
             ->whereNull('pesantrens.deleted_at')
             ->select([
@@ -44,9 +45,11 @@ class TenantContext
                 'tenant_roles.label as tenant_role_label',
             ])
             ->orderBy('pesantren_user.id')
-            ->get();
+            ->get()
+            ->map(fn (object $membership) => (array) $membership)
+            ->all());
 
-        $memberships = collect($memberships);
+        $memberships = collect($memberships)->map(fn (array $membership) => (object) $membership);
         $request->attributes->set($attribute, $memberships);
 
         return $memberships;
@@ -103,11 +106,12 @@ class TenantContext
             return $request->attributes->get($attribute);
         }
 
-        $tenant = DB::table('pesantrens')
+        $tenant = Cache::remember("pesantenku:tenant:{$id}", now()->addSeconds(30), fn () => (array) DB::table('pesantrens')
             ->select('id', 'name', 'city', 'address', 'phone', 'email', 'status', 'metadata')
             ->where('id', $id)
             ->whereNull('deleted_at')
-            ->first();
+            ->first());
+        $tenant = $tenant ? (object) $tenant : null;
         $request->attributes->set($attribute, $tenant);
 
         return $tenant;

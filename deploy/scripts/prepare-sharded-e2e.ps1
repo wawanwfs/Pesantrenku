@@ -34,7 +34,7 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 foreach ($shard in $shards) {
-    $sql = "CREATE DATABASE IF NOT EXISTS ``$($shard.Database)`` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+    $sql = "CREATE DATABASE IF NOT EXISTS ``$($shard.Database)`` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON ``$($shard.Database)``.* TO 'pesantenku'@'%'; FLUSH PRIVILEGES;"
     docker compose -f $compose exec -T mysql mysql -uroot -ppesantenku-local-root -e $sql
     if ($LASTEXITCODE -ne 0) {
         throw "Gagal membuat database $($shard.Database)."

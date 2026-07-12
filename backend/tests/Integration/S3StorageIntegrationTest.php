@@ -18,6 +18,7 @@ class S3StorageIntegrationTest extends TestCase
 
         config()->set('filesystems.disks.s3', $this->diskConfig());
         config()->set('pesantrenku.operations.disk', 's3');
+        config()->set('pesantrenku.operations.public_endpoint', env('PESANTRENKU_OPERATION_PUBLIC_ENDPOINT'));
         Storage::forgetDisk('s3');
         $storage = app(OperationStorage::class);
         $path = 'imports/integration/'.uniqid('signed-', true).'.txt';
@@ -26,11 +27,12 @@ class S3StorageIntegrationTest extends TestCase
         $this->assertSame('pesantenku-minio-integration', $storage->get($path));
         $signedUrl = $storage->temporaryUrl($path, 5);
         $this->assertNotNull($signedUrl);
-        $this->assertSame('pesantenku-minio-integration', Http::get($signedUrl)->throw()->body());
+        $this->assertSame('pesantenku-minio-integration', Http::withoutVerifying()->get($signedUrl)->throw()->body());
 
-        $lifecycle = $this->client()->getBucketLifecycleConfiguration(['Bucket' => 'pesantenku-integration']);
+        $lifecycle = $this->client()->getBucketLifecycleConfiguration(['Bucket' => $this->bucket()]);
         $prefixes = collect($lifecycle->get('Rules'))->map(fn ($rule) => data_get($rule, 'Filter.Prefix'))->filter();
         $this->assertTrue($prefixes->contains('imports/'));
+        $this->assertTrue($prefixes->contains('exports/'));
         $this->assertTrue($prefixes->contains('backups/'));
 
         $this->assertTrue($storage->delete($path));
@@ -40,11 +42,11 @@ class S3StorageIntegrationTest extends TestCase
     {
         return [
             'driver' => 's3',
-            'key' => 'pesantenku',
-            'secret' => 'pesantenku-secret',
-            'region' => 'us-east-1',
-            'bucket' => 'pesantenku-integration',
-            'endpoint' => 'http://127.0.0.1:9000',
+            'key' => env('AWS_ACCESS_KEY_ID', 'pesantenku'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY', 'pesantenku-secret'),
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            'bucket' => $this->bucket(),
+            'endpoint' => env('AWS_ENDPOINT', 'http://127.0.0.1:9000'),
             'use_path_style_endpoint' => true,
             'throw' => true,
         ];
@@ -54,10 +56,18 @@ class S3StorageIntegrationTest extends TestCase
     {
         return new S3Client([
             'version' => 'latest',
-            'region' => 'us-east-1',
-            'endpoint' => 'http://127.0.0.1:9000',
+            'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
+            'endpoint' => env('AWS_ENDPOINT', 'http://127.0.0.1:9000'),
             'use_path_style_endpoint' => true,
-            'credentials' => ['key' => 'pesantenku', 'secret' => 'pesantenku-secret'],
+            'credentials' => [
+                'key' => env('AWS_ACCESS_KEY_ID', 'pesantenku'),
+                'secret' => env('AWS_SECRET_ACCESS_KEY', 'pesantenku-secret'),
+            ],
         ]);
+    }
+
+    private function bucket(): string
+    {
+        return env('AWS_BUCKET', 'pesantenku-integration');
     }
 }

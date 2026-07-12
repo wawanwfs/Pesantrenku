@@ -25,6 +25,8 @@ class CrudController extends Controller
 
     private array $schemaTables = [];
 
+    private array $schemaDefinitions = [];
+
     public function __construct(
         private readonly TenantContext $tenantContext,
         private readonly OperationStorage $operationStorage,
@@ -2092,6 +2094,13 @@ class CrudController extends Controller
                 'status' => $status,
                 'note' => $nullableText,
             ],
+            'room_assignments' => [
+                'student_id' => $required('integer'),
+                'room_id' => $required('integer'),
+                'assigned_at' => $nullableDate,
+                'ended_at' => $nullableDate,
+                'status' => $status,
+            ],
             'permits' => [
                 'student_id' => $required('integer'),
                 'type' => $required('string'),
@@ -2185,6 +2194,13 @@ class CrudController extends Controller
                 'date' => $nullableDate,
                 'status' => $status,
             ],
+            'room_mutations' => [
+                'student_id' => $required('integer'),
+                'from_room' => $nullableString,
+                'to_room' => $required('string'),
+                'date' => $nullableDate,
+                'status' => $status,
+            ],
             'system_settings' => [
                 'key' => $required('string'),
                 'value' => ['nullable'],
@@ -2193,12 +2209,21 @@ class CrudController extends Controller
         };
 
         if (! $rules && $creating) {
-            $candidate = collect(['name', 'title', 'code', 'number', 'key', 'module', 'student_id', 'user_id'])
-                ->first(fn (string $column) => $this->hasColumn($table, $column));
-            if ($candidate !== null) {
-                $rules[$candidate] = str_ends_with($candidate, '_id')
-                    ? ['required', 'integer']
-                    : ['required', 'string', 'max:255'];
+            foreach ($this->columnDefinitions($table) as $column) {
+                $name = (string) ($column['name'] ?? '');
+                if ($name === ''
+                    || in_array($name, ['id', 'pesantren_id', 'created_at', 'updated_at', 'deleted_at'], true)
+                    || ($column['nullable'] ?? false)
+                    || ($column['default'] ?? null) !== null
+                    || ($column['auto_increment'] ?? false)) {
+                    continue;
+                }
+
+                $type = strtolower((string) ($column['type_name'] ?? $column['type'] ?? 'string'));
+                $rule = str_contains($type, 'int')
+                    ? 'integer'
+                    : (preg_match('/decimal|numeric|float|double|real/', $type) ? 'numeric' : (str_contains($type, 'date') || str_contains($type, 'time') ? 'date' : 'string'));
+                $rules[$name] = ['required', $rule];
             }
         }
 
@@ -2249,6 +2274,11 @@ class CrudController extends Controller
     private function hasTable(string $table): bool
     {
         return $this->schemaTables[$table] ??= Schema::hasTable($table);
+    }
+
+    private function columnDefinitions(string $table): array
+    {
+        return $this->schemaDefinitions[$table] ??= Schema::getColumns($table);
     }
 
     private function requestMemo(Request $request, string $key, callable $resolver): mixed

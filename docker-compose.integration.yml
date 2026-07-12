@@ -26,7 +26,9 @@ services:
       - >-
         mc alias set integration http://minio:9000 pesantenku pesantenku-secret &&
         mc mb --ignore-existing integration/pesantenku-integration &&
+        (mc ilm rule rm --all --force integration/pesantenku-integration || true) &&
         mc ilm rule add --expire-days 7 --prefix imports/ integration/pesantenku-integration &&
+        mc ilm rule add --expire-days 7 --prefix exports/ integration/pesantenku-integration &&
         mc ilm rule add --expire-days 30 --prefix backups/ integration/pesantenku-integration
 
 volumes:

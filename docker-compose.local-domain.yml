@@ -84,6 +84,10 @@ services:
         condition: service_started
       minio:
         condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - storage.pesantrenku.localhost
 
   app:
     image: ${PESANTRENKU_LOCAL_IMAGE:-pesantrenku:local-domain}
@@ -279,8 +283,9 @@ services:
       - >-
         mc alias set local http://minio:9000 pesantenku pesantenku-secret &&
         mc mb --ignore-existing local/pesantenku-local &&
-        mc ilm rule add --expire-days 7 --prefix imports/ local/pesantenku-local || true;
-        mc ilm rule add --expire-days 7 --prefix exports/ local/pesantenku-local || true;
+        (mc ilm rule rm --all --force local/pesantenku-local || true) &&
+        mc ilm rule add --expire-days 7 --prefix imports/ local/pesantenku-local &&
+        mc ilm rule add --expire-days 7 --prefix exports/ local/pesantenku-local &&
         mc ilm rule add --expire-days 30 --prefix backups/ local/pesantenku-local || true
 
   phpmyadmin:
