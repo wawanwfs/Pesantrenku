@@ -24,10 +24,59 @@ class SecurityHeaders
 
         if (! $response->headers->has('Content-Security-Policy')) {
             $websocketOrigin = trim((string) config('pesantrenku.notifications.websocket_origin'));
-            $connectSources = trim("'self' {$websocketOrigin}");
-            $response->headers->set('Content-Security-Policy', "default-src 'self'; connect-src {$connectSources}; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline' https://fonts.bunny.net; script-src 'self' 'unsafe-inline'; font-src 'self' data: https://fonts.bunny.net; frame-ancestors 'self'");
+            $viteSources = $this->viteDevServerSources();
+            $connectSources = array_filter(["'self'", $websocketOrigin, ...$viteSources]);
+            $assetSources = array_filter(["'self'", $viteSources[0] ?? null]);
+
+            $response->headers->set('Content-Security-Policy', sprintf(
+                "default-src 'self'; connect-src %s; img-src 'self' data: blob:; style-src %s 'unsafe-inline' https://fonts.bunny.net; script-src %s 'unsafe-inline'; font-src 'self' data: https://fonts.bunny.net; frame-ancestors 'self'",
+                implode(' ', $connectSources),
+                implode(' ', $assetSources),
+                implode(' ', $assetSources),
+            ));
         }
 
         return $response;
+    }
+
+    /**
+     * Allow only the active Vite development origin recorded by Laravel's hot file.
+     * Production never reads or trusts this local development endpoint.
+     *
+     * @return list<string>
+     */
+    private function viteDevServerSources(): array
+    {
+        if (! app()->environment('local')) {
+            return [];
+        }
+
+        $hotFile = public_path('hot');
+        if (! is_file($hotFile)) {
+            return [];
+        }
+
+        $url = trim((string) file_get_contents($hotFile));
+        $scheme = parse_url($url, PHP_URL_SCHEME);
+        $host = parse_url($url, PHP_URL_HOST);
+        $port = parse_url($url, PHP_URL_PORT);
+
+        if (! in_array($scheme, ['http', 'https'], true) || ! is_string($host) || $host === '') {
+            return [];
+        }
+
+        $host = trim($host, '[]');
+        $socketScheme = $scheme === 'https' ? 'wss' : 'ws';
+
+        // Chromium rejects IPv6 literals in CSP host sources. This fallback is
+        // local-only and Vite is configured to use IPv4 on its next restart.
+        if (str_contains($host, ':')) {
+            return ["{$scheme}:", "{$socketScheme}:"];
+        }
+
+        $portSuffix = is_int($port) ? ":{$port}" : '';
+        $origin = "{$scheme}://{$host}{$portSuffix}";
+
+        return [$origin, "{$socketScheme}://{$host}{$portSuffix}"];
     }
 }

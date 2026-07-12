@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-12T12:24:34Z",
+  "generated_at": "2026-07-12T12:37:40Z",
   "project": "Pesantenku",
   "branch": "main",
   "remote": "https://github.com/wawanwfs/Pesantrenku.git",
@@ -38,7 +38,8 @@
     "Hardened interaction accessibility with Escape/focus-trap/focus-restore behavior for the mobile drawer and primary dialogs, linked CRUD validation errors to fields, and added keyboard/outside-click lifecycle support to the landing mobile menu.",
     "Made CRUD search results race-safe by ignoring stale requests and loading list plus analytics concurrently; dashboard previews now use explicit human-oriented columns instead of arbitrary first fields.",
     "Connected owner dashboard previews to enriched tenant membership, module, and subscription DTOs; mobile toolbar menus are viewport-safe and mutually exclusive, while row actions stay compact without sticky overlap.",
-    "Made composer run dev cross-platform: Unix keeps Laravel Pail, while Windows automatically tails storage/logs/laravel.log without requiring the unavailable pcntl extension."
+    "Made composer run dev cross-platform: Unix keeps Laravel Pail, while Windows automatically tails storage/logs/laravel.log without requiring the unavailable pcntl extension.",
+    "Fixed local Vite CSP loading by deriving development sources from public/hot, allowing HMR connections only in local mode, and binding Vite/HMR to CSP-compatible 127.0.0.1; production CSP remains unchanged."
   ],
   "visual_redesign": {
     "public_entry": "Guest requests to / render Inertia Landing; authenticated users still redirect to their role dashboard.",
@@ -56,7 +57,7 @@
     ]
   },
   "validation": {
-    "phpunit": "42 passed, 1 skipped, 3343 assertions after integrating the latest main optimizations",
+    "phpunit": "44 passed, 1 skipped, 3349 assertions after adding local/production CSP regression coverage",
     "playwright": "35 passed and 3 desktop-only skips across desktop Chromium and Pixel 7 viewport, including clipping, toolbar geometry, compact row actions, connected preview data, and Escape regressions",
     "frontend_build": "Vite production build passed with 2810 modules",
     "php_format": "vendor/bin/pint --test passed",
