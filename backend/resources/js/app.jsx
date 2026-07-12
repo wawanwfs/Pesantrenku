@@ -5,6 +5,7 @@ import '../css/app.css';
 
 const pages = {
   App: () => import('./Pages/App.jsx'),
+  Landing: () => import('./Pages/Landing.jsx'),
   Login: () => import('./Pages/Login.jsx'),
 };
 

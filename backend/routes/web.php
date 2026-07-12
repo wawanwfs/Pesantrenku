@@ -12,10 +12,11 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Inertia\Inertia;
 
 Route::get('/', function (Request $request) {
     if (! $request->user()) {
-        return redirect('/login');
+        return Inertia::render('Landing');
     }
 
     $role = $request->user()->loadMissing('roles')->role_names[0] ?? 'super_admin';

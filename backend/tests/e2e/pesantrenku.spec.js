@@ -144,7 +144,7 @@ test('tu import preview mapping works', async ({ page }, testInfo) => {
   });
   await page.getByRole('button', { name: 'Preview' }).click();
   await expect(page.getByText('Mapping Kolom')).toBeVisible();
-  await expect(page.getByText('Valid')).toBeVisible();
+  await expect(page.getByText('Valid', { exact: true })).toBeVisible();
 });
 
 test('workflow endpoints and queued export are operational', async ({ page }, testInfo) => {
@@ -156,7 +156,7 @@ test('workflow endpoints and queued export are operational', async ({ page }, te
     await reject.click();
     await page.locator('textarea').fill('Catatan E2E wajib.');
     await page.getByRole('button', { name: 'Simpan Status' }).click();
-    await expect(page.getByText(/Status berhasil|ditolak/i)).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: /Status berhasil|ditolak/i })).toBeVisible();
   }
 
   await login(page, 'keuangan', 'keuangan@pesantenku.test');

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-12T08:45:00Z",
+  "generated_at": "2026-07-12T10:46:10Z",
   "project": "Pesantenku",
   "branch": "main",
   "remote": "https://github.com/wawanwfs/Pesantrenku.git",
@@ -29,12 +29,29 @@
     "Fixed CI Trivy tags, PHP version mismatch, Playwright metadata, Reverb E2E environment, full Pint gate, and added Flutter CI.",
     "Updated Docker Compose to build the backend image and added a Redis queue worker.",
     "Removed tracked recovery dumps, binlog, local certificate, host file, PHP error log, and Playwright result state; added root ignores.",
-    "Formatted the complete PHP codebase with Pint."
+    "Formatted the complete PHP codebase with Pint.",
+    "Added a public, responsive, CSS-3D animated landing page at the guest root with keyboard-accessible mobile navigation, dynamic sign-in/dashboard CTA, and reduced-motion support.",
+    "Redesigned the login, dashboard shell, cards, tables, filters, forms, dialogs, and responsive navigation into a cohesive premium visual system without changing API or authorization behavior.",
+    "Fixed dashboard modal layering so dialogs render above the sticky topbar and hardened E2E selectors against ambiguous visible labels."
   ],
+  "visual_redesign": {
+    "public_entry": "Guest requests to / render Inertia Landing; authenticated users still redirect to their role dashboard.",
+    "landing_files": [
+      "backend/resources/js/Pages/Landing.jsx",
+      "backend/resources/css/landing.css"
+    ],
+    "dashboard_scope": "backend/resources/js/Pages/App.jsx",
+    "login_scope": "backend/resources/js/Pages/Login.jsx",
+    "design_notes": [
+      "Landing uses code-native CSS 3D scene construction and pointer tilt rather than a bitmap asset.",
+      "External Google fonts were removed after CSP testing; landing typography falls back to bundled/existing fonts.",
+      "Modal content must not sit inside a lower z-index stacking context than the sticky topbar."
+    ]
+  },
   "validation": {
-    "phpunit": "35 passed, 1 skipped, 354 assertions",
-    "playwright": "30 passed across desktop Chromium and Pixel 7 viewport",
-    "frontend_build": "Vite production build passed with 2808 modules",
+    "phpunit": "37 passed, 1 skipped, 366 assertions",
+    "playwright": "30 passed across desktop Chromium and Pixel 7 viewport with no retries or flaky checks",
+    "frontend_build": "Vite production build passed with 2810 modules",
     "php_format": "vendor/bin/pint --test passed",
     "composer": "composer validate --strict and composer audit --locked passed",
     "npm": "npm audit --audit-level=high passed with 0 vulnerabilities",
@@ -48,6 +65,8 @@
   ],
   "next_agent": [
     "Check the latest GitHub Actions run on main before starting new feature work.",
+    "Keep the public Landing resolver in backend/resources/js/app.jsx aligned with the guest root route in backend/routes/web.php.",
+    "Preserve exact role/status selectors in E2E assertions when visual copy introduces overlapping text.",
     "Preserve active membership role authorization and the centralized sensitive-column denylist when adding resources.",
     "Add streamed queued backup creation before onboarding high-volume production tenants.",
     "Run Flutter locally when the SDK is available and expand mobile API integration beyond the current dashboard shell."

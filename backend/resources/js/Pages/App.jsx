@@ -149,14 +149,16 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-neutral-50 text-neutral-900">
-      <aside className={`${collapsed ? 'w-20' : 'w-72'} fixed inset-y-0 left-0 z-20 hidden border-r border-white/10 transition-all lg:block ${config.light ? 'bg-white text-neutral-900' : 'bg-gradient-to-b from-primary-900 via-[#053947] to-[#041C35] text-white'}`}>
-        <div className="flex h-full flex-col p-4">
+    <div className="min-h-screen overflow-x-hidden bg-[#f6f8f7] text-neutral-900 selection:bg-primary-100 selection:text-primary-900">
+      <aside className={`${collapsed ? 'w-20' : 'w-72'} fixed inset-y-0 left-0 z-20 hidden border-r transition-[width] duration-300 lg:block ${config.light ? 'border-neutral-200/80 bg-white/95 text-neutral-900 shadow-[10px_0_35px_rgba(15,23,42,0.03)]' : 'border-white/10 bg-gradient-to-b from-primary-900 via-[#073d49] to-[#041c35] text-white shadow-[10px_0_35px_rgba(4,28,53,0.15)]'}`}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.14),transparent_68%)]" />
+        <div className="relative flex h-full flex-col p-4">
           <div className="flex items-center gap-3 px-2 py-2">
             <Logo />
-            {!collapsed && <div><div className="font-semibold">Pesantenku</div><div className={`text-xs ${config.light ? 'text-neutral-500' : 'text-white/70'}`}>{config.role}</div></div>}
+            {!collapsed && <div className="min-w-0"><div className="font-semibold tracking-tight">Pesantenku</div><div className={`mt-0.5 truncate text-[11px] font-medium uppercase tracking-[0.12em] ${config.light ? 'text-neutral-500' : 'text-white/60'}`}>{config.role}</div></div>}
           </div>
-          <nav className="mt-7 flex-1 space-y-1 overflow-y-auto">
+          <div className={`mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] ${collapsed ? 'sr-only' : config.light ? 'text-neutral-400' : 'text-white/45'}`}>Navigasi</div>
+          <nav aria-label="Navigasi utama" className="mt-3 flex-1 space-y-1 overflow-y-auto pr-1">
             {config.menu.map(([label, icon, href]) => <SideItem key={label} label={label} icon={icon} href={label === 'Dashboard' ? `/dashboard/${panel}` : href} active={(screen === 'dashboard' && label === 'Dashboard') || href?.endsWith(`/module/${module}`) || module === slug(label)} light={config.light} collapsed={collapsed} />)}
           </nav>
           <button
@@ -165,33 +167,35 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
             aria-label={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
             aria-expanded={!collapsed}
             title={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
-            className={`mt-3 rounded-xl px-3 py-2 text-xs ${config.light ? 'bg-neutral-100' : 'bg-white/10'}`}
+            className={`mt-3 inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary-500/50 ${config.light ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' : 'bg-white/10 text-white/90 hover:bg-white/15'}`}
           >
             {collapsed ? '>>' : '<<'}
           </button>
         </div>
       </aside>
       {mobileNavOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <button type="button" className="absolute inset-0 bg-neutral-900/50" onClick={() => setMobileNavOpen(false)} aria-label="Tutup menu" />
-          <aside className={`relative flex h-full w-80 max-w-[86vw] flex-col border-r p-4 shadow-2xl ${config.light ? 'bg-white text-neutral-900' : 'bg-gradient-to-b from-primary-900 via-[#053947] to-[#041C35] text-white'}`}>
+        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigasi utama">
+          <button type="button" className="absolute inset-0 bg-neutral-950/45 backdrop-blur-[2px]" onClick={() => setMobileNavOpen(false)} aria-label="Tutup menu" />
+          <aside className={`relative flex h-full w-80 max-w-[86vw] flex-col border-r p-4 shadow-2xl ${config.light ? 'border-neutral-200 bg-white text-neutral-900' : 'border-white/10 bg-gradient-to-b from-primary-900 via-[#073d49] to-[#041c35] text-white'}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Logo />
-                <div><div className="font-semibold">Pesantenku</div><div className={`text-xs ${config.light ? 'text-neutral-500' : 'text-white/70'}`}>{config.role}</div></div>
+                <div><div className="font-semibold tracking-tight">Pesantenku</div><div className={`mt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] ${config.light ? 'text-neutral-500' : 'text-white/60'}`}>{config.role}</div></div>
               </div>
               <button type="button" onClick={() => setMobileNavOpen(false)} className={`rounded-xl p-2 ${config.light ? 'hover:bg-neutral-100' : 'hover:bg-white/10'}`} aria-label="Tutup menu"><icons.X className="h-5 w-5" /></button>
             </div>
-            <nav className="mt-7 flex-1 space-y-1 overflow-y-auto">
+            <div className={`mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] ${config.light ? 'text-neutral-400' : 'text-white/45'}`}>Navigasi</div>
+            <nav aria-label="Navigasi utama" className="mt-3 flex-1 space-y-1 overflow-y-auto">
               {config.menu.map(([label, icon, href]) => <SideItem key={label} label={label} icon={icon} href={label === 'Dashboard' ? `/dashboard/${panel}` : href} active={(screen === 'dashboard' && label === 'Dashboard') || href?.endsWith(`/module/${module}`) || module === slug(label)} light={config.light} onClick={() => setMobileNavOpen(false)} />)}
             </nav>
           </aside>
         </div>
       )}
 
-      <main className={`${collapsed ? 'lg:pl-20' : 'lg:pl-72'} transition-all`}>
+      <main className={`${collapsed ? 'lg:pl-20' : 'lg:pl-72'} relative min-w-0 transition-[padding] duration-300`}>
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-72 bg-[radial-gradient(ellipse_at_top_right,rgba(23,191,92,0.09),transparent_58%)]" />
         <Topbar panel={panel} auth={auth} shared={shared} app={app} onMenuOpen={() => setMobileNavOpen(true)} />
-        <div className="p-4 lg:p-6">
+        <div className="relative mx-auto max-w-[1800px] p-4 sm:p-5 lg:p-7">
           {screen === 'dashboard' ? <Dashboard dashboard={dashboard} shared={shared} panel={panel} /> : <ModulePage panel={panel} module={module} shared={shared} dashboard={dashboard} />}
         </div>
       </main>
@@ -249,17 +253,18 @@ function RoleDashboard({ dashboard, shared, panel }) {
 
   return (
     <div className="space-y-5">
-      <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <section className="relative overflow-hidden rounded-3xl border border-primary-100/70 bg-white p-5 shadow-[0_12px_35px_rgba(15,23,42,0.05)]">
+        <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-primary-100/60 blur-3xl" />
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex items-center gap-4">
-            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-primary-100 text-lg font-semibold text-primary-700">{(profile.name || roleLabel(panel)).split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
+          <div className="relative flex items-center gap-4">
+            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary-100 to-emerald-50 text-lg font-semibold text-primary-700 shadow-sm">{(profile.name || roleLabel(panel)).split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
             <div>
-              <div className="text-xs text-neutral-500">Pesantenku / {roleLabel(panel)}</div>
-              <h1 className="mt-1 text-2xl font-semibold">{profile.name || roleLabel(panel)}</h1>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-700">Pesantenku / {roleLabel(panel)}</div>
+              <h1 className="mt-1 text-2xl font-semibold tracking-tight">{profile.name || roleLabel(panel)}</h1>
               <p className="text-sm text-neutral-500">{profile.subtitle || 'Ringkasan aktivitas pesantren'}</p>
             </div>
           </div>
-          <Link href={`/${panel}/module/profil`} className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm hover:bg-neutral-50"><icons.UserCog className="h-4 w-4" /> Profil</Link>
+          <Link href={`/${panel}/module/profil`} className="relative inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5 hover:border-primary-200 hover:text-primary-700 hover:shadow"><icons.UserCog className="h-4 w-4" /> Profil</Link>
         </div>
       </section>
 
@@ -323,13 +328,13 @@ function TabbedCrudModule({ meta, shared }) {
   return (
     <div className="space-y-5">
       <Header title={meta.title} subtitle={meta.subtitle} />
-      <div className="flex flex-wrap gap-2 rounded-2xl border border-neutral-200 bg-white p-2 shadow-sm">
+      <div className="flex flex-wrap gap-1.5 rounded-2xl border border-neutral-200/80 bg-white/90 p-2 shadow-sm">
         {meta.tabs.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={() => setActive(item.key)}
-            className={`rounded-xl px-4 py-2 text-sm font-semibold ${item.key === tab.key ? 'bg-primary-600 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}
+            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary-500/40 ${item.key === tab.key ? 'bg-primary-600 text-white shadow-sm' : 'text-neutral-600 hover:bg-primary-50 hover:text-primary-700'}`}
           >
             {item.label}
           </button>
@@ -861,41 +866,41 @@ function CrudModule({ meta, shared }) {
       {meta.showHeader !== false && <Header title={meta.title} subtitle={meta.subtitle} />}
       {(message || error) && <Alert tone={error ? 'error' : 'success'}>{error || message}</Alert>}
       <PanelCard>
-        <div className="mb-5 flex flex-col gap-3 2xl:flex-row 2xl:items-start 2xl:justify-between">
-          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            <div className="relative w-full"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary-600" placeholder={`Cari ${meta.title.toLowerCase()}...`} /></div>
-            <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm"><option>Semua Status</option>{statusOptions.map((item) => <option key={item}>{item}</option>)}</select>
-            {meta.enableFilters !== false && <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm" title="Tanggal mulai" />}
-            {meta.enableFilters !== false && <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm" title="Tanggal akhir" />}
+        <div className="mb-5 flex flex-col gap-4 border-b border-neutral-100 pb-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
+          <div className="grid flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+            <div className="relative w-full"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 bg-white py-2.5 pl-10 pr-3 text-sm shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" placeholder={`Cari ${meta.title.toLowerCase()}...`} aria-label={`Cari ${meta.title.toLowerCase()}`} /></div>
+            <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70"><option>Semua Status</option>{statusOptions.map((item) => <option key={item}>{item}</option>)}</select>
+            {meta.enableFilters !== false && <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" title="Tanggal mulai" aria-label="Tanggal mulai" />}
+            {meta.enableFilters !== false && <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" title="Tanggal akhir" aria-label="Tanggal akhir" />}
             {meta.enableFilters !== false && (
-              <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm">
+              <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70">
                 <option value="">Semua Kelas</option>
                 {rowsOf(shared.classes).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             )}
             {meta.enableFilters !== false && (
-              <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm">
+              <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70">
                 <option value="">Semua Santri</option>
                 {rowsOf(shared.students).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
               </select>
             )}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {meta.resource === 'backups' && <button onClick={runBackup} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.Database className="h-4 w-4" /> Jalankan Backup</button>}
-            {meta.resource === 'backups' && meta.panel === 'super-admin' && <button onClick={() => setRestoreApprovalOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.Shield className="h-4 w-4" /> Persetujuan Restore</button>}
-            {canExport && <button onClick={() => exportResource(meta.resource, meta.title, 'csv', buildParams())} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.Download className="h-4 w-4" /> CSV</button>}
-            {canExport && <button onClick={() => exportResource(meta.resource, meta.title, 'excel', buildParams())} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.FileText className="h-4 w-4" /> Excel</button>}
-            {canExport && <button onClick={() => exportResource(meta.resource, meta.title, 'pdf', buildParams())} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.FileText className="h-4 w-4" /> PDF</button>}
-            {canExport && <button onClick={() => queueExport('excel')} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.Database className="h-4 w-4" /> Export Job</button>}
-            <button onClick={() => { setDownloadManagerOpen(true); loadJobs(); }} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.Download className="h-4 w-4" /> Download Manager</button>
-            {canImport && <button onClick={() => setImportOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><ImportIcon className="h-4 w-4" /> Import Excel</button>}
-            {canBulk && selectedIds.length > 0 && <button onClick={() => setBulkOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><BulkIcon className="h-4 w-4" /> Aksi Massal ({selectedIds.length})</button>}
-            {canEditPermissions && <button onClick={() => setPermissionOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.Shield className="h-4 w-4" /> Permission</button>}
-            {canEditPermissions && <button onClick={() => setCustomRoleOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.UserCog className="h-4 w-4" /> Custom Role</button>}
-            {canMonitorQueue && <button onClick={() => setQueueMonitorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.Activity className="h-4 w-4" /> Queue Monitor</button>}
-            {canEditPdfTemplates && <button onClick={() => setPdfTemplateOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.FileText className="h-4 w-4" /> Template PDF</button>}
-            <button onClick={() => loadRows()} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.RefreshCcw className="h-4 w-4" /> Refresh</button>
-            {canCreate && <button onClick={createRow} className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white"><icons.Plus className="h-4 w-4" /> {meta.createLabel || 'Tambah Data'}</button>}
+          <div className="flex flex-wrap gap-2 2xl:max-w-[48rem] 2xl:justify-end">
+            {meta.resource === 'backups' && <button onClick={runBackup} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Database className="h-4 w-4" /> Jalankan Backup</button>}
+            {meta.resource === 'backups' && meta.panel === 'super-admin' && <button onClick={() => setRestoreApprovalOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Shield className="h-4 w-4" /> Persetujuan Restore</button>}
+            {canExport && <button onClick={() => exportResource(meta.resource, meta.title, 'csv', buildParams())} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Download className="h-4 w-4" /> CSV</button>}
+            {canExport && <button onClick={() => exportResource(meta.resource, meta.title, 'excel', buildParams())} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.FileText className="h-4 w-4" /> Excel</button>}
+            {canExport && <button onClick={() => exportResource(meta.resource, meta.title, 'pdf', buildParams())} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.FileText className="h-4 w-4" /> PDF</button>}
+            {canExport && <button onClick={() => queueExport('excel')} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Database className="h-4 w-4" /> Export Job</button>}
+            <button onClick={() => { setDownloadManagerOpen(true); loadJobs(); }} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Download className="h-4 w-4" /> Download Manager</button>
+            {canImport && <button onClick={() => setImportOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><ImportIcon className="h-4 w-4" /> Import Excel</button>}
+            {canBulk && selectedIds.length > 0 && <button onClick={() => setBulkOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 shadow-sm transition hover:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200"><BulkIcon className="h-4 w-4" /> Aksi Massal ({selectedIds.length})</button>}
+            {canEditPermissions && <button onClick={() => setPermissionOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Shield className="h-4 w-4" /> Permission</button>}
+            {canEditPermissions && <button onClick={() => setCustomRoleOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.UserCog className="h-4 w-4" /> Custom Role</button>}
+            {canMonitorQueue && <button onClick={() => setQueueMonitorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Activity className="h-4 w-4" /> Queue Monitor</button>}
+            {canEditPdfTemplates && <button onClick={() => setPdfTemplateOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.FileText className="h-4 w-4" /> Template PDF</button>}
+            <button onClick={() => loadRows()} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.RefreshCcw className="h-4 w-4" /> Refresh</button>
+            {canCreate && <button onClick={createRow} className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"><icons.Plus className="h-4 w-4" /> {meta.createLabel || 'Tambah Data'}</button>}
           </div>
         </div>
         <Table rows={filteredRows} columns={meta.fields.map((field) => field.name)} meta={meta} shared={shared} loading={loading} selectable={canBulk} selectedIds={selectedIds} onToggleRow={toggleSelected} onToggleAll={setSelectedForPage} onView={canView ? viewRow : null} onEdit={canEdit ? editRow : null} onDelete={canDelete ? deleteRow : null} customActions={resourceActions} />
@@ -1118,9 +1123,9 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
   };
 
   return (
-    <header ref={topbarRef} className="sticky top-0 z-10 border-b border-neutral-200 bg-white/90 px-4 py-3 backdrop-blur lg:px-6">
-      <div className="flex items-center gap-4">
-        <button type="button" onClick={onMenuOpen} className="rounded-xl border border-neutral-200 p-2 hover:bg-neutral-50 lg:hidden" aria-label="Buka menu"><icons.Menu className="h-5 w-5" /></button>
+    <header ref={topbarRef} className="sticky top-0 z-10 border-b border-white/70 bg-white/80 px-4 py-3 shadow-[0_1px_0_rgba(15,23,42,0.03)] backdrop-blur-xl lg:px-7">
+      <div className="flex items-center gap-2.5 sm:gap-4">
+        <button type="button" onClick={onMenuOpen} className="rounded-xl border border-neutral-200 bg-white p-2 text-neutral-600 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 lg:hidden" aria-label="Buka menu"><icons.Menu className="h-5 w-5" /></button>
         <form onSubmit={submitSearch} className="relative flex-1">
           <icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
           <input
@@ -1130,16 +1135,16 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
               setSearchTerm(event.target.value);
               setSearchOpen(true);
             }}
-            className="w-full max-w-xl rounded-xl border border-neutral-200 py-2.5 pl-10 pr-10 text-sm outline-none focus:border-primary-600"
+            className="w-full max-w-xl rounded-xl border border-neutral-200/90 bg-white/80 py-2.5 pl-10 pr-10 text-sm shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:bg-white focus:ring-4 focus:ring-primary-100/70"
             placeholder="Cari menu, modul, laporan..."
           />
-          {searchTerm && <button type="button" onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 rounded-lg p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700" aria-label="Bersihkan pencarian"><icons.X className="h-4 w-4" /></button>}
+          {searchTerm && <button type="button" onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 rounded-lg p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Bersihkan pencarian"><icons.X className="h-4 w-4" /></button>}
           {searchOpen && searchTerm && (
-            <div className="absolute left-0 top-12 z-30 w-full max-w-xl overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl">
+            <div className="absolute left-0 top-12 z-30 w-full max-w-xl overflow-hidden rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-2xl">
               {searchResults.length > 0 ? searchResults.map((item) => {
                 const Icon = icons[item.icon] || icons.Search;
                 return (
-                  <button key={item.href} type="button" onClick={() => openMenu(item.href)} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm hover:bg-neutral-50">
+                  <button key={item.href} type="button" onClick={() => openMenu(item.href)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">
                     <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-50 text-primary-700"><Icon className="h-4 w-4" /></span>
                     <span className="font-medium">{item.label}</span>
                   </button>
@@ -1152,26 +1157,26 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
           <select
             value={activeTenantId}
             onChange={(event) => router.post('/tenant/switch', { pesantren_id: event.target.value }, { preserveScroll: true })}
-            className="hidden max-w-64 rounded-xl border border-neutral-200 px-3 py-2 text-sm xl:block"
+            className="hidden max-w-64 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 xl:block"
           >
             {memberships.map((item) => <option key={`${item.id}-${item.role || item.role_label}`} value={item.id}>{item.name || item.pesantren} {item.role_label ? `- ${item.role_label}` : ''}</option>)}
           </select>
         )}
-        <div className="hidden rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600 md:block">{academicYear}</div>
+        <div className="hidden rounded-xl border border-primary-100/80 bg-primary-50/60 px-3 py-2 text-xs font-medium text-primary-700 lg:block">{academicYear}</div>
         <div className="relative">
-          <button type="button" onClick={() => { setNotificationsOpen((open) => !open); setAccountOpen(false); }} className="relative rounded-xl border border-neutral-200 p-2 hover:bg-neutral-50" aria-label="Buka notifikasi">
+          <button type="button" onClick={() => { setNotificationsOpen((open) => !open); setAccountOpen(false); }} className="relative rounded-xl border border-neutral-200 bg-white p-2 text-neutral-600 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Buka notifikasi" aria-expanded={notificationsOpen}>
             <icons.Bell className="h-5 w-5" />
             {unreadCount > 0 && <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">{unreadCount}</span>}
           </button>
           {notificationsOpen && (
-            <div className="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl">
-              <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3 text-sm">
+            <div className="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-2xl">
+              <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-3 text-sm">
                 <span className="font-semibold">Notifikasi</span>
-                {notifications.length > 0 && <button type="button" onClick={markNotificationsRead} className="text-xs font-semibold text-primary-700">Tandai terbaca</button>}
+                {notifications.length > 0 && <button type="button" onClick={markNotificationsRead} className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">Tandai terbaca</button>}
               </div>
               <div className="max-h-80 overflow-y-auto">
                 {notifications.length > 0 ? notifications.map((item) => (
-                  <div key={item.id || item.title} className="border-b border-neutral-100 px-4 py-3 text-sm last:border-0">
+                  <div key={item.id || item.title} className="mx-1 border-b border-neutral-100 px-3 py-3 text-sm last:border-0">
                     <div className="font-medium">{item.title}</div>
                     <div className="mt-1 text-xs text-neutral-500">{item.body || item.description || 'Notifikasi sistem'}</div>
                   </div>
@@ -1181,25 +1186,25 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
           )}
         </div>
         <div className="relative">
-          <button type="button" onClick={() => { setAccountOpen((open) => !open); setNotificationsOpen(false); }} className="flex items-center gap-3 rounded-xl px-2 py-1.5 text-left hover:bg-neutral-50" aria-label="Buka menu akun">
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-primary-100 text-sm font-semibold text-primary-700">{initials || 'U'}</div>
+          <button type="button" onClick={() => { setAccountOpen((open) => !open); setNotificationsOpen(false); }} className="flex items-center gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Buka menu akun" aria-expanded={accountOpen}>
+            <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-primary-100 to-emerald-50 text-sm font-semibold text-primary-700 ring-2 ring-white">{initials || 'U'}</div>
             <div className="hidden text-sm md:block"><div className="font-semibold">{userName}</div><div className="text-xs text-neutral-500">{roleLabel(panel)}</div></div>
           </button>
           {accountOpen && (
-            <div className="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-xl">
-              <div className="border-b border-neutral-100 px-4 py-4">
+            <div className="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-2xl">
+              <div className="rounded-xl border-b border-neutral-100 px-3 py-3">
                 <div className="font-semibold">{userName}</div>
                 {userEmail && <div className="mt-1 text-xs text-neutral-500">{userEmail}</div>}
                 <div className="mt-2 text-xs text-neutral-500">{roles}</div>
               </div>
               {auth?.active_pesantren && (
-                <div className="border-b border-neutral-100 px-4 py-3 text-sm">
+                <div className="mx-1 border-b border-neutral-100 px-3 py-3 text-sm">
                   <div className="text-xs text-neutral-500">Pesantren Aktif</div>
                   <div className="mt-1 font-medium">{auth.active_pesantren.name}</div>
                 </div>
               )}
-              <Link href={settingsHref} className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-neutral-50" onClick={() => setAccountOpen(false)}><icons.Settings className="h-4 w-4" /> Pengaturan</Link>
-              <button type="button" onClick={logout} className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm text-red-600 hover:bg-red-50"><icons.LogOut className="h-4 w-4" /> Logout</button>
+              <Link href={settingsHref} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-neutral-50" onClick={() => setAccountOpen(false)}><icons.Settings className="h-4 w-4" /> Pengaturan</Link>
+              <button type="button" onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200"><icons.LogOut className="h-4 w-4" /> Logout</button>
             </div>
           )}
         </div>
@@ -1209,12 +1214,12 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
 }
 
 function Header({ title, subtitle }) {
-  return <div><div className="text-xs text-neutral-500">Pesantenku / Dashboard</div><h1 className="mt-1 text-2xl font-semibold">{title}</h1><p className="text-sm text-neutral-500">{subtitle}</p></div>;
+  return <div className="px-1 py-1"><div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-700">Pesantenku <span className="mx-1 text-neutral-300">/</span> Ruang kerja</div><h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">{title}</h1><p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-500">{subtitle}</p></div>;
 }
 
 function StatCard({ item }) {
   const Icon = icons[item.icon] || icons.Activity;
-  return <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><p className="text-xs text-neutral-500">{item.label}</p><p className="mt-2 text-2xl font-semibold">{item.value}</p></div><div className={`grid h-14 w-14 place-items-center rounded-full ${tone[item.tone] || tone.success}`}><Icon className="h-7 w-7" /></div></div><p className="mt-3 text-xs text-primary-700">{item.trend}</p></div>;
+  return <div className="group relative overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_4px_18px_rgba(15,23,42,0.035)] transition duration-200 hover:-translate-y-0.5 hover:border-primary-100 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]"><div className="pointer-events-none absolute -right-5 -top-6 h-24 w-24 rounded-full bg-primary-50/80 blur-2xl transition group-hover:bg-primary-100/80" /><div className="relative flex items-start justify-between gap-4"><div className="min-w-0"><p className="truncate text-xs font-medium text-neutral-500">{item.label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-neutral-900">{item.value}</p></div><div className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${tone[item.tone] || tone.success}`}><Icon className="h-5 w-5" /></div></div><p className="relative mt-4 truncate text-xs font-medium text-primary-700">{item.trend}</p></div>;
 }
 
 function ChartCard({ title, children }) {
@@ -1222,16 +1227,16 @@ function ChartCard({ title, children }) {
 }
 
 function ChartLoading() {
-  return <div className="grid h-56 place-items-center rounded-xl bg-neutral-50 text-sm text-neutral-500">Memuat visualisasi...</div>;
+  return <div className="grid h-56 place-items-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 text-sm text-neutral-500">Memuat visualisasi...</div>;
 }
 
 function PanelCard({ title, action, actionHref, onAction, children }) {
   return (
-    <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+    <section className="rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-[0_4px_18px_rgba(15,23,42,0.035)] sm:p-5">
       {title && (
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-semibold">{title}</h2>
-          {actionHref ? <Link href={actionHref} className="text-xs font-semibold text-primary-700">{action}</Link> : action ? <button type="button" onClick={onAction} className="text-xs font-semibold text-primary-700">{action}</button> : null}
+        <div className="mb-4 flex items-center justify-between gap-3">
+          <h2 className="min-w-0 font-semibold tracking-tight text-neutral-800">{title}</h2>
+          {actionHref ? <Link href={actionHref} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</Link> : action ? <button type="button" onClick={onAction} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</button> : null}
         </div>
       )}
       {children}
@@ -1241,7 +1246,7 @@ function PanelCard({ title, action, actionHref, onAction, children }) {
 
 function SideItem({ label, icon, href, active, light, collapsed, onClick }) {
   const Icon = icons[icon] || icons.CircleCheck;
-  return <Link href={href} onClick={onClick} aria-label={collapsed ? label : undefined} title={collapsed ? label : undefined} className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition ${active ? light ? 'bg-primary-50 text-primary-700' : 'bg-blue-600/50 text-white' : light ? 'text-neutral-600 hover:bg-neutral-100' : 'text-white/80 hover:bg-white/10'}`}><Icon className="h-4 w-4" />{!collapsed && <span>{label}</span>}</Link>;
+  return <Link href={href} onClick={onClick} aria-label={collapsed ? label : undefined} title={collapsed ? label : undefined} aria-current={active ? 'page' : undefined} className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-primary-500/50 ${active ? light ? 'bg-primary-50 text-primary-700 shadow-sm' : 'bg-white/15 text-white shadow-sm' : light ? 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}><span className={`absolute left-0 h-5 w-0.5 rounded-r-full transition ${active ? light ? 'bg-primary-600' : 'bg-primary-500' : 'bg-transparent'}`} /><Icon className={`h-4 w-4 shrink-0 transition ${active ? '' : 'group-hover:scale-110'}`} />{!collapsed && <span className="truncate">{label}</span>}</Link>;
 }
 
 function DataPreview({ title, rows, shared, href }) {
@@ -1650,22 +1655,22 @@ function Table({ rows = [], compact = false, columns: preferredColumns, shared =
   const visibleRows = compact ? normalized.slice(0, 5) : normalized;
   const selectableIds = visibleRows.map((row) => row.id).filter(Boolean);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
-  if (loading) return <div className="rounded-xl bg-neutral-50 p-8 text-center text-sm text-neutral-500">Memuat data...</div>;
-  if (!normalized.length) return <div className="rounded-xl bg-neutral-50 p-8 text-center text-sm text-neutral-500">Belum ada data.</div>;
+  if (loading) return <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 p-8 text-center text-sm text-neutral-500"><span className="inline-flex items-center gap-2"><icons.Loader2 className="h-4 w-4 animate-spin text-primary-600" /> Memuat data...</span></div>;
+  if (!normalized.length) return <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 p-8 text-center text-sm text-neutral-500"><span><icons.Inbox className="mx-auto mb-2 h-6 w-6 text-neutral-400" />Belum ada data.</span></div>;
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-left text-sm">
-        <thead><tr className="border-b border-neutral-200 text-xs text-neutral-500">{selectable && <th className="w-10 px-3 py-3"><input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll?.(selectableIds, event.target.checked)} className="h-4 w-4 accent-primary-600" aria-label="Pilih semua baris halaman ini" /></th>}{columns.map((c) => <th key={c} className="px-3 py-3 font-medium">{columnTitle(c)}</th>)}{hasActions && <th className="px-3 py-3 font-medium">Aksi</th>}</tr></thead>
+    <div className="overflow-x-auto rounded-xl border border-neutral-100">
+      <table className="w-full min-w-[640px] text-left text-sm">
+        <thead><tr className="border-b border-neutral-200 bg-neutral-50/90 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">{selectable && <th className="w-10 px-3 py-3"><input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll?.(selectableIds, event.target.checked)} className="h-4 w-4 rounded accent-primary-600" aria-label="Pilih semua baris halaman ini" /></th>}{columns.map((c) => <th key={c} className="whitespace-nowrap px-3 py-3 font-semibold">{columnTitle(c)}</th>)}{hasActions && <th className="px-3 py-3 font-semibold">Aksi</th>}</tr></thead>
         <tbody>{visibleRows.map((row, i) => {
           const visibleCustomActions = customActions.filter((action) => !action.show || action.show(row));
           return (
-            <tr key={row.id || i} className="border-b border-neutral-100">
-              {selectable && <td className="px-3 py-3"><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => onToggleRow?.(row.id)} className="h-4 w-4 accent-primary-600" aria-label={`Pilih baris ${row.id}`} /></td>}
-              <>{columns.map((c) => <td key={c} className="px-3 py-3">{renderCell(c, row[c], row, shared, fieldMap[c])}</td>)}</>
-              {hasActions && <td className="px-3 py-3"><div className="flex flex-wrap gap-2">{visibleCustomActions.map((action) => {
+            <tr key={row.id || i} className="border-b border-neutral-100 transition-colors last:border-b-0 hover:bg-primary-50/35">
+              {selectable && <td className="px-3 py-3"><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => onToggleRow?.(row.id)} className="h-4 w-4 rounded accent-primary-600" aria-label={`Pilih baris ${row.id}`} /></td>}
+              <>{columns.map((c) => <td key={c} className="max-w-64 px-3 py-3.5 align-middle text-neutral-700">{renderCell(c, row[c], row, shared, fieldMap[c])}</td>)}</>
+              {hasActions && <td className="px-3 py-3"><div className="flex flex-wrap gap-1.5">{visibleCustomActions.map((action) => {
                 const Icon = icons[action.icon] || icons.CircleCheck;
-                return <button key={action.key} type="button" title={action.label} onClick={() => action.onClick(row)} className={`rounded-lg border p-1.5 ${action.tone === 'danger' ? 'border-red-200 text-red-600 hover:border-red-500' : 'border-neutral-200 hover:border-primary-600 hover:text-primary-700'}`}><Icon className="h-3.5 w-3.5" /></button>;
-              })}{onView && <button type="button" title="Lihat" onClick={() => onView(row)} className="rounded-lg border border-neutral-200 p-1.5 hover:border-primary-600 hover:text-primary-700"><icons.Eye className="h-3.5 w-3.5" /></button>}{onEdit && <button type="button" title="Edit" onClick={() => onEdit(row)} className="rounded-lg border border-neutral-200 p-1.5 hover:border-primary-600 hover:text-primary-700"><icons.Edit2 className="h-3.5 w-3.5" /></button>}{onDelete && <button type="button" title="Hapus" onClick={() => onDelete(row)} className="rounded-lg border border-neutral-200 p-1.5 hover:border-red-500 hover:text-red-600"><icons.Trash2 className="h-3.5 w-3.5" /></button>}</div></td>}
+                return <button key={action.key} type="button" title={action.label} aria-label={action.label} onClick={() => action.onClick(row)} className={`rounded-lg border p-1.5 transition focus:outline-none focus:ring-2 ${action.tone === 'danger' ? 'border-red-200 text-red-600 hover:border-red-500 hover:bg-red-50 focus:ring-red-200' : 'border-neutral-200 bg-white hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:ring-primary-200'}`}><Icon className="h-3.5 w-3.5" /></button>;
+              })}{onView && <button type="button" title="Lihat" aria-label="Lihat detail" onClick={() => onView(row)} className="rounded-lg border border-neutral-200 bg-white p-1.5 transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Eye className="h-3.5 w-3.5" /></button>}{onEdit && <button type="button" title="Edit" aria-label="Edit data" onClick={() => onEdit(row)} className="rounded-lg border border-neutral-200 bg-white p-1.5 transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Edit2 className="h-3.5 w-3.5" /></button>}{onDelete && <button type="button" title="Hapus" aria-label="Hapus data" onClick={() => onDelete(row)} className="rounded-lg border border-neutral-200 bg-white p-1.5 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200"><icons.Trash2 className="h-3.5 w-3.5" /></button>}</div></td>}
             </tr>
           );
         })}</tbody>
@@ -1772,19 +1777,19 @@ function relationFallbackLabel(key, value, row) {
 function Badge({ label }) {
   const lower = label.toLowerCase();
   const cls = lower.includes('paid') || lower.includes('active') || lower.includes('approved') || lower.includes('aktif') || lower.includes('success') || lower.includes('berhasil') || lower.includes('selesai') || lower.includes('done') || lower.includes('info') ? 'bg-green-50 text-green-700' : lower.includes('pending') || lower.includes('unpaid') || lower.includes('waiting') || lower.includes('in_progress') || lower.includes('warning') || lower.includes('peringatan') || lower.includes('dipantau') ? 'bg-amber-50 text-amber-700' : lower.includes('error') || lower.includes('rejected') || lower.includes('cancelled') || lower.includes('ditolak') || lower.includes('diblokir') ? 'bg-red-50 text-red-700' : 'bg-neutral-100 text-neutral-600';
-  return <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${cls}`}>{label.replace('paid', 'Lunas').replace('unpaid', 'Belum Lunas').replace('active', 'Aktif').replace('approved', 'Disetujui').replace('rejected', 'Ditolak').replace('waiting', 'Menunggu').replace('in_progress', 'Diproses').replace('cancelled', 'Dibatalkan')}</span>;
+  return <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${cls}`}>{label.replace('paid', 'Lunas').replace('unpaid', 'Belum Lunas').replace('active', 'Aktif').replace('approved', 'Disetujui').replace('rejected', 'Ditolak').replace('waiting', 'Menunggu').replace('in_progress', 'Diproses').replace('cancelled', 'Dibatalkan')}</span>;
 }
 
 function ActivityRow({ item }) {
-  return <div className="flex gap-3 rounded-xl border border-neutral-100 p-3"><div className="grid h-9 w-9 place-items-center rounded-xl bg-primary-50 text-primary-700"><icons.CircleCheck className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="text-sm font-semibold">{item.title}</div><div className="truncate text-xs text-neutral-500">{item.description}</div></div><div className="text-right text-xs text-neutral-400">{item.time}</div></div>;
+  return <div className="flex gap-3 rounded-xl border border-neutral-100 bg-white p-3 transition hover:border-primary-100 hover:bg-primary-50/25"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-700"><icons.CircleCheck className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-neutral-800">{item.title}</div><div className="mt-0.5 truncate text-xs leading-5 text-neutral-500">{item.description}</div></div><div className="shrink-0 text-right text-[11px] font-medium text-neutral-400">{item.time}</div></div>;
 }
 
 function LegendList({ items }) {
-  return <div className="space-y-2">{items.map((item, i) => <div key={item.name} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ background: colors[i % colors.length] }} />{item.name}</span><span className="font-medium">{typeof item.value === 'number' && item.value > 100000 ? rupiah(item.value) : item.value}</span></div>)}</div>;
+  return <div className="mt-1 space-y-1.5">{items.map((item, i) => <div key={item.name} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-neutral-50"><span className="flex min-w-0 items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colors[i % colors.length] }} /><span className="truncate">{item.name}</span></span><span className="ml-3 font-semibold text-neutral-700">{typeof item.value === 'number' && item.value > 100000 ? rupiah(item.value) : item.value}</span></div>)}</div>;
 }
 
 function ProgressList({ items }) {
-  return <div className="space-y-4">{items.map((item, i) => <div key={item.name}><div className="mb-1 flex justify-between text-sm"><span>{item.name}</span><span>{item.value}%</span></div><div className="h-2 rounded-full bg-neutral-100"><div className="h-2 rounded-full" style={{ width: `${item.value}%`, background: colors[i % colors.length] }} /></div></div>)}</div>;
+  return <div className="space-y-4">{items.map((item, i) => <div key={item.name}><div className="mb-1.5 flex justify-between gap-3 text-sm"><span className="truncate font-medium text-neutral-700">{item.name}</span><span className="font-semibold text-neutral-600">{item.value}%</span></div><div className="h-2 overflow-hidden rounded-full bg-neutral-100"><div className="h-full rounded-full transition-all duration-500" style={{ width: `${item.value}%`, background: colors[i % colors.length] }} /></div></div>)}</div>;
 }
 
 function QuickActions({ items, panel }) {
@@ -1793,8 +1798,8 @@ function QuickActions({ items, panel }) {
       {items.slice(0, 6).map((item) => {
         const href = quickActionHref(panel, item);
         return (
-          <button key={item} type="button" onClick={() => href && router.visit(href)} className="rounded-xl border border-neutral-200 bg-neutral-50 p-4 text-sm font-medium hover:border-primary-600 hover:text-primary-700">
-            {item}
+          <button key={item} type="button" onClick={() => href && router.visit(href)} className="group rounded-xl border border-neutral-200 bg-neutral-50/70 p-4 text-left text-sm font-semibold text-neutral-700 transition hover:-translate-y-0.5 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40">
+            <span className="block transition group-hover:translate-x-0.5">{item}</span>
           </button>
         );
       })}
@@ -1855,7 +1860,8 @@ function activityHref(panel) {
 
 function Alert({ tone: alertTone, children }) {
   const cls = alertTone === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700';
-  return <div role={alertTone === 'error' ? 'alert' : 'status'} aria-live={alertTone === 'error' ? 'assertive' : 'polite'} className={`rounded-xl border px-4 py-3 text-sm ${cls}`}>{children}</div>;
+  const Icon = alertTone === 'error' ? icons.TriangleAlert : icons.CircleCheck;
+  return <div role={alertTone === 'error' ? 'alert' : 'status'} aria-live={alertTone === 'error' ? 'assertive' : 'polite'} className={`flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm font-medium shadow-sm ${cls}`}><Icon className="mt-0.5 h-4 w-4 shrink-0" />{children}</div>;
 }
 
 function PaginationControls({ pagination, page, setPage, perPage, setPerPage }) {
@@ -1865,13 +1871,13 @@ function PaginationControls({ pagination, page, setPage, perPage, setPerPage }) 
 
   return (
     <div className="mt-4 flex flex-col gap-3 border-t border-neutral-100 pt-4 text-sm text-neutral-600 md:flex-row md:items-center md:justify-between">
-      <div>{total} data / halaman {currentPage} dari {lastPage}</div>
+      <div><span className="font-semibold text-neutral-700">{total}</span> data <span className="text-neutral-300">/</span> halaman {currentPage} dari {lastPage}</div>
       <div className="flex flex-wrap items-center gap-2">
-        <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value))} className="rounded-xl border border-neutral-200 px-3 py-2 text-sm">
+        <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value))} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100">
           {[10, 20, 50, 100].map((value) => <option key={value} value={value}>{value} / halaman</option>)}
         </select>
-        <button type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 disabled:opacity-50"><icons.ChevronLeft className="h-4 w-4" /> Sebelumnya</button>
-        <button type="button" disabled={currentPage >= lastPage} onClick={() => setPage((value) => Math.min(lastPage, value + 1))} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-3 py-2 disabled:opacity-50">Berikutnya <icons.ChevronRight className="h-4 w-4" /></button>
+        <button type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.ChevronLeft className="h-4 w-4" /> Sebelumnya</button>
+        <button type="button" disabled={currentPage >= lastPage} onClick={() => setPage((value) => Math.min(lastPage, value + 1))} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary-200">Berikutnya <icons.ChevronRight className="h-4 w-4" /></button>
       </div>
     </div>
   );
@@ -2351,24 +2357,24 @@ function CrudModal({ meta, shared, formData, setFormData, editing, mode, saving,
   const title = viewOnly ? `Detail ${meta.title}` : `${editing && mode === 'edit' ? 'Edit' : 'Tambah'} ${meta.title}`;
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
-      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
-        <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
+    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-950/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
+        <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
           <div>
-            <h2 className="font-semibold">{title}</h2>
+            <h2 className="font-semibold tracking-tight">{title}</h2>
             <p className="text-xs text-neutral-500">{viewOnly ? 'Baca data tanpa mengubah isi.' : 'Isi data lalu simpan. Data langsung tersambung ke API.'}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 p-2 hover:bg-neutral-50" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button>
+          <button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 bg-white p-2 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="grid gap-3 overflow-y-auto p-5 md:grid-cols-2">
+          <div className="grid gap-4 overflow-y-auto p-5 md:grid-cols-2">
             {meta.fields.map((field) => <FieldInput key={field.name} field={field} shared={shared} value={formData[field.name]} disabled={viewOnly} error={formErrors[field.name]} onChange={(value) => setFormData((current) => ({ ...current, [field.name]: value }))} />)}
             {viewOnly && <div className="md:col-span-2"><TimelineList timeline={timeline} loading={timelineLoading} shared={shared} /></div>}
           </div>
-          <div className="flex flex-col gap-2 border-t border-neutral-200 bg-neutral-50 px-5 py-4 sm:flex-row sm:justify-end">
-            <button type="button" onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm"><icons.X className="h-4 w-4" /> {viewOnly ? 'Tutup' : 'Batal'}</button>
+          <div className="flex flex-col gap-2 border-t border-neutral-100 bg-neutral-50/80 px-5 py-4 sm:flex-row sm:justify-end">
+            <button type="button" onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium shadow-sm transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.X className="h-4 w-4" /> {viewOnly ? 'Tutup' : 'Batal'}</button>
             {!viewOnly && (
-              <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60">
+              <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
                 {saving ? <icons.Loader2 className="h-4 w-4 animate-spin" /> : <icons.Save className="h-4 w-4" />}
                 {editing && mode === 'edit' ? 'Simpan Perubahan' : 'Tambah Data'}
               </button>
@@ -2516,31 +2522,31 @@ function FieldInput({ field, shared, value, disabled = false, error, onChange })
   const errorText = Array.isArray(error) ? error[0] : error;
 
   if (field.type === 'textarea') {
-    return <label className="block text-sm md:col-span-2"><span className="mb-1 block font-medium">{label}</span><textarea disabled={disabled} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`h-24 w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-primary-600 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40' : 'border-neutral-200'}`} />{errorText && <span className="mt-1 block text-xs text-red-600">{errorText}</span>}</label>;
+    return <label className="block text-sm md:col-span-2"><span className="mb-1.5 block font-semibold text-neutral-700">{label}</span><textarea disabled={disabled} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`h-28 w-full rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40 focus:ring-red-100' : 'border-neutral-200'}`} />{errorText && <span className="mt-1.5 block text-xs font-medium text-red-600">{errorText}</span>}</label>;
   }
 
   if (field.type === 'boolean') {
-    return <label className={`flex items-center gap-3 rounded-xl border px-3 py-2 text-sm ${errorText ? 'border-red-300 bg-red-50/40' : 'border-neutral-200'}`}><input type="checkbox" disabled={disabled} checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 accent-primary-600 disabled:opacity-50" /><span className="font-medium">{label}</span>{errorText && <span className="text-xs text-red-600">{errorText}</span>}</label>;
+    return <label className={`flex items-center gap-3 rounded-xl border bg-white px-3 py-3 text-sm shadow-sm transition ${errorText ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 hover:border-primary-200'}`}><input type="checkbox" disabled={disabled} checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 rounded accent-primary-600 disabled:opacity-50" /><span className="font-semibold text-neutral-700">{label}</span>{errorText && <span className="text-xs font-medium text-red-600">{errorText}</span>}</label>;
   }
 
   if (field.type?.startsWith('select')) {
     return (
       <label className="block text-sm">
-        <span className="mb-1 block font-medium">{label}</span>
-        <select disabled={disabled} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-primary-600 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40' : 'border-neutral-200'}`}>
+        <span className="mb-1.5 block font-semibold text-neutral-700">{label}</span>
+        <select disabled={disabled} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40 focus:ring-red-100' : 'border-neutral-200'}`}>
           <option value="">Pilih {label}</option>
           {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
-        {errorText && <span className="mt-1 block text-xs text-red-600">{errorText}</span>}
+        {errorText && <span className="mt-1.5 block text-xs font-medium text-red-600">{errorText}</span>}
       </label>
     );
   }
 
-  return <label className="block text-sm"><span className="mb-1 block font-medium">{label}</span><input disabled={disabled} type={field.type || 'text'} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`w-full rounded-xl border px-3 py-2 text-sm outline-none focus:border-primary-600 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40' : 'border-neutral-200'}`} />{errorText && <span className="mt-1 block text-xs text-red-600">{errorText}</span>}</label>;
+  return <label className="block text-sm"><span className="mb-1.5 block font-semibold text-neutral-700">{label}</span><input disabled={disabled} type={field.type || 'text'} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40 focus:ring-red-100' : 'border-neutral-200'}`} />{errorText && <span className="mt-1.5 block text-xs font-medium text-red-600">{errorText}</span>}</label>;
 }
 
 function Logo() {
-  return <div className="grid h-10 w-10 place-items-center rounded-xl border border-current/20 bg-white/10"><svg viewBox="0 0 48 48" className="h-8 w-8" fill="none"><path d="M24 5 43 41H5L24 5Z" stroke="currentColor" strokeWidth="2" /><path d="M24 15v18M18 32c4-2 8-2 12 0M16 36h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></div>;
+  return <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-current/15 bg-white/10 shadow-sm"><svg viewBox="0 0 48 48" className="h-8 w-8" fill="none"><path d="M24 5 43 41H5L24 5Z" stroke="currentColor" strokeWidth="2" /><path d="M24 15v18M18 32c4-2 8-2 12 0M16 36h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></div>;
 }
 
 function rowsOf(rows) {
