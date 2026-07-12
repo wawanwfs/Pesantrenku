@@ -61,6 +61,26 @@ class DashboardDataTest extends TestCase
                 ->has('dashboard.summary', 4));
     }
 
+    public function test_guru_dashboard_uses_human_readable_schedule_relations(): void
+    {
+        $this->seed();
+        $user = User::where('email', 'guru@pesantenku.test')->firstOrFail();
+        $tenantId = DB::table('pesantren_user')->where('user_id', $user->id)->value('pesantren_id');
+
+        $this->actingAs($user)
+            ->withSession(['active_pesantren_id' => $tenantId])
+            ->get('/dashboard/guru')
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('dashboard.schedules.0', fn (Assert $schedule) => $schedule
+                    ->where('kelas', '9A')
+                    ->where('mata_pelajaran', 'Bahasa Arab')
+                    ->missing('pesantren_id')
+                    ->missing('class_id')
+                    ->missing('subject_id')
+                    ->etc()));
+    }
+
     public function test_inertia_shared_payload_hides_credentials_protected_settings_and_other_users_notifications(): void
     {
         $this->seed();

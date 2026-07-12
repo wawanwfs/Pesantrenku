@@ -150,13 +150,12 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
   const mobileNavRef = useDialogLifecycle(() => setMobileNavOpen(false), mobileNavOpen);
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[#f6f8f7] text-neutral-900 selection:bg-primary-100 selection:text-primary-900">
-      <aside className={`${collapsed ? 'w-20' : 'w-72'} fixed inset-y-0 left-0 z-20 hidden border-r transition-[width] duration-300 lg:block ${config.light ? 'border-neutral-200/80 bg-white/95 text-neutral-900 shadow-[10px_0_35px_rgba(15,23,42,0.03)]' : 'border-white/10 bg-gradient-to-b from-primary-900 via-[#073d49] to-[#041c35] text-white shadow-[10px_0_35px_rgba(4,28,53,0.15)]'}`}>
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-48 bg-[radial-gradient(ellipse_at_top,rgba(255,255,255,0.14),transparent_68%)]" />
-        <div className="relative flex h-full flex-col p-4">
+    <div className="app-shell min-h-screen overflow-x-hidden text-neutral-900 selection:bg-primary-100 selection:text-primary-900">
+      <aside className={`app-sidebar ${collapsed ? 'w-20' : 'w-72'} fixed inset-y-0 left-0 z-20 hidden border-r transition-[width] duration-300 lg:block ${config.light ? 'app-sidebar-light border-neutral-200 bg-white text-neutral-900' : 'app-sidebar-dark border-white/10 text-white'}`}>
+        <div className="relative flex h-full flex-col p-3.5">
           <div className="flex items-center gap-3 px-2 py-2">
             <Logo />
-            {!collapsed && <div className="min-w-0"><div className="font-semibold tracking-tight">Pesantenku</div><div className={`mt-0.5 truncate text-[11px] font-medium uppercase tracking-[0.12em] ${config.light ? 'text-neutral-500' : 'text-white/60'}`}>{config.role}</div></div>}
+            {!collapsed && <div className="min-w-0"><div className="font-semibold">Pesantrenku</div><div className={`mt-0.5 text-[11px] font-medium uppercase ${config.light ? 'text-neutral-500' : 'text-white/60'}`}>{config.role}</div></div>}
           </div>
           <div className={`mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] ${collapsed ? 'sr-only' : config.light ? 'text-neutral-400' : 'text-white/45'}`}>Navigasi</div>
           <nav aria-label="Navigasi utama" className="mt-3 flex-1 space-y-1 overflow-y-auto pr-1">
@@ -168,22 +167,22 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
             aria-label={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
             aria-expanded={!collapsed}
             title={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
-            className={`mt-3 inline-flex items-center justify-center rounded-xl px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary-500/50 ${config.light ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' : 'bg-white/10 text-white/90 hover:bg-white/15'}`}
+            className={`mt-3 inline-flex min-h-10 items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary-500/50 ${config.light ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' : 'bg-white/10 text-white/90 hover:bg-white/15'}`}
           >
-            {collapsed ? '>>' : '<<'}
+            {collapsed ? <icons.ChevronRight className="h-4 w-4" /> : <span className="inline-flex items-center gap-2"><icons.ChevronLeft className="h-4 w-4" /> Ciutkan</span>}
           </button>
         </div>
       </aside>
       {mobileNavOpen && (
         <div ref={mobileNavRef} className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigasi utama">
-          <button type="button" className="absolute inset-0 bg-neutral-950/45 backdrop-blur-[2px]" onClick={() => setMobileNavOpen(false)} aria-label="Tutup menu" />
-          <aside className={`relative flex h-full w-80 max-w-[86vw] flex-col border-r p-4 shadow-2xl ${config.light ? 'border-neutral-200 bg-white text-neutral-900' : 'border-white/10 bg-gradient-to-b from-primary-900 via-[#073d49] to-[#041c35] text-white'}`}>
+          <button type="button" className="absolute inset-0 bg-neutral-950/45 backdrop-blur-[2px]" onClick={() => setMobileNavOpen(false)} aria-label="Tutup menu" tabIndex={-1} />
+          <aside className={`app-sidebar relative flex h-full w-80 max-w-[88vw] flex-col border-r p-4 shadow-2xl ${config.light ? 'app-sidebar-light border-neutral-200 bg-white text-neutral-900' : 'app-sidebar-dark border-white/10 text-white'}`}>
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Logo />
-                <div><div className="font-semibold tracking-tight">Pesantenku</div><div className={`mt-0.5 text-[11px] font-medium uppercase tracking-[0.12em] ${config.light ? 'text-neutral-500' : 'text-white/60'}`}>{config.role}</div></div>
+                <div><div className="font-semibold">Pesantrenku</div><div className={`mt-0.5 text-[11px] font-medium uppercase ${config.light ? 'text-neutral-500' : 'text-white/60'}`}>{config.role}</div></div>
               </div>
-              <button type="button" onClick={() => setMobileNavOpen(false)} className={`rounded-xl p-2 ${config.light ? 'hover:bg-neutral-100' : 'hover:bg-white/10'}`} aria-label="Tutup menu"><icons.X className="h-5 w-5" /></button>
+              <button type="button" onClick={() => setMobileNavOpen(false)} className={`rounded-lg p-2 ${config.light ? 'hover:bg-neutral-100' : 'hover:bg-white/10'}`} aria-label="Tutup menu" data-dialog-initial-focus><icons.X className="h-5 w-5" /></button>
             </div>
             <div className={`mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] ${config.light ? 'text-neutral-400' : 'text-white/45'}`}>Navigasi</div>
             <nav aria-label="Navigasi utama" className="mt-3 flex-1 space-y-1 overflow-y-auto">
@@ -193,10 +192,9 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
         </div>
       )}
 
-      <main className={`${collapsed ? 'lg:pl-20' : 'lg:pl-72'} relative min-w-0 transition-[padding] duration-300`}>
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-72 bg-[radial-gradient(ellipse_at_top_right,rgba(23,191,92,0.09),transparent_58%)]" />
+      <main className={`workspace-main ${collapsed ? 'lg:pl-20' : 'lg:pl-72'} relative min-w-0 transition-[padding] duration-300`}>
         <Topbar panel={panel} auth={auth} shared={shared} app={app} onMenuOpen={() => setMobileNavOpen(true)} />
-        <div className="relative mx-auto max-w-[1800px] p-4 sm:p-5 lg:p-7">
+        <div className="workspace-content relative mx-auto max-w-[1800px] p-3.5 sm:p-5 lg:p-6">
           {screen === 'dashboard' ? <Dashboard dashboard={dashboard} shared={shared} panel={panel} /> : <ModulePage panel={panel} module={module} shared={shared} dashboard={dashboard} />}
         </div>
       </main>
@@ -217,7 +215,7 @@ function Dashboard({ dashboard, shared, panel }) {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {dashboard.stats?.map((item) => <StatCard key={item.label} item={item} />)}
       </section>
-      <section className="grid items-start gap-5 xl:grid-cols-[1.45fr_0.8fr_0.8fr]">
+      <section className="grid items-start gap-5 xl:grid-cols-[1.35fr_0.65fr]">
         <ChartCard title={panel === 'akademik' ? 'Statistik Siswa' : panel === 'keuangan' ? 'Grafik Pemasukan & Pengeluaran' : 'Grafik Pengguna & Transaksi'}>
           <Suspense fallback={<ChartLoading />}><DashboardLineVisualization data={dashboard.lineChart || []} /></Suspense>
         </ChartCard>
@@ -225,11 +223,11 @@ function Dashboard({ dashboard, shared, panel }) {
           <Suspense fallback={<ChartLoading />}><DashboardDonutVisualization data={dashboard.donut || []} /></Suspense>
           <LegendList items={dashboard.donut || []} />
         </ChartCard>
-        <PanelCard title={panel === 'keuangan' ? 'Pengingat & Notifikasi' : 'Aktivitas Sistem Terbaru'} action="Lihat Semua" actionHref={activityHref(panel)}>
-          <div className="space-y-3">
-            {(dashboard.activities || []).map((item) => <ActivityRow key={item.title} item={item} />)}
-          </div>
-        </PanelCard>
+        <div className="min-w-0 xl:col-span-2">
+          <PanelCard title={panel === 'keuangan' ? 'Pengingat & Notifikasi' : 'Aktivitas Sistem Terbaru'} action="Lihat Semua" actionHref={activityHref(panel)}>
+            <ActivityFeed items={dashboard.activities || []} emptyTitle="Belum ada aktivitas" />
+          </PanelCard>
+        </div>
       </section>
       <section className="grid items-start gap-5 xl:grid-cols-3">
         <DataPreview title={preview[0].title} rows={preview[0].rows} columns={preview[0].columns} shared={shared} href={preview[0].href} />
@@ -241,7 +239,7 @@ function Dashboard({ dashboard, shared, panel }) {
       <section className="grid items-start gap-5 xl:grid-cols-2">
         <DataPreview title={preview[2].title} rows={preview[2].rows} columns={preview[2].columns} shared={shared} href={preview[2].href} />
         <PanelCard title="Notifikasi Penting">
-          <div className="space-y-3">{(shared.notifications || []).map((n) => <ActivityRow key={n.id} item={{ title: n.title, description: n.body, time: 'Baru saja' }} />)}</div>
+          <ActivityFeed items={rowsOf(shared.notifications).map((n) => ({ ...n, description: n.body, time: 'Baru saja' }))} emptyTitle="Belum ada notifikasi" />
         </PanelCard>
       </section>
     </div>
@@ -254,18 +252,17 @@ function RoleDashboard({ dashboard, shared, panel }) {
 
   return (
     <div className="space-y-5">
-      <section className="relative overflow-hidden rounded-3xl border border-primary-100/70 bg-white p-5 shadow-[0_12px_35px_rgba(15,23,42,0.05)]">
-        <div className="pointer-events-none absolute -right-16 -top-20 h-52 w-52 rounded-full bg-primary-100/60 blur-3xl" />
+      <section className="profile-strip surface-panel overflow-hidden border-l-4 border-l-primary-600 p-4 sm:p-5">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div className="relative flex items-center gap-4">
-            <div className="grid h-14 w-14 place-items-center rounded-2xl bg-gradient-to-br from-primary-100 to-emerald-50 text-lg font-semibold text-primary-700 shadow-sm">{(profile.name || roleLabel(panel)).split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
-            <div>
-              <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-700">Pesantenku / {roleLabel(panel)}</div>
-              <h1 className="mt-1 text-2xl font-semibold tracking-tight">{profile.name || roleLabel(panel)}</h1>
-              <p className="text-sm text-neutral-500">{profile.subtitle || 'Ringkasan aktivitas pesantren'}</p>
+          <div className="flex min-w-0 items-center gap-3.5">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-primary-50 text-base font-semibold text-primary-700 ring-1 ring-primary-100">{(profile.name || roleLabel(panel)).split(' ').map((part) => part[0]).join('').slice(0, 2)}</div>
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold uppercase text-primary-700">Pesantrenku / {roleLabel(panel)}</div>
+              <h1 className="mt-1 break-words text-xl font-semibold text-neutral-900 sm:text-2xl">{profile.name || roleLabel(panel)}</h1>
+              <p className="mt-0.5 break-words text-sm leading-5 text-neutral-500">{profile.subtitle || 'Ringkasan aktivitas pesantren'}</p>
             </div>
           </div>
-          <Link href={`/${panel}/module/profil`} className="relative inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold shadow-sm transition hover:-translate-y-0.5 hover:border-primary-200 hover:text-primary-700 hover:shadow"><icons.UserCog className="h-4 w-4" /> Profil</Link>
+          <Link href={panel === 'owner' ? '/owner/module/profil-pesantren' : `/${panel}/module/profil`} className="ui-button ui-button-secondary"><icons.UserCog className="h-4 w-4" /> Profil</Link>
         </div>
       </section>
 
@@ -278,10 +275,7 @@ function RoleDashboard({ dashboard, shared, panel }) {
           <Table rows={primary.rows} shared={shared} compact />
         </PanelCard>
         <PanelCard title="Pengumuman">
-          <div className="space-y-3">
-            {rowsOf(dashboard.announcements).slice(0, 5).map((item) => <ActivityRow key={item.id || item.title} item={{ title: item.title, description: item.body || item.category || 'Pengumuman pesantren', time: item.published_at || 'Terbaru' }} />)}
-            {!rowsOf(dashboard.announcements).length && <div className="rounded-xl bg-neutral-50 p-5 text-center text-sm text-neutral-500">Belum ada pengumuman.</div>}
-          </div>
+          <ActivityFeed items={rowsOf(dashboard.announcements).slice(0, 5).map((item) => ({ ...item, description: item.body || item.category || 'Pengumuman pesantren', time: item.published_at || 'Terbaru' }))} emptyTitle="Belum ada pengumuman" />
         </PanelCard>
       </section>
 
@@ -293,7 +287,7 @@ function RoleDashboard({ dashboard, shared, panel }) {
           <Table rows={panel === 'klinik' ? dashboard.medical : dashboard.invoices} shared={shared} compact />
         </PanelCard>
         <PanelCard title="Notifikasi Penting">
-          <div className="space-y-3">{rowsOf(shared.notifications).slice(0, 4).map((n) => <ActivityRow key={n.id} item={{ title: n.title, description: n.body, time: 'Baru saja' }} />)}</div>
+          <ActivityFeed items={rowsOf(shared.notifications).slice(0, 4).map((n) => ({ ...n, description: n.body, time: 'Baru saja' }))} emptyTitle="Belum ada notifikasi" />
         </PanelCard>
       </section>
     </div>
@@ -325,23 +319,43 @@ function ModulePage({ panel, module, shared, dashboard }) {
 function TabbedCrudModule({ meta, shared }) {
   const [active, setActive] = useState(meta.tabs[0]?.key);
   const tab = meta.tabs.find((item) => item.key === active) || meta.tabs[0];
+  const selectTabFromKeyboard = (event, index) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+    event.preventDefault();
+    const lastIndex = meta.tabs.length - 1;
+    const nextIndex = event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? lastIndex
+        : (index + (event.key === 'ArrowRight' ? 1 : -1) + meta.tabs.length) % meta.tabs.length;
+    setActive(meta.tabs[nextIndex].key);
+    window.requestAnimationFrame(() => event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[nextIndex]?.focus());
+  };
 
   return (
     <div className="space-y-5">
       <Header title={meta.title} subtitle={meta.subtitle} />
-      <div className="flex flex-wrap gap-1.5 rounded-2xl border border-neutral-200/80 bg-white/90 p-2 shadow-sm">
-        {meta.tabs.map((item) => (
+      <div className="tab-bar surface-panel flex gap-1 overflow-x-auto p-1.5" role="tablist" aria-label={meta.title}>
+        {meta.tabs.map((item, index) => (
           <button
             key={item.key}
+            id={`${meta.resource || slug(meta.title)}-tab-${item.key}`}
             type="button"
             onClick={() => setActive(item.key)}
-            className={`rounded-xl px-4 py-2.5 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary-500/40 ${item.key === tab.key ? 'bg-primary-600 text-white shadow-sm' : 'text-neutral-600 hover:bg-primary-50 hover:text-primary-700'}`}
+            onKeyDown={(event) => selectTabFromKeyboard(event, index)}
+            role="tab"
+            aria-selected={item.key === tab.key}
+            aria-controls={`${meta.resource || slug(meta.title)}-panel-${item.key}`}
+            tabIndex={item.key === tab.key ? 0 : -1}
+            className={`shrink-0 rounded-md px-3.5 py-2 text-sm font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary-500/40 ${item.key === tab.key ? 'bg-primary-600 text-white' : 'text-neutral-600 hover:bg-primary-50 hover:text-primary-700'}`}
           >
             {item.label}
           </button>
         ))}
       </div>
-      <CrudModule meta={{ ...tab.meta, title: tab.label, subtitle: tab.subtitle || tab.meta.subtitle, showHeader: false }} shared={shared} />
+      <div id={`${meta.resource || slug(meta.title)}-panel-${tab.key}`} role="tabpanel" aria-labelledby={`${meta.resource || slug(meta.title)}-tab-${tab.key}`}>
+        <CrudModule meta={{ ...tab.meta, title: tab.label, subtitle: tab.subtitle || tab.meta.subtitle, showHeader: false }} shared={shared} />
+      </div>
     </div>
   );
 }
@@ -353,7 +367,7 @@ function RoleModule({ panel, module, dashboard, shared }) {
     <div className="space-y-5">
       <Header title={meta.title} subtitle={meta.subtitle} />
       {meta.profile && (
-        <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
+        <section className="surface-panel border-l-4 border-l-sky-500 p-4 sm:p-5">
           <div className="text-sm font-semibold">{dashboard.profile?.name}</div>
           <div className="mt-1 text-sm text-neutral-500">{dashboard.profile?.subtitle}</div>
         </section>
@@ -373,7 +387,7 @@ function RoleModule({ panel, module, dashboard, shared }) {
       {meta.secondaryRows && (
         <section className="grid gap-5 xl:grid-cols-2">
           <PanelCard title={meta.secondaryTitle || 'Data Terkait'}><Table rows={meta.secondaryRows} shared={shared} compact /></PanelCard>
-          <PanelCard title="Pengumuman"><div className="space-y-3">{rowsOf(dashboard.announcements).slice(0, 4).map((item) => <ActivityRow key={item.id || item.title} item={{ title: item.title, description: item.body || item.category, time: item.published_at || 'Terbaru' }} />)}</div></PanelCard>
+          <PanelCard title="Pengumuman"><ActivityFeed items={rowsOf(dashboard.announcements).slice(0, 4).map((item) => ({ ...item, description: item.body || item.category, time: item.published_at || 'Terbaru' }))} emptyTitle="Belum ada pengumuman" /></PanelCard>
         </section>
       )}
     </div>
@@ -433,7 +447,7 @@ function QrTool({ rows, shared }) {
       <PanelCard title="QR Aktif">
         {(message || error) && <div className="mb-4"><Alert tone={error ? 'error' : 'success'}>{error || message}</Alert></div>}
         <div className="grid aspect-square max-w-xs place-items-center rounded-2xl border border-neutral-200 bg-white p-6">
-          {code ? <QRCodeSVG value={code} size={240} level="M" marginSize={2} title="QR identitas Pesantenku" /> : <div className="text-center text-sm text-neutral-500">Generate kode untuk menampilkan QR yang dapat dipindai.</div>}
+          {code ? <QRCodeSVG value={code} size={240} level="M" marginSize={2} title="QR identitas Pesantrenku" /> : <div className="text-center text-sm text-neutral-500">Generate kode untuk menampilkan QR yang dapat dipindai.</div>}
         </div>
         <div className="mt-4 break-all rounded-xl bg-neutral-50 p-3 font-mono text-xs">{code || 'Belum ada kode QR.'}</div>
         {expiresAt && <div className="mt-2 text-xs text-neutral-500">Berlaku sampai {formatCell(expiresAt, 'expires_at', shared)}</div>}
@@ -892,8 +906,8 @@ function CrudModule({ meta, shared }) {
       {meta.showHeader !== false && <Header title={meta.title} subtitle={meta.subtitle} />}
       {(message || error) && <Alert tone={error ? 'error' : 'success'}>{error || message}</Alert>}
       <PanelCard>
-        <div className="mb-5 flex flex-col gap-4 border-b border-neutral-100 pb-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
-          <div className="grid min-w-0 flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="crud-command-bar mb-4 flex flex-col gap-4 border-b border-neutral-200 pb-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
+          <div className="filter-grid grid min-w-0 flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
             <div className="relative w-full"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 bg-white py-2.5 pl-10 pr-3 text-sm shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" placeholder={`Cari ${meta.title.toLowerCase()}...`} aria-label={`Cari ${meta.title.toLowerCase()}`} /></div>
             {supportsStatusFilter && <label className="grid gap-1 text-xs font-medium text-neutral-600"><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value)} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70"><option>Semua Status</option>{statusOptions.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}</select></label>}
             {meta.enableFilters !== false && supportsDateFilter && <label className="grid gap-1 text-xs font-medium text-neutral-600"><span>Dari tanggal</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" /></label>}
@@ -911,7 +925,7 @@ function CrudModule({ meta, shared }) {
               </select></label>
             )}
           </div>
-          <div className="crud-toolbar relative flex flex-wrap items-start gap-2 2xl:max-w-[48rem] 2xl:justify-end" onToggle={(event) => { if (event.target.open) event.currentTarget.querySelectorAll('details[open]').forEach((detail) => { if (detail !== event.target) detail.removeAttribute('open'); }); }}>
+          <div className="crud-toolbar relative flex flex-wrap items-start gap-2 2xl:max-w-[48rem] 2xl:justify-end" aria-label="Aksi data" onToggle={(event) => { if (event.target.open) event.currentTarget.querySelectorAll('details[open]').forEach((detail) => { if (detail !== event.target) detail.removeAttribute('open'); }); }}>
             {meta.resource === 'backups' && <button onClick={runBackup} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Database className="h-4 w-4" /> Jalankan Backup</button>}
             {meta.resource === 'backups' && meta.panel === 'super-admin' && <button onClick={() => setRestoreApprovalOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Shield className="h-4 w-4" /> Persetujuan Restore</button>}
             {canImport && <button onClick={() => setImportOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><ImportIcon className="h-4 w-4" /> Import Excel</button>}
@@ -928,12 +942,6 @@ function CrudModule({ meta, shared }) {
       </PanelCard>
       {jobs.length > 0 && <JobStatusStrip jobs={jobs} onRefresh={loadJobs} />}
       {analytics && <Suspense fallback={<ChartLoading />}><AnalyticsPanel analytics={analytics} title={meta.title} /></Suspense>}
-      {meta.showInsights !== false && (
-        <section className="grid gap-5 lg:grid-cols-2">
-          <PanelCard title="Status Modul"><ProgressList items={[{ name: 'Data Aktif', value: 85 }, { name: 'Perlu Review', value: 18 }, { name: 'Arsip', value: 32 }]} /></PanelCard>
-          <PanelCard title="Audit Terbaru"><ActivityRow item={{ title: `${meta.title} diperbarui`, description: 'Perubahan dicatat di audit log', time: '5 menit lalu' }} /></PanelCard>
-        </section>
-      )}
       {modalMode && <CrudModal meta={meta} shared={shared} formData={formData} setFormData={setFormData} editing={editing} mode={modalMode} saving={saving} formErrors={formErrors} onSubmit={submit} onClose={cancelEdit} timeline={timeline} timelineLoading={timelineLoading} />}
       {workflowDraft && <WorkflowModal draft={workflowDraft} note={workflowNote} setNote={setWorkflowNote} saving={loading} onSubmit={submitWorkflow} onClose={() => setWorkflowDraft(null)} />}
       {importOpen && <ImportModal title={meta.title} resource={meta.resource} loading={loading} onSubmit={submitImport} onClose={() => setImportOpen(false)} />}
@@ -984,12 +992,12 @@ function SystemModule({ meta, shared }) {
         {meta.stats.map((item) => <StatCard key={item.label} item={item} />)}
       </section>
       <PanelCard title={meta.tableTitle}>
-        <div className="mb-5 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-1 gap-3">
-            <div className="relative max-w-xl flex-1"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary-600" placeholder={meta.searchPlaceholder} /></div>
-            <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm"><option value="">Semua Status</option><option value="berhasil">Berhasil</option><option value="peringatan">Peringatan</option><option value="diblokir">Diblokir</option><option value="error">Error</option></select>
+        <div className="system-toolbar mb-4 flex flex-col gap-3 border-b border-neutral-200 pb-4 md:flex-row md:items-center md:justify-between">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row">
+            <div className="relative max-w-xl flex-1"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input aria-label={`Cari ${meta.title}`} value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 py-2.5 pl-10 pr-3 text-sm outline-none focus:border-primary-600" placeholder={meta.searchPlaceholder} /></div>
+            <select aria-label={`Filter status ${meta.title}`} value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-neutral-200 px-3 text-sm"><option value="">Semua Status</option><option value="berhasil">Berhasil</option><option value="peringatan">Peringatan</option><option value="diblokir">Diblokir</option><option value="error">Error</option></select>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button onClick={exportRows} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.Download className="h-4 w-4" /> Export CSV</button>
             <button onClick={() => router.reload({ only: ['shared', 'dashboard'], preserveScroll: true })} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-2 text-sm"><icons.RefreshCcw className="h-4 w-4" /> Refresh</button>
           </div>
@@ -1143,28 +1151,29 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
   };
 
   return (
-    <header ref={topbarRef} className="sticky top-0 z-10 border-b border-white/70 bg-white/80 px-4 py-3 shadow-[0_1px_0_rgba(15,23,42,0.03)] backdrop-blur-xl lg:px-7">
+    <header ref={topbarRef} className="app-topbar sticky top-0 z-10 border-b border-neutral-200 bg-white/95 px-3.5 py-2.5 backdrop-blur-lg sm:px-5 lg:px-6">
       <div className="flex items-center gap-2.5 sm:gap-4">
-        <button type="button" onClick={onMenuOpen} className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 lg:hidden" aria-label="Buka menu"><icons.Menu className="h-5 w-5" /></button>
+        <button type="button" onClick={onMenuOpen} className="icon-button lg:hidden" aria-label="Buka menu"><icons.Menu className="h-5 w-5" /></button>
         <form onSubmit={submitSearch} className="relative flex-1">
           <icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
           <input
+            aria-label="Cari menu, modul, dan laporan"
             value={searchTerm}
             onFocus={() => setSearchOpen(true)}
             onChange={(event) => {
               setSearchTerm(event.target.value);
               setSearchOpen(true);
             }}
-            className="w-full max-w-xl rounded-xl border border-neutral-200/90 bg-white/80 py-2.5 pl-10 pr-10 text-sm shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:bg-white focus:ring-4 focus:ring-primary-100/70"
+            className="topbar-search w-full max-w-xl rounded-lg border border-neutral-200 bg-neutral-50 py-2.5 pl-10 pr-10 text-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:bg-white focus:ring-3 focus:ring-primary-100/70"
             placeholder="Cari menu, modul, laporan..."
           />
           {searchTerm && <button type="button" onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 rounded-lg p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Bersihkan pencarian"><icons.X className="h-4 w-4" /></button>}
           {searchOpen && searchTerm && (
-            <div className="absolute left-0 top-12 z-30 w-full max-w-xl overflow-hidden rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-2xl">
+            <div className="floating-menu absolute left-0 top-12 z-30 w-full max-w-xl overflow-hidden border border-neutral-200 bg-white p-1.5 shadow-xl">
               {searchResults.length > 0 ? searchResults.map((item) => {
                 const Icon = icons[item.icon] || icons.Search;
                 return (
-                  <button key={item.href} type="button" onClick={() => openMenu(item.href)} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">
+                  <button key={item.href} type="button" onClick={() => openMenu(item.href)} className="flex w-full items-center gap-3 rounded-md px-3 py-2.5 text-left text-sm transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">
                     <span className="grid h-8 w-8 place-items-center rounded-lg bg-primary-50 text-primary-700"><Icon className="h-4 w-4" /></span>
                     <span className="font-medium">{item.label}</span>
                   </button>
@@ -1175,21 +1184,22 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
         </form>
         {memberships.length > 0 && (
           <select
+            aria-label="Pilih pesantren aktif"
             value={activeTenantId}
             onChange={(event) => router.post('/tenant/switch', { pesantren_id: event.target.value }, { preserveScroll: true })}
-            className="hidden max-w-64 rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 xl:block"
+            className="hidden max-w-64 rounded-lg border border-neutral-200 bg-white px-3 py-2.5 text-sm text-neutral-700 outline-none transition focus:border-primary-500 focus:ring-3 focus:ring-primary-100/70 xl:block"
           >
             {memberships.map((item) => <option key={`${item.id}-${item.role || item.role_label}`} value={item.id}>{item.name || item.pesantren} {item.role_label ? `- ${item.role_label}` : ''}</option>)}
           </select>
         )}
-        <div className="hidden rounded-xl border border-primary-100/80 bg-primary-50/60 px-3 py-2 text-xs font-medium text-primary-700 lg:block">{academicYear}</div>
+        <div className="hidden max-w-56 rounded-md border border-primary-100 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-800 lg:block">{academicYear}</div>
         <div className="relative">
-          <button type="button" onClick={() => { setNotificationsOpen((open) => !open); setAccountOpen(false); }} className="relative grid min-h-11 min-w-11 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Buka notifikasi" aria-expanded={notificationsOpen}>
+          <button type="button" onClick={() => { setNotificationsOpen((open) => !open); setAccountOpen(false); }} className="icon-button relative" aria-label="Buka notifikasi" aria-expanded={notificationsOpen}>
             <icons.Bell className="h-5 w-5" />
             {unreadCount > 0 && <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">{unreadCount}</span>}
           </button>
           {notificationsOpen && (
-            <div className="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-2xl">
+            <div className="floating-menu absolute right-0 top-12 z-30 w-[min(22rem,calc(100vw-1rem))] overflow-hidden border border-neutral-200 bg-white p-1.5 shadow-xl">
               <div className="flex items-center justify-between border-b border-neutral-100 px-3 py-3 text-sm">
                 <span className="font-semibold">Notifikasi</span>
                 {notifications.length > 0 && <button type="button" onClick={markNotificationsRead} className="rounded-lg px-2 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">Tandai terbaca</button>}
@@ -1206,13 +1216,13 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
           )}
         </div>
         <div className="relative">
-          <button type="button" onClick={() => { setAccountOpen((open) => !open); setNotificationsOpen(false); }} className="flex items-center gap-3 rounded-xl px-2 py-1.5 text-left transition hover:bg-white hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Buka menu akun" aria-expanded={accountOpen}>
-            <div className="grid h-9 w-9 place-items-center rounded-full bg-gradient-to-br from-primary-100 to-emerald-50 text-sm font-semibold text-primary-700 ring-2 ring-white">{initials || 'U'}</div>
+          <button type="button" onClick={() => { setAccountOpen((open) => !open); setNotificationsOpen(false); }} className="flex items-center gap-3 rounded-lg px-1.5 py-1 text-left transition hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Buka menu akun" aria-expanded={accountOpen}>
+            <div className="grid h-9 w-9 place-items-center rounded-lg bg-sky-50 text-sm font-semibold text-sky-700 ring-1 ring-sky-100">{initials || 'U'}</div>
             <div className="hidden text-sm md:block"><div className="font-semibold">{userName}</div><div className="text-xs text-neutral-500">{roleLabel(panel)}</div></div>
           </button>
           {accountOpen && (
-            <div className="absolute right-0 top-12 z-30 w-80 overflow-hidden rounded-2xl border border-neutral-200 bg-white p-1.5 shadow-2xl">
-              <div className="rounded-xl border-b border-neutral-100 px-3 py-3">
+            <div className="floating-menu absolute right-0 top-12 z-30 w-[min(22rem,calc(100vw-1rem))] overflow-hidden border border-neutral-200 bg-white p-1.5 shadow-xl">
+              <div className="border-b border-neutral-100 px-3 py-3">
                 <div className="font-semibold">{userName}</div>
                 {userEmail && <div className="mt-1 text-xs text-neutral-500">{userEmail}</div>}
                 <div className="mt-2 text-xs text-neutral-500">{roles}</div>
@@ -1234,12 +1244,14 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
 }
 
 function Header({ title, subtitle }) {
-  return <div className="px-1 py-1"><div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-primary-700">Pesantenku <span className="mx-1 text-neutral-300">/</span> Ruang kerja</div><h1 className="mt-1.5 text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">{title}</h1><p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-500">{subtitle}</p></div>;
+  return <header className="page-heading border-b border-neutral-200 px-0.5 pb-4 pt-1"><div className="flex items-center gap-2 text-[11px] font-semibold uppercase text-primary-700"><span className="h-1.5 w-1.5 bg-primary-600" /> Pesantrenku <span className="text-neutral-300">/</span> Ruang kerja</div><h1 className="mt-2 break-words text-2xl font-semibold leading-tight text-neutral-900 sm:text-[1.75rem]">{title}</h1><p className="mt-1.5 max-w-4xl break-words text-sm leading-6 text-neutral-600">{subtitle}</p></header>;
 }
 
 function StatCard({ item }) {
   const Icon = icons[item.icon] || icons.Activity;
-  return <div className="group relative overflow-hidden rounded-2xl border border-neutral-200/90 bg-white p-5 shadow-[0_4px_18px_rgba(15,23,42,0.035)] transition duration-200 hover:-translate-y-0.5 hover:border-primary-100 hover:shadow-[0_12px_28px_rgba(15,23,42,0.08)]"><div className="pointer-events-none absolute -right-5 -top-6 h-24 w-24 rounded-full bg-primary-50/80 blur-2xl transition group-hover:bg-primary-100/80" /><div className="relative flex items-start justify-between gap-4"><div className="min-w-0"><p className="truncate text-xs font-medium text-neutral-500">{item.label}</p><p className="mt-2 text-2xl font-semibold tracking-tight text-neutral-900">{item.value}</p></div><div className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${tone[item.tone] || tone.success}`}><Icon className="h-5 w-5" /></div></div><p className="relative mt-4 truncate text-xs font-medium text-primary-700">{item.trend}</p></div>;
+  const visualTones = ['success', 'info', 'warning', 'purple'];
+  const visualTone = item.tone || visualTones[String(item.label || '').length % visualTones.length];
+  return <article className={`stat-card stat-tone-${visualTone} min-w-0 border border-neutral-200 bg-white p-4`}><div className="flex items-start justify-between gap-3"><div className="min-w-0"><p className="break-words text-xs font-medium leading-5 text-neutral-500">{item.label}</p><p className="mt-1.5 break-words text-2xl font-semibold leading-tight text-neutral-900">{item.value}</p></div><div className={`stat-icon grid h-10 w-10 shrink-0 place-items-center rounded-md ${tone[visualTone] || tone.success}`}><Icon className="h-[1.125rem] w-[1.125rem]" /></div></div><p className="mt-3 break-words border-t border-neutral-100 pt-2.5 text-xs font-medium leading-5 text-neutral-600">{item.trend}</p></article>;
 }
 
 function ChartCard({ title, children }) {
@@ -1247,16 +1259,16 @@ function ChartCard({ title, children }) {
 }
 
 function ChartLoading() {
-  return <div className="grid h-56 place-items-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 text-sm text-neutral-500">Memuat visualisasi...</div>;
+  return <StatePanel icon="Loader2" title="Memuat visualisasi" description="Data grafik sedang disiapkan." loading />;
 }
 
 function PanelCard({ title, action, actionHref, onAction, children }) {
   return (
-    <section className="min-w-0 rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-[0_4px_18px_rgba(15,23,42,0.035)] sm:p-5">
+    <section className="surface-panel min-w-0 p-4 sm:p-5">
       {title && (
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="min-w-0 font-semibold tracking-tight text-neutral-800">{title}</h2>
-          {actionHref ? <Link href={actionHref} className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</Link> : action ? <button type="button" onClick={onAction} className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</button> : null}
+        <div className="mb-4 flex min-w-0 items-start justify-between gap-3 border-b border-neutral-100 pb-3">
+          <h2 className="min-w-0 break-words text-sm font-semibold leading-5 text-neutral-800 sm:text-base">{title}</h2>
+          {actionHref ? <Link href={actionHref} className="inline-flex min-h-9 shrink-0 items-center rounded-md px-2.5 py-1.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</Link> : action ? <button type="button" onClick={onAction} className="inline-flex min-h-9 shrink-0 items-center rounded-md px-2.5 py-1.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</button> : null}
         </div>
       )}
       {children}
@@ -1266,7 +1278,7 @@ function PanelCard({ title, action, actionHref, onAction, children }) {
 
 function SideItem({ label, icon, href, active, light, collapsed, onClick }) {
   const Icon = icons[icon] || icons.CircleCheck;
-  return <Link href={href} onClick={onClick} aria-label={collapsed ? label : undefined} title={collapsed ? label : undefined} aria-current={active ? 'page' : undefined} className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-primary-500/50 ${active ? light ? 'bg-primary-50 text-primary-700 shadow-sm' : 'bg-white/15 text-white shadow-sm' : light ? 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}><span className={`absolute left-0 h-5 w-0.5 rounded-r-full transition ${active ? light ? 'bg-primary-600' : 'bg-primary-500' : 'bg-transparent'}`} /><Icon className={`h-4 w-4 shrink-0 transition ${active ? '' : 'group-hover:scale-110'}`} />{!collapsed && <span className="truncate">{label}</span>}</Link>;
+  return <Link href={href} onClick={onClick} aria-label={collapsed ? label : undefined} title={collapsed ? label : undefined} aria-current={active ? 'page' : undefined} className={`side-item group relative flex min-h-10 items-center gap-3 rounded-md px-3 py-2 text-[13px] font-medium leading-5 transition focus:outline-none focus:ring-2 focus:ring-primary-500/50 ${active ? light ? 'bg-primary-50 text-primary-800' : 'bg-white/15 text-white' : light ? 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}><span className={`absolute inset-y-2 left-0 w-0.5 transition ${active ? light ? 'bg-primary-600' : 'bg-primary-400' : 'bg-transparent'}`} /><Icon className="h-4 w-4 shrink-0" />{!collapsed && <span className="min-w-0 break-words">{label}</span>}</Link>;
 }
 
 function DataPreview({ title, rows, columns, shared, href }) {
@@ -1664,6 +1676,21 @@ function dashboardPreview(panel, shared) {
   ];
 }
 
+function StatePanel({ icon = 'Inbox', title, description, loading = false, compact = false }) {
+  const Icon = icons[icon] || icons.Inbox;
+  return (
+    <div className={`state-panel grid place-items-center border border-dashed border-neutral-200 bg-neutral-50/70 text-center ${compact ? 'min-h-28 p-4' : 'min-h-44 p-7'}`} role={loading ? 'status' : undefined} aria-live={loading ? 'polite' : undefined}>
+      <div className="max-w-sm">
+        <div className="mx-auto grid h-9 w-9 place-items-center rounded-md border border-neutral-200 bg-white text-neutral-500">
+          <Icon className={`h-4 w-4 ${loading ? 'animate-spin text-primary-600' : ''}`} />
+        </div>
+        <div className="mt-2.5 text-sm font-semibold text-neutral-700">{title}</div>
+        {description && <div className="mt-1 text-xs leading-5 text-neutral-500">{description}</div>}
+      </div>
+    </div>
+  );
+}
+
 function Table({ rows = [], compact = false, columns: preferredColumns, shared = {}, meta, loading = false, selectable = false, selectedIds = [], onToggleRow, onToggleAll, onView, onEdit, onDelete, customActions = [] }) {
   const normalized = Array.isArray(rows) ? rows : Object.values(rows || {});
   const fieldMap = useMemo(() => Object.fromEntries((meta?.fields || []).map((field) => [field.name, field])), [meta]);
@@ -1675,21 +1702,21 @@ function Table({ rows = [], compact = false, columns: preferredColumns, shared =
   const visibleRows = compact ? normalized.slice(0, 5) : normalized;
   const selectableIds = visibleRows.map((row) => row.id).filter(Boolean);
   const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.includes(id));
-  if (loading) return <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 p-8 text-center text-sm text-neutral-500"><span className="inline-flex items-center gap-2"><icons.Loader2 className="h-4 w-4 animate-spin text-primary-600" /> Memuat data...</span></div>;
-  if (!normalized.length) return <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 p-8 text-center text-sm text-neutral-500"><span><icons.Inbox className="mx-auto mb-2 h-6 w-6 text-neutral-400" />Belum ada data.</span></div>;
+  if (loading) return <StatePanel icon="Loader2" title="Memuat data" description="Daftar terbaru sedang diambil dari server." loading />;
+  if (!normalized.length) return <StatePanel title="Belum ada data" description="Data yang tersedia akan ditampilkan di tabel ini." />;
   return (
     <div className="min-w-0">
       <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-neutral-500 md:hidden" aria-hidden="true"><icons.MoveHorizontal className="h-3.5 w-3.5" /> Geser untuk melihat kolom lainnya</div>
-      <div className="relative min-w-0 overflow-x-auto rounded-xl border border-neutral-100 [scrollbar-width:thin]">
-      <table className="w-full min-w-[640px] text-left text-sm">
-        <thead><tr className="border-b border-neutral-200 bg-neutral-50/90 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">{selectable && <th className="w-10 px-3 py-3"><input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll?.(selectableIds, event.target.checked)} className="h-4 w-4 rounded accent-primary-600" aria-label="Pilih semua baris halaman ini" /></th>}{columns.map((c) => <th key={c} className="whitespace-nowrap px-3 py-3 font-semibold">{columnTitle(c)}</th>)}{hasActions && <th className="px-3 py-3 font-semibold">Aksi</th>}</tr></thead>
+      <div className="data-table-wrap relative min-w-0 overflow-x-auto border border-neutral-200 [scrollbar-width:thin]">
+      <table className="data-table w-full min-w-[640px] table-auto text-left text-sm">
+        <thead><tr className="border-b border-neutral-200 bg-neutral-50 text-[11px] font-semibold uppercase text-neutral-500">{selectable && <th className="w-10 px-3 py-2.5"><input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll?.(selectableIds, event.target.checked)} className="h-4 w-4 rounded accent-primary-600" aria-label="Pilih semua baris halaman ini" /></th>}{columns.map((c) => <th key={c} className="whitespace-nowrap px-3 py-2.5 font-semibold">{columnTitle(c)}</th>)}{hasActions && <th className="px-3 py-2.5 text-right font-semibold">Aksi</th>}</tr></thead>
         <tbody>{visibleRows.map((row, i) => {
           const visibleCustomActions = customActions.filter((action) => !action.show || action.show(row));
           return (
             <tr key={row.id || i} className="border-b border-neutral-100 transition-colors last:border-b-0 hover:bg-primary-50/35">
-              {selectable && <td className="px-3 py-3"><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => onToggleRow?.(row.id)} className="h-4 w-4 rounded accent-primary-600" aria-label={`Pilih baris ${row.id}`} /></td>}
-              <>{columns.map((c) => <td key={c} className="max-w-64 px-3 py-3.5 align-middle text-neutral-700">{renderCell(c, row[c], row, shared, fieldMap[c])}</td>)}</>
-              {hasActions && <td className="sticky right-0 bg-white/95 px-3 py-3 shadow-[-10px_0_18px_-18px_rgba(15,23,42,0.8)] backdrop-blur-sm"><div className="flex flex-wrap justify-end gap-1.5">{visibleCustomActions.map((action) => {
+              {selectable && <td className="px-3 py-2.5"><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => onToggleRow?.(row.id)} className="h-4 w-4 rounded accent-primary-600" aria-label={`Pilih baris ${row.id}`} /></td>}
+              <>{columns.map((c) => <td key={c} className="max-w-72 px-3 py-2.5 align-top text-neutral-700">{renderCell(c, row[c], row, shared, fieldMap[c])}</td>)}</>
+              {hasActions && <td className="table-actions sticky right-0 bg-white/95 px-3 py-2 shadow-[-10px_0_18px_-18px_rgba(15,23,42,0.8)] backdrop-blur-sm"><div className="flex flex-nowrap justify-end gap-1">{visibleCustomActions.map((action) => {
                 const Icon = icons[action.icon] || icons.CircleCheck;
                 return <button key={action.key} type="button" title={action.label} aria-label={action.label} onClick={() => action.onClick(row)} className={`grid min-h-9 min-w-9 place-items-center rounded-lg border transition focus:outline-none focus:ring-2 ${action.tone === 'danger' ? 'border-red-200 text-red-600 hover:border-red-500 hover:bg-red-50 focus:ring-red-200' : 'border-neutral-200 bg-white hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:ring-primary-200'}`}><Icon className="h-4 w-4" /></button>;
               })}{onView && <button type="button" title="Lihat" aria-label="Lihat detail" onClick={() => onView(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Eye className="h-4 w-4" /></button>}{onEdit && <button type="button" title="Edit" aria-label="Edit data" onClick={() => onEdit(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Edit2 className="h-4 w-4" /></button>}{onDelete && <button type="button" title="Hapus" aria-label="Hapus data" onClick={() => onDelete(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200"><icons.Trash2 className="h-4 w-4" /></button>}</div></td>}
@@ -1810,7 +1837,7 @@ function relationFallbackLabel(key, value, row) {
 function Badge({ label }) {
   const lower = String(label).toLowerCase();
   const cls = lower.includes('inactive') || lower.includes('unpaid') || lower.includes('error') || lower.includes('rejected') || lower.includes('cancelled') || lower.includes('ditolak') || lower.includes('diblokir') ? 'bg-red-50 text-red-700' : lower.includes('pending') || lower.includes('waiting') || lower.includes('in_progress') || lower.includes('warning') || lower.includes('peringatan') || lower.includes('dipantau') ? 'bg-amber-50 text-amber-700' : lower.includes('paid') || lower.includes('active') || lower.includes('approved') || lower.includes('aktif') || lower.includes('success') || lower.includes('berhasil') || lower.includes('selesai') || lower.includes('done') || lower.includes('info') ? 'bg-green-50 text-green-700' : 'bg-neutral-100 text-neutral-600';
-  return <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${cls}`}>{statusLabel(label)}</span>;
+  return <span className={`inline-flex max-w-full rounded-md px-2 py-0.5 text-[11px] font-semibold leading-5 ${cls}`}>{statusLabel(label)}</span>;
 }
 
 function statusLabel(value) {
@@ -1822,16 +1849,22 @@ function statusLabel(value) {
   }[key] || titleFromSlug(String(value ?? '-'));
 }
 
+function ActivityFeed({ items = [], emptyTitle }) {
+  const normalized = rowsOf(items);
+  if (!normalized.length) return <StatePanel title={emptyTitle} description="Informasi terbaru akan tampil di panel ini." compact />;
+  return <div>{normalized.map((item, index) => <ActivityRow key={item.id || item.title || index} item={item} />)}</div>;
+}
+
 function ActivityRow({ item }) {
-  return <div className="flex gap-3 rounded-xl border border-neutral-100 bg-white p-3 transition hover:border-primary-100 hover:bg-primary-50/25"><div className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-700"><icons.CircleCheck className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold text-neutral-800">{item.title}</div><div className="mt-0.5 truncate text-xs leading-5 text-neutral-500">{item.description}</div></div><div className="shrink-0 text-right text-[11px] font-medium text-neutral-400">{item.time}</div></div>;
+  return <div className="activity-row flex min-w-0 gap-3 border-b border-neutral-100 py-3 last:border-b-0"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary-50 text-primary-700"><icons.CircleCheck className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="break-words text-sm font-semibold leading-5 text-neutral-800">{item.title}</div><div className="mt-0.5 break-words text-xs leading-5 text-neutral-500">{item.description}</div></div><div className="max-w-24 shrink-0 text-right text-[11px] font-medium leading-4 text-neutral-400">{item.time}</div></div>;
 }
 
 function LegendList({ items }) {
-  return <div className="mt-1 space-y-1.5">{items.map((item, i) => <div key={item.name} className="flex items-center justify-between rounded-lg px-2 py-1.5 text-sm hover:bg-neutral-50"><span className="flex min-w-0 items-center gap-2"><span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: colors[i % colors.length] }} /><span className="truncate">{item.name}</span></span><span className="ml-3 font-semibold text-neutral-700">{typeof item.value === 'number' && item.value > 100000 ? rupiah(item.value) : item.value}</span></div>)}</div>;
+  return items.length ? <div className="mt-1 space-y-1">{items.map((item, i) => <div key={item.name} className="flex items-start justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-neutral-50"><span className="flex min-w-0 items-start gap-2"><span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: colors[i % colors.length] }} /><span className="break-words leading-5">{item.name}</span></span><span className="shrink-0 font-semibold text-neutral-700">{typeof item.value === 'number' && item.value > 100000 ? rupiah(item.value) : item.value}</span></div>)}</div> : <StatePanel title="Belum ada distribusi" description="Data visualisasi belum tersedia." compact />;
 }
 
 function ProgressList({ items }) {
-  return <div className="space-y-4">{items.map((item, i) => <div key={item.name}><div className="mb-1.5 flex justify-between gap-3 text-sm"><span className="truncate font-medium text-neutral-700">{item.name}</span><span className="font-semibold text-neutral-600">{item.value}%</span></div><div className="h-2 overflow-hidden rounded-full bg-neutral-100"><div className="h-full rounded-full transition-all duration-500" style={{ width: `${item.value}%`, background: colors[i % colors.length] }} /></div></div>)}</div>;
+  return items.length ? <div className="space-y-4">{items.map((item, i) => <div key={item.name}><div className="mb-1.5 flex items-start justify-between gap-3 text-sm"><span className="min-w-0 break-words font-medium leading-5 text-neutral-700">{item.name}</span><span className="shrink-0 font-semibold text-neutral-600">{item.value}%</span></div><div className="h-2 overflow-hidden rounded-sm bg-neutral-100"><div className="h-full transition-all duration-500" style={{ width: `${item.value}%`, background: colors[i % colors.length] }} /></div></div>)}</div> : <StatePanel title="Belum ada ringkasan" description="Metrik akan muncul setelah data tersedia." compact />;
 }
 
 function QuickActions({ items, panel }) {
@@ -1840,8 +1873,8 @@ function QuickActions({ items, panel }) {
       {items.slice(0, 6).map((item) => {
         const href = quickActionHref(panel, item);
         return (
-          <button key={item} type="button" onClick={() => href && router.visit(href)} className="group rounded-xl border border-neutral-200 bg-neutral-50/70 p-4 text-left text-sm font-semibold text-neutral-700 transition hover:-translate-y-0.5 hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500/40">
-            <span className="block transition group-hover:translate-x-0.5">{item}</span>
+          <button key={item} type="button" onClick={() => href && router.visit(href)} className="group min-h-16 rounded-md border border-neutral-200 bg-neutral-50 p-3 text-left text-sm font-semibold leading-5 text-neutral-700 transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40">
+            <span className="block break-words">{item}</span>
           </button>
         );
       })}
@@ -1903,7 +1936,7 @@ function activityHref(panel) {
 function Alert({ tone: alertTone, children }) {
   const cls = alertTone === 'error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-green-200 bg-green-50 text-green-700';
   const Icon = alertTone === 'error' ? icons.TriangleAlert : icons.CircleCheck;
-  return <div role={alertTone === 'error' ? 'alert' : 'status'} aria-live={alertTone === 'error' ? 'assertive' : 'polite'} className={`flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm font-medium shadow-sm ${cls}`}><Icon className="mt-0.5 h-4 w-4 shrink-0" />{children}</div>;
+  return <div role={alertTone === 'error' ? 'alert' : 'status'} aria-live={alertTone === 'error' ? 'assertive' : 'polite'} className={`flex items-start gap-2.5 rounded-md border px-4 py-3 text-sm font-medium leading-6 ${cls}`}><Icon className="mt-1 h-4 w-4 shrink-0" /><div className="min-w-0 break-words">{children}</div></div>;
 }
 
 function PaginationControls({ pagination, page, setPage, perPage, setPerPage }) {
@@ -1912,7 +1945,7 @@ function PaginationControls({ pagination, page, setPage, perPage, setPerPage }) 
   const currentPage = Math.min(page, lastPage);
 
   return (
-    <div className="mt-4 flex flex-col gap-3 border-t border-neutral-100 pt-4 text-sm text-neutral-600 md:flex-row md:items-center md:justify-between">
+    <div className="pagination-bar mt-4 flex flex-col gap-3 border-t border-neutral-200 pt-4 text-sm text-neutral-600 md:flex-row md:items-center md:justify-between">
       <div><span className="font-semibold text-neutral-700">{total}</span> data <span className="text-neutral-300">/</span> halaman {currentPage} dari {lastPage}</div>
       <div className="flex flex-wrap items-center gap-2">
         <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value))} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100">
@@ -2100,7 +2133,8 @@ function QueueMonitorModal({ onClose }) {
 }
 
 function RestoreBackupModal({ draft, setDraft, loading, onSubmit, onClose }) {
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true"><form onSubmit={onSubmit} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4"><div><h2 className="font-semibold">Ajukan Restore Backup</h2><p className="text-xs text-neutral-500">{draft.name || `Backup #${draft.id}`}</p></div><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 p-2" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button></div><div className="space-y-3 p-5"><Alert tone="error">Restore memerlukan MFA dan persetujuan owner serta super admin. Ketik RESTORE untuk membuat permintaan.</Alert><textarea required minLength={10} value={draft.reason || ''} onChange={(event) => setDraft((current) => ({ ...current, reason: event.target.value }))} className="h-24 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" placeholder="Alasan restore dan referensi insiden" /><input required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={draft.mfa_code || ''} onChange={(event) => setDraft((current) => ({ ...current, mfa_code: event.target.value.replace(/\D/g, '') }))} className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" placeholder="Kode MFA 6 digit" /><input value={draft.confirmation || ''} onChange={(event) => setDraft((current) => ({ ...current, confirmation: event.target.value }))} className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" placeholder="RESTORE" /></div><div className="flex justify-end gap-2 border-t border-neutral-200 bg-neutral-50 px-5 py-4"><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm">Batal</button><button type="submit" disabled={loading || draft.confirmation !== 'RESTORE' || String(draft.mfa_code || '').length !== 6 || String(draft.reason || '').length < 10} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Ajukan Pemulihan</button></div></form></div>;
+  const dialogRef = useDialogLifecycle(onClose);
+  return <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Ajukan restore backup"><form onSubmit={onSubmit} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4"><div><h2 className="font-semibold">Ajukan Restore Backup</h2><p className="text-xs text-neutral-500">{draft.name || `Backup #${draft.id}`}</p></div><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 p-2" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button></div><div className="space-y-3 p-5"><Alert tone="error">Restore memerlukan MFA dan persetujuan owner serta super admin. Ketik RESTORE untuk membuat permintaan.</Alert><textarea aria-label="Alasan restore dan referensi insiden" required minLength={10} value={draft.reason || ''} onChange={(event) => setDraft((current) => ({ ...current, reason: event.target.value }))} className="h-24 w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" placeholder="Alasan restore dan referensi insiden" /><input aria-label="Kode MFA restore" required inputMode="numeric" pattern="[0-9]{6}" maxLength={6} value={draft.mfa_code || ''} onChange={(event) => setDraft((current) => ({ ...current, mfa_code: event.target.value.replace(/\D/g, '') }))} className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" placeholder="Kode MFA 6 digit" /><input aria-label="Konfirmasi restore" value={draft.confirmation || ''} onChange={(event) => setDraft((current) => ({ ...current, confirmation: event.target.value }))} className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" placeholder="RESTORE" /></div><div className="flex justify-end gap-2 border-t border-neutral-200 bg-neutral-50 px-5 py-4"><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm">Batal</button><button type="submit" disabled={loading || draft.confirmation !== 'RESTORE' || String(draft.mfa_code || '').length !== 6 || String(draft.reason || '').length < 10} className="rounded-xl bg-red-600 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50">Ajukan Pemulihan</button></div></form></div>;
 }
 
 function RestoreApprovalModal({ onClose }) {
@@ -2111,7 +2145,8 @@ function RestoreApprovalModal({ onClose }) {
   const load = async () => { try { const json = await apiJson('/web-actions/backup/restore-requests'); setRows(rowsOf(json.data)); setError(''); } catch (err) { setError(err.message); } };
   useEffect(() => { load(); }, []);
   const action = async (row, type) => { setError(''); setMessage(''); try { const json = await apiJson(`/web-actions/backup/restore-requests/${row.id}/${type}`, { method: 'POST', body: JSON.stringify({ mfa_code: mfaCode }) }); setMessage(json.message); await load(); } catch (err) { setError(err.message); } };
-  return <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true"><div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4"><div><h2 className="font-semibold">Persetujuan Restore</h2><p className="text-xs text-neutral-500">Persetujuan berlapis dan eksekusi khusus super admin.</p></div><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 p-2" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">{message && <Alert tone="success">{message}</Alert>}{error && <Alert tone="error">{error}</Alert>}<input inputMode="numeric" maxLength={6} value={mfaCode} onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, ''))} className="w-full max-w-xs rounded-xl border border-neutral-200 px-3 py-2 text-sm" placeholder="Kode MFA super admin" /><div className="space-y-3">{rows.map((row) => <div key={row.id} className="rounded-xl border border-neutral-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-semibold">#{row.id} {row.backup_name || `Backup #${row.backup_id}`}</div><div className="mt-1 text-xs text-neutral-500">{row.requester_name || `User #${row.requested_by}`} - {row.reason}</div><div className="mt-2 flex flex-wrap gap-2"><Badge label={row.status} />{rowsOf(row.approvals).map((approval) => <span key={approval.role} className="rounded-full bg-neutral-100 px-2 py-1 text-xs">{titleFromSlug(approval.role)}</span>)}</div></div><div className="flex gap-2"><button type="button" disabled={mfaCode.length !== 6 || !['pending', 'approved'].includes(row.status)} onClick={() => action(row, 'approve')} className="rounded-lg border border-neutral-200 px-3 py-2 text-xs disabled:opacity-40">Setujui</button><button type="button" disabled={mfaCode.length !== 6 || row.status !== 'approved'} onClick={() => action(row, 'execute')} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Eksekusi</button></div></div></div>)}{rows.length === 0 && <div className="rounded-xl bg-neutral-50 p-8 text-center text-sm text-neutral-500">Belum ada permintaan restore.</div>}</div></div></div></div>;
+  const dialogRef = useDialogLifecycle(onClose);
+  return <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Persetujuan restore"><div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4"><div><h2 className="font-semibold">Persetujuan Restore</h2><p className="text-xs text-neutral-500">Persetujuan berlapis dan eksekusi khusus super admin.</p></div><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 p-2" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button></div><div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-5">{message && <Alert tone="success">{message}</Alert>}{error && <Alert tone="error">{error}</Alert>}<input aria-label="Kode MFA super admin" inputMode="numeric" maxLength={6} value={mfaCode} onChange={(event) => setMfaCode(event.target.value.replace(/\D/g, ''))} className="w-full max-w-xs rounded-xl border border-neutral-200 px-3 py-2 text-sm" placeholder="Kode MFA super admin" /><div className="space-y-3">{rows.map((row) => <div key={row.id} className="rounded-xl border border-neutral-200 p-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="font-semibold">#{row.id} {row.backup_name || `Backup #${row.backup_id}`}</div><div className="mt-1 text-xs text-neutral-500">{row.requester_name || `User #${row.requested_by}`} - {row.reason}</div><div className="mt-2 flex flex-wrap gap-2"><Badge label={row.status} />{rowsOf(row.approvals).map((approval) => <span key={approval.role} className="rounded-full bg-neutral-100 px-2 py-1 text-xs">{titleFromSlug(approval.role)}</span>)}</div></div><div className="flex gap-2"><button type="button" disabled={mfaCode.length !== 6 || !['pending', 'approved'].includes(row.status)} onClick={() => action(row, 'approve')} className="rounded-lg border border-neutral-200 px-3 py-2 text-xs disabled:opacity-40">Setujui</button><button type="button" disabled={mfaCode.length !== 6 || row.status !== 'approved'} onClick={() => action(row, 'execute')} className="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Eksekusi</button></div></div></div>)}{rows.length === 0 && <div className="rounded-xl bg-neutral-50 p-8 text-center text-sm text-neutral-500">Belum ada permintaan restore.</div>}</div></div></div></div>;
 }
 
 function CustomRoleModal({ onClose }) {
@@ -2126,8 +2161,9 @@ function CustomRoleModal({ onClose }) {
   const toggle = (resource, ability) => setDraft((current) => ({ ...current, [ability]: current[ability].includes(resource) ? current[ability].filter((item) => item !== resource) : [...current[ability], resource] }));
   const save = async (event) => { event.preventDefault(); setError(''); try { const endpoint = draft.id ? `/web-api/permissions/custom-roles/${draft.id}` : '/web-api/permissions/custom-roles'; const method = draft.id ? 'PATCH' : 'POST'; const saved = await apiJson(endpoint, { method, body: JSON.stringify(draft) }); const roleId = draft.id || saved.id; await apiJson(`/web-api/permissions/custom-roles/${roleId}/assign`, { method: 'POST', body: JSON.stringify({ membership_ids: draft.membership_ids }) }); setMessage('Custom role dan assignment berhasil disimpan.'); setDraft(empty); await load(); } catch (err) { setError(err.message); } };
   const remove = async () => { if (!draft.id || !window.confirm('Hapus custom role ini?')) return; await apiJson(`/web-api/permissions/custom-roles/${draft.id}`, { method: 'DELETE' }); setDraft(empty); await load(); };
+  const dialogRef = useDialogLifecycle(onClose);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true"><form onSubmit={save} className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4"><div><h2 className="font-semibold">Custom Role Tenant</h2><p className="text-xs text-neutral-500">Buat role khusus, permission resource, dan assignment pengguna.</p></div><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 p-2" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button></div><div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[260px_1fr]"><aside className="overflow-y-auto border-r border-neutral-200 p-4"><button type="button" onClick={() => setDraft(empty)} className="mb-3 w-full rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white">Role Baru</button>{rowsOf(data?.roles).map((role) => <button key={role.id} type="button" onClick={() => select(role)} className={`mb-2 w-full rounded-xl border px-3 py-2 text-left text-sm ${draft.id === role.id ? 'border-primary-600 bg-primary-50' : 'border-neutral-200'}`}><div className="font-semibold">{role.label}</div><div className="text-xs text-neutral-500">{role.name}</div></button>)}</aside><div className="min-h-0 space-y-4 overflow-y-auto p-5">{message && <Alert tone="success">{message}</Alert>}{error && <Alert tone="error">{error}</Alert>}<div className="grid gap-3 md:grid-cols-2"><label className="text-sm"><span className="mb-1 block font-medium">Kode Role</span><input required value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') }))} className="w-full rounded-xl border border-neutral-200 px-3 py-2" /></label><label className="text-sm"><span className="mb-1 block font-medium">Nama Role</span><input required value={draft.label} onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} className="w-full rounded-xl border border-neutral-200 px-3 py-2" /></label><label className="text-sm md:col-span-2"><span className="mb-1 block font-medium">Deskripsi</span><textarea value={draft.description || ''} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} className="h-20 w-full rounded-xl border border-neutral-200 px-3 py-2" /></label></div><div className="overflow-x-auto rounded-xl border border-neutral-200"><table className="w-full text-sm"><thead><tr className="border-b bg-neutral-50 text-left text-xs text-neutral-500"><th className="px-3 py-2">Resource</th><th className="px-3 py-2">Baca</th><th className="px-3 py-2">Kelola</th></tr></thead><tbody>{rowsOf(data?.resources).map((resource) => <tr key={resource} className="border-b border-neutral-100"><td className="px-3 py-2 font-medium">{titleFromSlug(resource)}</td><td className="px-3 py-2"><input type="checkbox" checked={draft.read.includes(resource)} onChange={() => toggle(resource, 'read')} /></td><td className="px-3 py-2"><input type="checkbox" checked={draft.write.includes(resource)} onChange={() => toggle(resource, 'write')} /></td></tr>)}</tbody></table></div><div className="rounded-xl border border-neutral-200"><div className="border-b px-4 py-3 text-sm font-semibold">Assignment Pengguna</div><div className="grid gap-2 p-4 md:grid-cols-2">{rowsOf(data?.memberships).map((member) => <label key={member.id} className="flex items-center gap-2 rounded-lg border border-neutral-100 p-2 text-sm"><input type="checkbox" checked={draft.membership_ids.includes(member.id)} onChange={() => setDraft((current) => ({ ...current, membership_ids: current.membership_ids.includes(member.id) ? current.membership_ids.filter((id) => id !== member.id) : [...current.membership_ids, member.id] }))} /><span>{member.user_name} <span className="text-xs text-neutral-500">({member.base_role})</span></span></label>)}</div></div></div></div><div className="flex justify-between border-t border-neutral-200 bg-neutral-50 px-5 py-4"><div>{draft.id && <button type="button" onClick={remove} className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-600">Hapus Role</button>}</div><div className="flex gap-2"><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm">Tutup</button><button type="submit" className="rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white">Simpan Role</button></div></div></form></div>
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Custom role tenant"><form onSubmit={save} className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"><div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4"><div><h2 className="font-semibold">Custom Role Tenant</h2><p className="text-xs text-neutral-500">Buat role khusus, permission resource, dan assignment pengguna.</p></div><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 p-2" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button></div><div className="grid min-h-0 flex-1 overflow-hidden lg:grid-cols-[260px_1fr]"><aside className="overflow-y-auto border-r border-neutral-200 p-4"><button type="button" onClick={() => setDraft(empty)} className="mb-3 w-full rounded-xl bg-primary-600 px-3 py-2 text-sm font-semibold text-white">Role Baru</button>{rowsOf(data?.roles).map((role) => <button key={role.id} type="button" onClick={() => select(role)} className={`mb-2 w-full rounded-xl border px-3 py-2 text-left text-sm ${draft.id === role.id ? 'border-primary-600 bg-primary-50' : 'border-neutral-200'}`}><div className="font-semibold">{role.label}</div><div className="text-xs text-neutral-500">{role.name}</div></button>)}</aside><div className="min-h-0 space-y-4 overflow-y-auto p-5">{message && <Alert tone="success">{message}</Alert>}{error && <Alert tone="error">{error}</Alert>}<div className="grid gap-3 md:grid-cols-2"><label className="text-sm"><span className="mb-1 block font-medium">Kode Role</span><input required value={draft.name} onChange={(event) => setDraft((current) => ({ ...current, name: event.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '_') }))} className="w-full rounded-xl border border-neutral-200 px-3 py-2" /></label><label className="text-sm"><span className="mb-1 block font-medium">Nama Role</span><input required value={draft.label} onChange={(event) => setDraft((current) => ({ ...current, label: event.target.value }))} className="w-full rounded-xl border border-neutral-200 px-3 py-2" /></label><label className="text-sm md:col-span-2"><span className="mb-1 block font-medium">Deskripsi</span><textarea value={draft.description || ''} onChange={(event) => setDraft((current) => ({ ...current, description: event.target.value }))} className="h-20 w-full rounded-xl border border-neutral-200 px-3 py-2" /></label></div><div className="overflow-x-auto rounded-xl border border-neutral-200"><table className="w-full text-sm"><thead><tr className="border-b bg-neutral-50 text-left text-xs text-neutral-500"><th className="px-3 py-2">Resource</th><th className="px-3 py-2">Baca</th><th className="px-3 py-2">Kelola</th></tr></thead><tbody>{rowsOf(data?.resources).map((resource) => <tr key={resource} className="border-b border-neutral-100"><td className="px-3 py-2 font-medium">{titleFromSlug(resource)}</td><td className="px-3 py-2"><input type="checkbox" checked={draft.read.includes(resource)} onChange={() => toggle(resource, 'read')} /></td><td className="px-3 py-2"><input type="checkbox" checked={draft.write.includes(resource)} onChange={() => toggle(resource, 'write')} /></td></tr>)}</tbody></table></div><div className="rounded-xl border border-neutral-200"><div className="border-b px-4 py-3 text-sm font-semibold">Assignment Pengguna</div><div className="grid gap-2 p-4 md:grid-cols-2">{rowsOf(data?.memberships).map((member) => <label key={member.id} className="flex items-center gap-2 rounded-lg border border-neutral-100 p-2 text-sm"><input type="checkbox" checked={draft.membership_ids.includes(member.id)} onChange={() => setDraft((current) => ({ ...current, membership_ids: current.membership_ids.includes(member.id) ? current.membership_ids.filter((id) => id !== member.id) : [...current.membership_ids, member.id] }))} /><span>{member.user_name} <span className="text-xs text-neutral-500">({member.base_role})</span></span></label>)}</div></div></div></div><div className="flex justify-between border-t border-neutral-200 bg-neutral-50 px-5 py-4"><div>{draft.id && <button type="button" onClick={remove} className="rounded-xl border border-red-200 px-4 py-2 text-sm text-red-600">Hapus Role</button>}</div><div className="flex gap-2"><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm">Tutup</button><button type="submit" className="rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white">Simpan Role</button></div></div></form></div>
   );
 }
 
@@ -2289,7 +2325,7 @@ function PdfTemplateModal({ shared, onClose, onSaved }) {
   ];
   const [active, setActive] = useState(templates[0].key);
   const [settings, setSettings] = useState([]);
-  const [draft, setDraft] = useState({ title: '', header: '', footer: '', accent_color: '#127A4F', logo_text: 'Pesantenku' });
+  const [draft, setDraft] = useState({ title: '', header: '', footer: '', accent_color: '#127A4F', logo_text: 'Pesantrenku' });
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -2310,9 +2346,9 @@ function PdfTemplateModal({ shared, onClose, onSaved }) {
     setDraft({
       title: value.title || (active.includes('receipt') ? 'Kwitansi Pembayaran' : active.includes('letter') ? 'Surat Pesantren' : 'Laporan Pesantren'),
       header: value.header || 'Pondok Pesantren',
-      footer: value.footer || 'Dokumen dibuat otomatis oleh Pesantenku.',
+      footer: value.footer || 'Dokumen dibuat otomatis oleh Pesantrenku.',
       accent_color: value.accent_color || '#127A4F',
-      logo_text: value.logo_text || 'Pesantenku',
+      logo_text: value.logo_text || 'Pesantrenku',
     });
   }, [active, settings]);
 
@@ -2623,7 +2659,7 @@ function useDialogLifecycle(onClose, open = true) {
     document.body.style.overflow = 'hidden';
 
     const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
-    const focusFirst = () => dialog?.querySelector(focusableSelector)?.focus();
+    const focusFirst = () => (dialog?.querySelector('[data-dialog-initial-focus]') || dialog?.querySelector(focusableSelector))?.focus();
     const frame = window.requestAnimationFrame(focusFirst);
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {
@@ -3143,7 +3179,7 @@ function readOnlyCrudModule(panel, module) {
 }
 
 function moduleSubtitle(panel, title) {
-  if (panel === 'super-admin') return `Kelola ${title.toLowerCase()} untuk platform SaaS Pesantenku.`;
+  if (panel === 'super-admin') return `Kelola ${title.toLowerCase()} untuk platform SaaS Pesantrenku.`;
   if (panel === 'owner') return `Kelola ${title.toLowerCase()} untuk tenant pesantren aktif.`;
   if (panel === 'keuangan') return `Kelola ${title.toLowerCase()} keuangan pesantren aktif.`;
   if (panel === 'akademik') return `Kelola ${title.toLowerCase()} akademik pesantren aktif.`;

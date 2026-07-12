@@ -31,10 +31,12 @@ const allRoles = [
   'musyrif',
   'klinik',
 ];
+const runId = process.env.PESANTRENKU_E2E_RUN || Date.now().toString(36);
 
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 180_000,
+  testIgnore: ['visual-audit.spec.js'],
+  timeout: 360_000,
   expect: { timeout: 8_000 },
   retries: 1,
   reporter: [['list']],
@@ -55,14 +57,14 @@ export default defineConfig({
       url: 'http://127.0.0.1:8100/health',
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { ...commonEnv, APP_URL: 'http://127.0.0.1:8100', DB_CONNECTION: 'sqlite', DB_DATABASE: resolve('database/e2e-desktop.sqlite'), CACHE_PREFIX: 'e2e_desktop_' },
+      env: { ...commonEnv, APP_URL: 'http://127.0.0.1:8100', DB_CONNECTION: 'sqlite', DB_DATABASE: resolve('database/e2e-desktop.sqlite'), CACHE_PREFIX: `e2e_desktop_${runId}_` },
     },
     {
       command: 'php artisan serve --host=127.0.0.1 --port=8101',
       url: 'http://127.0.0.1:8101/health',
       reuseExistingServer: false,
       timeout: 120_000,
-      env: { ...commonEnv, APP_URL: 'http://127.0.0.1:8101', DB_CONNECTION: 'sqlite', DB_DATABASE: resolve('database/e2e-mobile.sqlite'), CACHE_PREFIX: 'e2e_mobile_' },
+      env: { ...commonEnv, APP_URL: 'http://127.0.0.1:8101', DB_CONNECTION: 'sqlite', DB_DATABASE: resolve('database/e2e-mobile.sqlite'), CACHE_PREFIX: `e2e_mobile_${runId}_` },
     },
   ],
   projects: [

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { EyeOff } from 'lucide-react';
 import { router, useForm, icons } from '../lib/deps.jsx';
 
 const demoAccounts = [
@@ -14,6 +15,8 @@ const demoAccounts = [
   ['klinik@pesantenku.test', 'Klinik'],
 ];
 
+const fieldBase = 'min-h-12 w-full rounded-lg border bg-[#fffdf8] py-3 pl-11 text-sm text-[#102c27] outline-none transition placeholder:text-[#63736d] hover:border-[#8bb4a2] focus:border-[#0d3b32] focus:ring-4 focus:ring-[#d6efdc] disabled:cursor-wait disabled:bg-[#f4f3ed] disabled:text-[#5c6d66] [&:-webkit-autofill]:[-webkit-text-fill-color:#102c27] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_#fffdf8_inset]';
+
 export default function Login({ auth, app }) {
   const runtimeEnvironment = app?.environment || auth?.environment;
   const demoEnabled = app?.demo_enabled ?? auth?.demo_enabled ?? (runtimeEnvironment ? ['local', 'demo'].includes(runtimeEnvironment) : import.meta.env.DEV);
@@ -23,6 +26,8 @@ export default function Login({ auth, app }) {
     password: demoEnabled ? 'password' : '',
   });
   const home = dashboardHref(auth?.roles?.[0]);
+  const hasErrors = Object.keys(errors).length > 0;
+  const selectedDemo = demoAccounts.some(([email]) => email === data.login) ? data.login : '';
 
   useEffect(() => {
     if (auth?.user && home) {
@@ -45,149 +50,184 @@ export default function Login({ auth, app }) {
 
   if (auth?.user) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#f4f8f4] p-6 text-neutral-900">
-        <div className="flex items-center gap-3 rounded-2xl border border-primary-100 bg-white px-6 py-5 text-sm font-medium shadow-xl shadow-primary-900/5" aria-live="polite">
-          <icons.Loader2 className="h-5 w-5 animate-spin text-primary-600" aria-hidden="true" />
-          Mengalihkan ke dashboard...
+      <main className="grid min-h-dvh place-items-center bg-[#f7f4ec] p-6 text-[#102c27]">
+        <div className="flex max-w-sm items-center gap-3 border-l-2 border-[#0d3b32] bg-[#fffdf8] px-5 py-4 shadow-[0_16px_40px_rgba(13,59,50,0.08)]" aria-live="polite" aria-busy="true">
+          <icons.Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#127a4f] motion-reduce:animate-none" aria-hidden="true" />
+          <div>
+            <p className="text-sm font-semibold">Akses terverifikasi</p>
+            <p className="mt-0.5 text-xs text-[#62736d]">Mengalihkan ke ruang kerja Anda...</p>
+          </div>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="relative isolate min-h-screen overflow-hidden bg-[#f4f8f4] px-4 py-5 text-neutral-900 sm:px-6 sm:py-8 lg:grid lg:place-items-center lg:p-10">
+    <main className="relative min-h-dvh overflow-x-hidden bg-[#f7f4ec] text-[#102c27] selection:bg-[#d6efdc] selection:text-[#0d3b32] lg:p-6">
       <Backdrop />
 
-      <section className="relative mx-auto grid min-w-0 w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 shadow-[0_32px_90px_-28px_rgba(6,64,42,0.34)] backdrop-blur-xl lg:grid-cols-[1.06fr_0.94fr]">
-        <aside className="relative min-w-0 overflow-hidden bg-[#06402A] p-6 text-white sm:p-9 lg:p-11">
-          <LoginBrand />
-          <HeroArtwork />
-          <div className="relative mt-8 max-w-md lg:mt-12">
-            <span className="inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1.5 text-xs font-medium tracking-wide text-primary-50">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#9FE3BA] shadow-[0_0_0_4px_rgba(159,227,186,0.16)]" />
-              TERHUBUNG & TERLINDUNGI
-            </span>
-            <h1 className="mt-5 max-w-sm text-3xl font-semibold leading-[1.12] tracking-tight sm:text-4xl">
-              Satu ruang kerja untuk seluruh kehidupan pesantren.
+      <section className="relative mx-auto grid min-h-dvh w-full max-w-[1440px] bg-[#fffdf8] lg:min-h-[calc(100dvh-3rem)] lg:grid-cols-[minmax(0,1.06fr)_minmax(440px,0.74fr)] lg:border lg:border-[#d8ded7] lg:shadow-[0_28px_70px_rgba(24,80,61,0.13)]">
+        <aside className="relative hidden min-w-0 overflow-hidden bg-[#0d3b32] px-10 py-9 text-white lg:flex lg:flex-col xl:px-14 xl:py-12">
+          <div className="absolute inset-0 opacity-25 [background-image:linear-gradient(rgba(223,244,124,0.12)_1px,transparent_1px),linear-gradient(90deg,rgba(223,244,124,0.09)_1px,transparent_1px)] [background-size:44px_44px] [mask-image:linear-gradient(to_bottom,black,transparent_78%)]" aria-hidden="true" />
+          <div className="absolute -bottom-24 left-1/2 h-64 w-[44rem] -translate-x-1/2 border border-[#dff47c]/20 [transform:translateX(-50%)_rotateX(70deg)]" aria-hidden="true" />
+
+          <LoginBrand inverse />
+
+          <div className="relative my-auto max-w-xl py-12">
+            <div className="flex items-center gap-3 font-mono text-[10px] uppercase text-[#c8e5d0]">
+              <span className="h-px w-8 bg-[#9fcba1]" />
+              Gerbang ruang kerja
+            </div>
+            <h1 className="mt-6 max-w-lg font-serif text-[clamp(2.5rem,4.5vw,4.6rem)] font-semibold leading-[0.98] text-[#f7f4ec]">
+              Satu akses untuk ritme pesantren.
             </h1>
-            <p className="mt-4 max-w-sm text-sm leading-6 text-primary-50/85">
-              Kelola pembelajaran, asrama, keuangan, dan komunikasi keluarga dalam alur yang rapi dan manusiawi.
+            <p className="mt-6 max-w-md text-sm leading-7 text-[#c7d8d0]">
+              Masuk ke dashboard sesuai peran Anda untuk melanjutkan pekerjaan akademik, administrasi, pengasuhan, dan keuangan.
             </p>
+
+            <OperationalPreview />
           </div>
 
-          <div className="relative mt-8 grid max-w-md grid-cols-3 gap-2.5 text-center sm:gap-3 lg:mt-10">
-            <TrustPoint label="Akademik" icon={icons.BookOpen} />
-            <TrustPoint label="Keuangan" icon={icons.Wallet} />
-            <TrustPoint label="Asrama" icon={icons.Shield} />
+          <div className="relative flex items-center justify-between gap-5 border-t border-white/15 pt-5 text-[11px] text-[#b4cdbd]">
+            <span className="inline-flex items-center gap-2"><span className="h-1.5 w-1.5 rounded-full bg-[#dff47c]" /> Sistem operasional aktif</span>
+            <span>Akses berbasis peran</span>
           </div>
         </aside>
 
-        <div className="flex min-h-full min-w-0 flex-col p-6 sm:p-9 lg:p-11">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-semibold text-primary-700">Portal Pesantenku</p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl">Selamat datang kembali</h2>
-              <p className="mt-2 max-w-sm text-sm leading-6 text-neutral-600">
-                {demoEnabled ? 'Pilih peran demo atau gunakan akun yang sudah terdaftar.' : 'Masuk untuk melanjutkan aktivitas Anda di Pesantenku.'}
+        <div className="relative flex min-h-dvh min-w-0 flex-col bg-[#fffdf8] lg:min-h-0">
+          <div className="h-1 w-full bg-[linear-gradient(90deg,#0d3b32_0_34%,#5b9a84_34%_67%,#dff47c_67%)] lg:hidden" aria-hidden="true" />
+
+          <div className="mx-auto flex w-full max-w-[500px] flex-1 flex-col justify-center px-5 py-8 sm:px-9 sm:py-12 lg:px-10 xl:px-12">
+            <div className="mb-10 lg:hidden">
+              <LoginBrand />
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <p className="font-mono text-[10px] font-medium uppercase text-[#4b7568]">Portal akses</p>
+              <span className="inline-flex items-center gap-1.5 text-[11px] font-medium text-[#62736d]">
+                <icons.Shield className="h-3.5 w-3.5 text-[#127a4f]" aria-hidden="true" />
+                Terlindungi
+              </span>
+            </div>
+
+            <div className="mt-5 border-l-2 border-[#5b9a84] pl-5">
+              <h2 className="font-serif text-4xl font-semibold leading-tight text-[#102c27] sm:text-[2.7rem]">Selamat datang kembali.</h2>
+              <p className="mt-3 max-w-md text-sm leading-6 text-[#62736d]">
+                {demoEnabled ? 'Pilih akun demo atau gunakan identitas yang sudah terdaftar.' : 'Gunakan identitas akun Anda untuk melanjutkan ke dashboard.'}
               </p>
             </div>
-            <div className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-primary-50 text-primary-700" aria-hidden="true">
-              <icons.Shield className="h-5 w-5" />
+
+            {hasErrors && (
+              <div className="mt-7 flex gap-3 border border-red-200 bg-red-50 px-4 py-3 text-red-900" role="alert" aria-live="assertive">
+                <icons.TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden="true" />
+                <div>
+                  <p className="text-sm font-semibold">Akses belum dapat diverifikasi</p>
+                  <p className="mt-0.5 text-xs leading-5 text-red-700">Periksa kembali identitas dan password yang Anda masukkan.</p>
+                </div>
+              </div>
+            )}
+
+            {demoEnabled && (
+              <div className="mt-7 border-y border-[#d8ded7] py-4">
+                <div className="flex items-end justify-between gap-4">
+                  <label htmlFor="demo-account" className="text-xs font-semibold text-[#36594f]">Akses cepat demo</label>
+                  <span className="text-[10px] text-[#5c6d66]">10 peran tersedia</span>
+                </div>
+                <div className="relative mt-2">
+                  <icons.Users className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#5b7b70]" aria-hidden="true" />
+                  <select
+                    id="demo-account"
+                    value={selectedDemo}
+                    onChange={(event) => setData('login', event.target.value)}
+                    disabled={processing}
+                    className="min-h-11 w-full appearance-none rounded-lg border border-[#cfd8d2] bg-[#f7f4ec] py-2.5 pl-10 pr-10 text-sm font-medium text-[#21483d] outline-none transition hover:border-[#8bb4a2] focus:border-[#0d3b32] focus:ring-4 focus:ring-[#d6efdc] disabled:cursor-wait disabled:opacity-70"
+                  >
+                    <option value="">Gunakan akun lain</option>
+                    {demoAccounts.map(([email, role]) => <option key={email} value={email}>{role}</option>)}
+                  </select>
+                  <icons.ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-[#5b7b70]" aria-hidden="true" />
+                </div>
+              </div>
+            )}
+
+            <form onSubmit={submit} className="mt-7" noValidate aria-busy={processing}>
+              <div>
+                <label htmlFor="login" className="block text-sm font-semibold text-[#294d43]">Email, username, atau telepon</label>
+                <div className="relative mt-2">
+                  <icons.Users className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6c8179]" aria-hidden="true" />
+                  <input
+                    id="login"
+                    name="login"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck="false"
+                    value={data.login}
+                    onChange={(event) => setData('login', event.target.value)}
+                    aria-invalid={Boolean(errors.login)}
+                    aria-describedby={errors.login ? 'login-error' : undefined}
+                    disabled={processing}
+                    required
+                    className={`${fieldBase} pr-4 ${errors.login ? 'border-red-400 bg-red-50/30 focus:border-red-500 focus:ring-red-100' : 'border-[#cfd8d2]'}`}
+                    placeholder="nama@pesantren.id"
+                  />
+                </div>
+                {errors.login && <FieldError id="login-error">{errors.login}</FieldError>}
+              </div>
+
+              <div className="mt-5">
+                <div className="flex items-center justify-between gap-3">
+                  <label htmlFor="password" className="block text-sm font-semibold text-[#294d43]">Password</label>
+                  {demoEnabled && <span className="text-[11px] text-[#5c6d66]">Demo: <strong className="font-semibold text-[#36594f]">password</strong></span>}
+                </div>
+                <div className="relative mt-2">
+                  <icons.Shield className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6c8179]" aria-hidden="true" />
+                  <input
+                    id="password"
+                    name="password"
+                    type={passwordVisible ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    value={data.password}
+                    onChange={(event) => setData('password', event.target.value)}
+                    aria-invalid={Boolean(errors.password)}
+                    aria-describedby={errors.password ? 'password-error' : undefined}
+                    disabled={processing}
+                    required
+                    className={`${fieldBase} pr-14 ${errors.password ? 'border-red-400 bg-red-50/30 focus:border-red-500 focus:ring-red-100' : 'border-[#cfd8d2]'}`}
+                    placeholder="Masukkan password"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setPasswordVisible((visible) => !visible)}
+                    disabled={processing}
+                    className="absolute right-1.5 top-1/2 grid h-10 w-10 -translate-y-1/2 place-items-center rounded-md text-[#4b7568] transition hover:bg-[#e5eee3] hover:text-[#0d3b32] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0d3b32] focus-visible:ring-offset-1 disabled:cursor-wait disabled:opacity-50"
+                    aria-label={passwordVisible ? 'Sembunyikan password' : 'Tampilkan password'}
+                    title={passwordVisible ? 'Sembunyikan password' : 'Tampilkan password'}
+                  >
+                    {passwordVisible ? <EyeOff className="h-4 w-4" aria-hidden="true" /> : <icons.Eye className="h-4 w-4" aria-hidden="true" />}
+                  </button>
+                </div>
+                {errors.password && <FieldError id="password-error">{errors.password}</FieldError>}
+              </div>
+
+              <button
+                type="submit"
+                disabled={processing}
+                className="mt-7 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-lg bg-[#0d3b32] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(13,59,50,0.18)] transition hover:bg-[#145345] hover:shadow-[0_15px_28px_rgba(13,59,50,0.22)] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-[#b6df73] focus-visible:ring-offset-2 disabled:cursor-wait disabled:bg-[#48675e] disabled:shadow-none"
+              >
+                {processing ? <icons.Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden="true" /> : <span>Masuk ke dashboard</span>}
+                {processing ? <span>Memverifikasi akses...</span> : <icons.ChevronRight className="h-4 w-4" aria-hidden="true" />}
+              </button>
+            </form>
+
+            <div className="mt-8 flex items-start gap-2.5 border-t border-[#e1e5df] pt-5 text-xs leading-5 text-[#62736d]">
+              <icons.CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-[#127a4f]" aria-hidden="true" />
+              <p>Setelah masuk, akses diarahkan otomatis sesuai peran dan izin akun Anda.</p>
             </div>
           </div>
 
-          {demoEnabled && (
-            <div className="mt-7 min-w-0">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-600">Akses cepat demo</p>
-                <span className="text-xs text-neutral-400">10 peran tersedia</span>
-              </div>
-              <div className="mt-3 flex max-w-full gap-2 overflow-x-auto pb-2 [scrollbar-width:thin]" aria-label="Pilih akun demo">
-                {demoAccounts.map(([email, role]) => {
-                  const selected = data.login === email;
-                  return (
-                    <button
-                      key={email}
-                      type="button"
-                      onClick={() => setData('login', email)}
-                      aria-pressed={selected}
-                      className={`shrink-0 rounded-xl border px-3 py-2 text-left text-xs font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600 focus-visible:ring-offset-2 ${selected ? 'border-primary-600 bg-primary-50 text-primary-700 shadow-sm' : 'border-neutral-200 bg-white text-neutral-600 hover:border-primary-200 hover:bg-primary-50/50'}`}
-                    >
-                      {role}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <form onSubmit={submit} className="mt-7" noValidate>
-            <div>
-              <label htmlFor="login" className="block text-sm font-semibold text-neutral-800">Email, username, atau telepon</label>
-              <div className="relative mt-2">
-                <icons.Users className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" aria-hidden="true" />
-                <input
-                  id="login"
-                  name="login"
-                  autoComplete="username"
-                  value={data.login}
-                  onChange={(event) => setData('login', event.target.value)}
-                  aria-invalid={Boolean(errors.login)}
-                  aria-describedby={errors.login ? 'login-error' : undefined}
-                  required
-                  className="w-full rounded-xl border border-neutral-200 bg-white py-3 pl-11 pr-4 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 hover:border-primary-200 focus:border-primary-600 focus:ring-4 focus:ring-primary-100"
-                  placeholder="nama@pesantren.id"
-                />
-              </div>
-              {errors.login && <p id="login-error" className="mt-2 text-sm font-medium text-red-600" role="alert">{errors.login}</p>}
-            </div>
-
-            <div className="mt-5">
-              <div className="flex items-center justify-between gap-3">
-                <label htmlFor="password" className="block text-sm font-semibold text-neutral-800">Password</label>
-                {demoEnabled && <span className="text-xs text-neutral-500">Demo: <strong className="font-semibold text-neutral-700">password</strong></span>}
-              </div>
-              <div className="relative mt-2">
-                <icons.Shield className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" aria-hidden="true" />
-                <input
-                  id="password"
-                  name="password"
-                  type={passwordVisible ? 'text' : 'password'}
-                  autoComplete="current-password"
-                  value={data.password}
-                  onChange={(event) => setData('password', event.target.value)}
-                  aria-invalid={Boolean(errors.password)}
-                  aria-describedby={errors.password ? 'password-error' : undefined}
-                  required
-                  className="w-full rounded-xl border border-neutral-200 bg-white py-3 pl-11 pr-20 text-sm text-neutral-900 outline-none transition placeholder:text-neutral-400 hover:border-primary-200 focus:border-primary-600 focus:ring-4 focus:ring-primary-100"
-                  placeholder="Masukkan password"
-                />
-                <button
-                  type="button"
-                  onClick={() => setPasswordVisible((visible) => !visible)}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-600"
-                  aria-label={passwordVisible ? 'Sembunyikan password' : 'Tampilkan password'}
-                >
-                  {passwordVisible ? 'Sembunyikan' : 'Tampilkan'}
-                </button>
-              </div>
-              {errors.password && <p id="password-error" className="mt-2 text-sm font-medium text-red-600" role="alert">{errors.password}</p>}
-            </div>
-
-            <button
-              type="submit"
-              disabled={processing}
-              className="mt-7 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-3.5 text-sm font-semibold text-white shadow-lg shadow-primary-600/20 transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-xl hover:shadow-primary-600/25 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-primary-200 disabled:translate-y-0 disabled:cursor-wait disabled:opacity-65"
-            >
-              {processing ? <icons.Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <icons.Shield className="h-4 w-4" aria-hidden="true" />}
-              {processing ? 'Memverifikasi akses...' : 'Masuk'}
-            </button>
-          </form>
-
-          <div className="mt-auto flex items-start gap-2.5 border-t border-neutral-100 pt-6 text-xs leading-5 text-neutral-500">
-            <icons.CircleCheck className="mt-0.5 h-4 w-4 shrink-0 text-primary-600" aria-hidden="true" />
-            <p>Dengan melanjutkan, Anda menggunakan ruang kerja yang aman sesuai peran dan izin akun Anda.</p>
-          </div>
+          <p className="px-5 pb-6 text-center text-[10px] text-[#5f7069] sm:px-9 lg:text-left">
+            Pesantrenku - Ruang tumbuh pesantren
+          </p>
         </div>
       </section>
     </main>
@@ -197,54 +237,66 @@ export default function Login({ auth, app }) {
 function Backdrop() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
-      <div className="absolute -left-40 -top-44 h-[34rem] w-[34rem] rounded-full bg-[radial-gradient(circle,rgba(23,191,92,0.16),transparent_67%)] blur-2xl" />
-      <div className="absolute -bottom-64 -right-40 h-[42rem] w-[42rem] rounded-full bg-[radial-gradient(circle,rgba(14,98,63,0.14),transparent_65%)] blur-2xl" />
-      <div className="absolute inset-0 opacity-[0.16] [background-image:linear-gradient(rgba(6,64,42,0.11)_1px,transparent_1px),linear-gradient(90deg,rgba(6,64,42,0.11)_1px,transparent_1px)] [background-size:42px_42px]" />
+      <div className="absolute inset-0 opacity-35 [background-image:linear-gradient(rgba(13,59,50,0.05)_1px,transparent_1px),linear-gradient(90deg,rgba(13,59,50,0.05)_1px,transparent_1px)] [background-size:32px_32px]" />
+      <div className="absolute left-0 top-0 h-1 w-1/3 bg-[#0d3b32]" />
+      <div className="absolute left-1/3 top-0 h-1 w-1/3 bg-[#5b9a84]" />
+      <div className="absolute right-0 top-0 h-1 w-1/3 bg-[#dff47c]" />
     </div>
   );
 }
 
-function LoginBrand() {
+function LoginBrand({ inverse = false }) {
   return (
-    <div className="relative flex items-center gap-3">
-      <div className="grid h-12 w-12 place-items-center rounded-2xl border border-white/30 bg-white/10 shadow-lg shadow-black/10 backdrop-blur" aria-hidden="true">
+    <div className={`relative flex items-center gap-3 ${inverse ? 'text-white' : 'text-[#102c27]'}`}>
+      <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-lg border ${inverse ? 'border-white/20 bg-white/10' : 'border-[#0d3b32]/15 bg-[#e5eee3]'}`} aria-hidden="true">
         <svg viewBox="0 0 48 48" className="h-8 w-8" fill="none">
-          <path d="M24 5 43 41H5L24 5Z" stroke="currentColor" strokeWidth="2.5" />
-          <path d="M24 15v18M18 32c4-2 8-2 12 0M16 36h16" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" />
+          <path d="M24 5 43 41H5L24 5Z" stroke="currentColor" strokeWidth="2.2" />
+          <path d="M24 15v18M18 32c4-2 8-2 12 0M16 36h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" />
         </svg>
       </div>
       <div>
-        <div className="text-base font-semibold tracking-tight">Pesantenku</div>
-        <div className="text-xs text-primary-50/70">Ruang tumbuh pesantren</div>
+        <div className="text-base font-semibold leading-none">Pesantrenku</div>
+        <div className={`mt-1.5 text-[9px] font-semibold uppercase ${inverse ? 'text-[#b4cdbd]' : 'text-[#62736d]'}`}>Ruang tumbuh pesantren</div>
       </div>
     </div>
   );
 }
 
-function HeroArtwork() {
+function OperationalPreview() {
+  const modules = [
+    ['Akademik', 'Jadwal dan perkembangan', icons.BookOpen],
+    ['Keuangan', 'Tagihan dan laporan', icons.Wallet],
+    ['Pengasuhan', 'Asrama dan kesehatan', icons.Shield],
+  ];
+
   return (
-    <div className="pointer-events-none absolute right-[-4.5rem] top-[5.5rem] hidden h-64 w-72 sm:block lg:top-[7rem]" aria-hidden="true">
-      <div className="absolute left-14 top-4 h-40 w-44 rotate-[14deg] rounded-[2.25rem] border border-white/20 bg-gradient-to-br from-white/25 via-white/10 to-transparent shadow-2xl shadow-black/20 backdrop-blur-sm [transform:rotateX(55deg)_rotateZ(-24deg)]" />
-      <div className="absolute left-7 top-9 grid h-40 w-44 place-items-center rounded-[2.25rem] border border-white/20 bg-[linear-gradient(145deg,rgba(159,227,186,0.82),rgba(23,191,92,0.26)_48%,rgba(255,255,255,0.12))] shadow-[0_28px_44px_-16px_rgba(0,0,0,0.58)] [transform:rotateX(52deg)_rotateZ(-24deg)] animate-pulse">
-        <div className="grid h-20 w-20 place-items-center rounded-3xl border border-white/40 bg-[#06402A]/55 shadow-xl backdrop-blur">
-          <svg viewBox="0 0 48 48" className="h-12 w-12 text-white" fill="none">
-            <path d="M24 5 43 41H5L24 5Z" stroke="currentColor" strokeWidth="2.3" />
-            <path d="M24 15v18M18 32c4-2 8-2 12 0M16 36h16" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" />
-          </svg>
-        </div>
+    <div className="mt-10 max-w-lg rounded-lg border border-white/15 bg-white/[0.06] p-4 shadow-[18px_22px_0_rgba(0,0,0,0.08)] backdrop-blur-sm [transform:perspective(900px)_rotateY(-3deg)_rotateX(1deg)]">
+      <div className="flex items-center justify-between border-b border-white/10 pb-3">
+        <span className="text-xs font-semibold text-[#eff6dc]">Ringkasan ruang kerja</span>
+        <span className="font-mono text-[9px] uppercase text-[#dff47c]">Siap digunakan</span>
       </div>
-      <div className="absolute left-2 top-40 h-12 w-12 rounded-2xl border border-white/20 bg-white/10 shadow-lg backdrop-blur-sm [transform:rotateX(52deg)_rotateZ(-24deg)] animate-pulse" />
-      <div className="absolute left-44 top-40 h-9 w-9 rounded-xl border border-white/25 bg-[#9FE3BA]/55 shadow-lg [transform:rotateX(52deg)_rotateZ(-24deg)] animate-pulse" />
+      <div className="divide-y divide-white/10">
+        {modules.map(([title, detail, Icon]) => (
+          <div key={title} className="flex items-center gap-3 py-3">
+            <Icon className="h-4 w-4 shrink-0 text-[#b7d89e]" aria-hidden="true" />
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-semibold text-white">{title}</p>
+              <p className="mt-0.5 truncate text-[10px] text-[#a9c0b6]">{detail}</p>
+            </div>
+            <span className="h-1.5 w-1.5 rounded-full bg-[#dff47c]" aria-hidden="true" />
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function TrustPoint({ label, icon: Icon }) {
+function FieldError({ id, children }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.07] px-2 py-3 backdrop-blur-sm">
-      <Icon className="mx-auto h-4 w-4 text-[#9FE3BA]" aria-hidden="true" />
-      <p className="mt-1.5 text-[11px] font-medium text-white/85">{label}</p>
-    </div>
+    <p id={id} className="mt-2 flex items-start gap-1.5 text-xs font-medium leading-5 text-red-700" role="alert">
+      <icons.TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span>{children}</span>
+    </p>
   );
 }
 

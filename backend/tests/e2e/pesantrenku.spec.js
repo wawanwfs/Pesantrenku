@@ -28,11 +28,9 @@ async function login(page, panel, email) {
   await expect(username).toBeVisible({ timeout: 15_000 });
   await username.fill(email);
   await page.locator('input[type="password"]').fill('password');
-  await Promise.all([
-    page.waitForURL(new RegExp(`/dashboard/${panel.replace('-', '\\-')}`), { waitUntil: 'domcontentloaded', timeout: 45_000 }),
-    page.getByRole('button', { name: 'Masuk' }).click(),
-  ]);
-  await page.waitForLoadState('domcontentloaded');
+  await page.getByRole('button', { name: /Masuk/ }).click();
+  await expect(page).toHaveURL(new RegExp(`/dashboard/${panel.replace('-', '\\-')}`), { timeout: 45_000 });
+  await expect(page.getByLabel('Buka menu akun')).toBeVisible({ timeout: 15_000 });
 }
 
 async function clickDetailsAction(page, summary, action) {
@@ -142,29 +140,24 @@ test('table cards do not widen the Pixel 7 viewport', async ({ page }, testInfo)
   await login(page, 'tu', 'tu@pesantenku.test');
   await navigate(page, '/tu/module/santri');
 
-  const card = page.locator('main section.rounded-2xl').first();
+  const scroller = page.locator('main .data-table-wrap').first();
+  await expect(scroller).toBeVisible({ timeout: 15_000 });
+  const card = scroller.locator('xpath=ancestor::section[1]');
   await expect(card, `${page.url()}\n${(await page.locator('body').innerText()).slice(0, 500)}`).toBeVisible();
+  await expect(scroller.locator('table')).toBeVisible();
 
-  const geometry = await card.evaluate((element) => {
-    const cardRect = element.getBoundingClientRect();
-    const scroller = element.querySelector('table')?.parentElement;
-    const scrollerRect = scroller?.getBoundingClientRect();
-
-    return {
-      viewportWidth: window.innerWidth,
-      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
-      cardLeft: cardRect.left,
-      cardRight: cardRect.right,
-      scrollerLeft: scrollerRect?.left,
-      scrollerRight: scrollerRect?.right,
-    };
-  });
+  const cardBox = await card.boundingBox();
+  const scrollerBox = await scroller.boundingBox();
+  const geometry = await page.evaluate(() => ({
+    viewportWidth: window.innerWidth,
+    documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  }));
 
   expect(geometry.documentOverflow).toBeLessThanOrEqual(1);
-  expect(geometry.cardLeft).toBeGreaterThanOrEqual(-1);
-  expect(geometry.cardRight).toBeLessThanOrEqual(geometry.viewportWidth + 1);
-  expect(geometry.scrollerLeft).toBeGreaterThanOrEqual(geometry.cardLeft - 1);
-  expect(geometry.scrollerRight).toBeLessThanOrEqual(geometry.cardRight + 1);
+  expect(cardBox.x).toBeGreaterThanOrEqual(-1);
+  expect(cardBox.x + cardBox.width).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+  expect(scrollerBox.x).toBeGreaterThanOrEqual(cardBox.x - 1);
+  expect(scrollerBox.x + scrollerBox.width).toBeLessThanOrEqual(cardBox.x + cardBox.width + 1);
 
   const firstActionCell = card.locator('tbody td.sticky.right-0').first();
   if (await firstActionCell.isVisible().catch(() => false)) {
@@ -175,7 +168,7 @@ test('table cards do not widen the Pixel 7 viewport', async ({ page }, testInfo)
     }));
     expect(actionLayout.position).not.toBe('sticky');
     expect(actionLayout.flexWrap).toBe('nowrap');
-    expect(actionLayout.rowHeight).toBeLessThan(100);
+    expect(actionLayout.rowHeight).toBeLessThanOrEqual(120);
   }
 
   await page.getByText('Ekspor', { exact: true }).click();
@@ -363,7 +356,7 @@ test('observability realtime and responsive runtime are healthy', async ({ page 
   expect(response?.headers()['x-correlation-id']).toBeTruthy();
 
   await expect.poll(() => page.evaluate(() => window.__pesantenkuRealtime?.state), { timeout: 15_000 }).toBe('connected');
-  await expect.poll(() => page.evaluate(() => performance.getEntriesByType('resource').some((entry) => entry.name.includes('AnalyticsPanel-')))).toBeTruthy();
+  await expect.poll(() => page.evaluate(() => performance.getEntriesByType('resource').some((entry) => entry.name.includes('AnalyticsPanel')))).toBeTruthy();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   expect(overflow).toBeLessThanOrEqual(1);

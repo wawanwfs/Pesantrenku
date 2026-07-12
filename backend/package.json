@@ -6,6 +6,7 @@
         "build": "vite build",
         "dev": "vite",
         "test:e2e": "node scripts/prepare-e2e.mjs && playwright test",
+        "audit:ui": "node scripts/prepare-e2e.mjs && playwright test tests/e2e/visual-audit.spec.js --config=playwright.visual.config.js",
         "test:e2e:local-domain": "playwright test --config=playwright.local-domain.config.js",
         "test:e2e:local-domain:sharded": "powershell -ExecutionPolicy Bypass -File ../deploy/scripts/prepare-sharded-e2e.ps1 && playwright test --config=playwright.local-domain.config.js",
         "benchmark:local-domain": "node scripts/benchmark-local-domain.mjs"
@@ -28,6 +29,7 @@
         "qrcode.react": "^4.2.0",
         "react": "^19.2.7",
         "react-dom": "^19.2.7",
-        "recharts": "^3.9.2"
+        "recharts": "^3.9.2",
+        "three": "^0.185.1"
     }
 }

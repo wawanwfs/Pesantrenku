@@ -151,7 +151,7 @@ class DashboardService
             'keuangan' => ['invoices', 'payments', 'arrears'],
             'akademik' => ['grades', 'schedules', 'classes'],
             'tu' => ['students', 'letters', 'rooms'],
-            'klinik' => ['medicalQueues'],
+            'klinik' => ['medicalQueues', 'students'],
             default => [],
         };
     }
@@ -552,6 +552,27 @@ class DashboardService
         $user = $request?->user();
         $student = $this->query($request, 'students')->first();
         $teacher = $role === 'guru' ? $this->query($request, 'teachers')->first() : null;
+        $students = $this->query($request, 'students')
+            ->leftJoin('classes', 'students.class_id', '=', 'classes.id')
+            ->select('students.id', 'students.nis', 'students.name', 'students.gender', 'classes.name as kelas', 'students.room as kamar', 'students.status')
+            ->limit(5)
+            ->get();
+        $schedules = $this->query($request, 'schedules')
+            ->leftJoin('classes', 'schedules.class_id', '=', 'classes.id')
+            ->leftJoin('subjects', 'schedules.subject_id', '=', 'subjects.id')
+            ->select('schedules.id', 'classes.name as kelas', 'subjects.name as mata_pelajaran', 'schedules.day as hari', 'schedules.time as waktu', 'schedules.teacher_name as guru', 'schedules.room_name as ruang', 'schedules.type as jenis')
+            ->limit(5)
+            ->get();
+        $invoices = $this->query($request, 'invoices')
+            ->leftJoin('students', 'invoices.student_id', '=', 'students.id')
+            ->select('invoices.id', 'invoices.invoice_number as nomor_tagihan', 'students.name as santri', 'invoices.period as periode', 'invoices.amount as nominal', 'invoices.due_date as jatuh_tempo', 'invoices.status')
+            ->limit(5)
+            ->get();
+        $medical = $this->query($request, 'medical_records')
+            ->leftJoin('students', 'medical_records.student_id', '=', 'students.id')
+            ->select('medical_records.id', 'students.name as santri', 'medical_records.complaint as keluhan', 'medical_records.diagnosis as diagnosis', 'medical_records.date as tanggal', 'medical_records.doctor_name as dokter')
+            ->limit(5)
+            ->get();
         $profileName = $teacher?->name ?? $user?->name ?? 'Pengguna';
         $profileSubtitle = match ($role) {
             'santri' => collect([$student?->room, $student?->nis])->filter()->implode(' - ') ?: 'Profil santri',
@@ -568,11 +589,11 @@ class DashboardService
             'summary' => $this->mobileSummary($role, $request),
             'menu' => $this->mobileMenus($role),
             'announcements' => $this->query($request, 'announcements')->latest('id')->limit(5)->get(),
-            'students' => $this->query($request, 'students')->limit(5)->get(),
-            'schedules' => $this->query($request, 'schedules')->limit(5)->get(),
+            'students' => $students,
+            'schedules' => $schedules,
             'violations' => $this->query($request, 'violations')->limit(5)->get(),
-            'invoices' => $this->query($request, 'invoices')->limit(5)->get(),
-            'medical' => $this->query($request, 'medical_records')->limit(5)->get(),
+            'invoices' => $invoices,
+            'medical' => $medical,
         ];
     }
 

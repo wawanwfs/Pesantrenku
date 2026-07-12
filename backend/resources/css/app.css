@@ -6,26 +6,308 @@
 
 @theme {
     --font-sans: 'Poppins', ui-sans-serif, system-ui, sans-serif;
-    --color-primary-50: #E6F4EE;
-    --color-primary-100: #C8E9DA;
-    --color-primary-500: #17BF5C;
-    --color-primary-600: #127A4F;
-    --color-primary-700: #0E623F;
-    --color-primary-900: #06402A;
+    --color-primary-50: #E8F5EF;
+    --color-primary-100: #CDEBDD;
+    --color-primary-400: #35A872;
+    --color-primary-500: #17875B;
+    --color-primary-600: #126D4A;
+    --color-primary-700: #0D593E;
+    --color-primary-800: #0B4935;
+    --color-primary-900: #073A2B;
     --color-neutral-50: #F8FAFC;
     --color-neutral-100: #F1F5F9;
     --color-neutral-200: #E2E8F0;
+    --color-neutral-300: #CBD5E1;
     --color-neutral-400: #94A3B8;
+    --color-neutral-500: #64748B;
     --color-neutral-600: #475569;
+    --color-neutral-700: #334155;
+    --color-neutral-800: #1E293B;
     --color-neutral-900: #0F172A;
 }
 
+:root {
+    color-scheme: light;
+    --surface: #FFFFFF;
+    --surface-muted: #F6F8FA;
+    --border: #DDE4EA;
+    --ink: #172033;
+    --muted: #5F6E82;
+    --focus: rgba(23, 135, 91, 0.2);
+    --shadow-surface: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(15, 23, 42, 0.035);
+}
+
 html {
-    background: #F8FAFC;
+    background: #EEF3F5;
 }
 
 body {
-    color: #0F172A;
+    min-width: 320px;
+    color: var(--ink);
+    background: #EEF3F5;
+}
+
+.app-shell {
+    background:
+        linear-gradient(180deg, rgba(222, 238, 233, 0.64) 0, rgba(246, 248, 250, 0) 15rem),
+        linear-gradient(90deg, rgba(15, 118, 110, 0.025) 1px, transparent 1px),
+        #F4F7F8;
+    background-size: auto, 28px 28px, auto;
+}
+
+.app-shell {
+    min-width: 0;
+}
+
+.app-shell [class*='tracking-'] {
+    letter-spacing: 0;
+}
+
+.app-shell .text-neutral-400 {
+    color: #64748B;
+}
+
+.app-shell .rounded-xl,
+.app-shell .rounded-2xl,
+.app-shell .rounded-3xl {
+    border-radius: 8px;
+}
+
+.workspace-main {
+    min-height: 100vh;
+}
+
+.app-sidebar {
+    box-shadow: 8px 0 24px rgba(15, 23, 42, 0.06);
+}
+
+.app-sidebar-dark {
+    background: linear-gradient(180deg, #0C493A 0%, #123D4A 55%, #172C3F 100%);
+}
+
+.app-sidebar-light {
+    background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%);
+}
+
+.app-sidebar nav {
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+    scrollbar-width: thin;
+}
+
+.side-item {
+    overflow-wrap: anywhere;
+}
+
+.app-topbar {
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.03);
+}
+
+.topbar-search,
+.app-shell input,
+.app-shell select,
+.app-shell textarea {
+    max-width: 100%;
+}
+
+.app-shell input:not([type='checkbox']):not([type='radio']):not([type='color']),
+.app-shell select,
+.app-shell textarea {
+    border-radius: 8px;
+}
+
+.app-shell input:focus-visible,
+.app-shell select:focus-visible,
+.app-shell textarea:focus-visible,
+.app-shell button:focus-visible,
+.app-shell summary:focus-visible,
+.app-shell a:focus-visible {
+    outline: 2px solid #0F766E;
+    outline-offset: 2px;
+}
+
+.icon-button {
+    display: grid;
+    min-height: 42px;
+    min-width: 42px;
+    place-items: center;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #FFFFFF;
+    color: #526174;
+    transition: border-color 150ms ease, background-color 150ms ease, color 150ms ease;
+}
+
+.icon-button:hover {
+    border-color: #A7D7C2;
+    background: #E8F5EF;
+    color: #0D593E;
+}
+
+.floating-menu {
+    border-radius: 8px;
+}
+
+.page-heading h1,
+.page-heading p,
+.surface-panel h2,
+.profile-strip h1 {
+    overflow-wrap: anywhere;
+}
+
+.surface-panel {
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    box-shadow: var(--shadow-surface);
+}
+
+.profile-strip {
+    background:
+        linear-gradient(90deg, rgba(232, 245, 239, 0.72), rgba(255, 255, 255, 0) 48%),
+        #FFFFFF;
+}
+
+.stat-card {
+    position: relative;
+    border-radius: 8px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    overflow: hidden;
+}
+
+.stat-card::before {
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 3px;
+    background: #17875B;
+    content: '';
+}
+
+.stat-tone-info::before { background: #2878B8; }
+.stat-tone-warning::before { background: #D59222; }
+.stat-tone-error::before { background: #C94B50; }
+.stat-tone-purple::before { background: #7964A8; }
+.stat-tone-success::before { background: #17875B; }
+
+.state-panel {
+    border-radius: 8px;
+}
+
+.tab-bar {
+    scrollbar-width: thin;
+}
+
+.ui-button {
+    display: inline-flex;
+    min-height: 40px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    border-radius: 8px;
+    padding: 0.5rem 0.875rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.ui-button-secondary {
+    border: 1px solid var(--border);
+    background: #FFFFFF;
+    color: #334155;
+}
+
+.ui-button-secondary:hover {
+    border-color: #A7D7C2;
+    background: #F3FAF7;
+    color: #0D593E;
+}
+
+.filter-grid label > span {
+    color: #526174;
+}
+
+.crud-toolbar > button,
+.crud-toolbar > details > summary,
+.system-toolbar button {
+    min-height: 40px;
+    border-radius: 8px;
+    white-space: normal;
+    line-height: 1.25rem;
+    text-align: center;
+}
+
+.crud-toolbar details > div {
+    border-radius: 8px;
+}
+
+.crud-toolbar details > div button {
+    border-radius: 5px;
+    overflow-wrap: anywhere;
+}
+
+.data-table-wrap {
+    border-radius: 8px;
+    background: #FFFFFF;
+}
+
+.data-table th,
+.data-table td {
+    overflow-wrap: anywhere;
+    word-break: normal;
+}
+
+.data-table tbody tr:nth-child(even) td:not(.table-actions) {
+    background: rgba(248, 250, 252, 0.64);
+}
+
+.data-table tbody tr:hover td {
+    background: #F0F8F5;
+}
+
+.data-table .table-actions {
+    min-width: 8rem;
+}
+
+.activity-row:first-child {
+    padding-top: 0;
+}
+
+.activity-row:last-child {
+    padding-bottom: 0;
+}
+
+.pagination-bar button,
+.pagination-bar select {
+    border-radius: 8px;
+}
+
+.app-shell [role='dialog'][class~='z-50'] {
+    padding: 1rem;
+    background: rgba(15, 23, 42, 0.58);
+    backdrop-filter: blur(3px);
+}
+
+.app-shell [role='dialog'][class~='z-50'] > form,
+.app-shell [role='dialog'][class~='z-50'] > div {
+    max-height: calc(100dvh - 2rem);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    border-radius: 8px;
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.28);
+}
+
+.app-shell [role='dialog'][class~='z-50'] h2,
+.app-shell [role='dialog'][class~='z-50'] p,
+.app-shell [role='dialog'][class~='z-50'] label,
+.app-shell [role='dialog'][class~='z-50'] pre {
+    overflow-wrap: anywhere;
+}
+
+.app-shell [role='dialog'][class~='z-50'] pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.app-shell [role='dialog'][class~='z-50'] button,
+.app-shell [role='dialog'][class~='z-50'] summary {
+    border-radius: 8px;
 }
 
 td.sticky.right-0 {
@@ -36,19 +318,119 @@ td.sticky.right-0 > div {
     flex-wrap: nowrap;
 }
 
+@media (max-width: 1023px) {
+    .workspace-content {
+        max-width: 100%;
+    }
+}
+
 @media (max-width: 767px) {
+    .app-shell {
+        background-size: auto, 22px 22px, auto;
+    }
+
+    .crud-command-bar {
+        margin-left: -0.25rem;
+        margin-right: -0.25rem;
+    }
+
+    .crud-toolbar {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        width: 100%;
+    }
+
+    .crud-toolbar > button,
+    .crud-toolbar > details,
+    .crud-toolbar > details > summary {
+        width: 100%;
+    }
+
+    .crud-toolbar > button:last-child {
+        grid-column: 1 / -1;
+    }
+
     .crud-toolbar details {
-        position: static;
+        min-width: 0;
     }
 
     .crud-toolbar details > div {
-        left: 0;
-        right: 0;
-        top: 100%;
+        position: static;
         min-width: 0;
         width: 100%;
-        max-width: calc(100vw - 2rem);
         margin-top: 0.5rem;
+    }
+
+    .crud-toolbar details[open] {
+        grid-column: 1 / -1;
+    }
+
+    .system-toolbar button {
+        flex: 1 1 calc(50% - 0.25rem);
+        justify-content: center;
+    }
+
+    .pagination-bar > div:last-child {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        width: 100%;
+    }
+
+    .pagination-bar select {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+
+    .pagination-bar button {
+        justify-content: center;
+    }
+
+    .activity-row {
+        display: grid;
+        grid-template-columns: 2rem minmax(0, 1fr);
+    }
+
+    .activity-row > :last-child {
+        grid-column: 2;
+        max-width: none;
+        text-align: left;
+    }
+
+    .app-shell [role='dialog'][class~='z-50'] {
+        align-items: end;
+        padding: 0.5rem;
+    }
+
+    .app-shell [role='dialog'][class~='z-50'] > form,
+    .app-shell [role='dialog'][class~='z-50'] > div {
+        width: 100%;
+        max-height: calc(100dvh - 1rem);
+    }
+
+    .app-shell [role='dialog'][class~='z-50'] > form > :first-child,
+    .app-shell [role='dialog'][class~='z-50'] > div > :first-child {
+        padding: 0.875rem 1rem;
+    }
+
+    .app-shell [role='dialog'][class~='z-50'] > form > :last-child,
+    .app-shell [role='dialog'][class~='z-50'] > div > :last-child:not(form),
+    .app-shell [role='dialog'][class~='z-50'] > div > form > :last-child {
+        padding: 0.75rem 1rem;
+    }
+
+    .app-shell [role='dialog'][class~='z-50'] > form > :last-child button,
+    .app-shell [role='dialog'][class~='z-50'] > div > :last-child:not(form) button,
+    .app-shell [role='dialog'][class~='z-50'] > div > form > :last-child button {
+        min-height: 42px;
+    }
+
+    .app-topbar .floating-menu {
+        position: fixed;
+        top: 3.75rem;
+        right: 0.5rem;
+        left: 0.5rem;
+        width: auto;
+        max-width: none;
     }
 
     td.sticky.right-0 {
@@ -58,5 +440,26 @@ td.sticky.right-0 > div {
 
     td.sticky.right-0 > div {
         flex-wrap: nowrap;
+    }
+}
+
+@media (max-width: 479px) {
+    .page-heading h1 {
+        font-size: 1.5rem;
+    }
+
+    .surface-panel {
+        padding: 0.875rem;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .app-shell *,
+    .app-shell *::before,
+    .app-shell *::after {
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
     }
 }
