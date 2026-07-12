@@ -147,6 +147,7 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
   const config = panels[panel] || panels['super-admin'];
   const [collapsed, setCollapsed] = useState(false);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const mobileNavRef = useDialogLifecycle(() => setMobileNavOpen(false), mobileNavOpen);
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[#f6f8f7] text-neutral-900 selection:bg-primary-100 selection:text-primary-900">
@@ -174,7 +175,7 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
         </div>
       </aside>
       {mobileNavOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigasi utama">
+        <div ref={mobileNavRef} className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigasi utama">
           <button type="button" className="absolute inset-0 bg-neutral-950/45 backdrop-blur-[2px]" onClick={() => setMobileNavOpen(false)} aria-label="Tutup menu" />
           <aside className={`relative flex h-full w-80 max-w-[86vw] flex-col border-r p-4 shadow-2xl ${config.light ? 'border-neutral-200 bg-white text-neutral-900' : 'border-white/10 bg-gradient-to-b from-primary-900 via-[#073d49] to-[#041c35] text-white'}`}>
             <div className="flex items-center justify-between">
@@ -216,7 +217,7 @@ function Dashboard({ dashboard, shared, panel }) {
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {dashboard.stats?.map((item) => <StatCard key={item.label} item={item} />)}
       </section>
-      <section className="grid gap-5 xl:grid-cols-[1.45fr_0.8fr_0.8fr]">
+      <section className="grid items-start gap-5 xl:grid-cols-[1.45fr_0.8fr_0.8fr]">
         <ChartCard title={panel === 'akademik' ? 'Statistik Siswa' : panel === 'keuangan' ? 'Grafik Pemasukan & Pengeluaran' : 'Grafik Pengguna & Transaksi'}>
           <Suspense fallback={<ChartLoading />}><DashboardLineVisualization data={dashboard.lineChart || []} /></Suspense>
         </ChartCard>
@@ -230,15 +231,15 @@ function Dashboard({ dashboard, shared, panel }) {
           </div>
         </PanelCard>
       </section>
-      <section className="grid gap-5 xl:grid-cols-3">
-        <DataPreview title={preview[0].title} rows={preview[0].rows} shared={shared} href={preview[0].href} />
-        <DataPreview title={preview[1].title} rows={preview[1].rows} shared={shared} href={preview[1].href} />
+      <section className="grid items-start gap-5 xl:grid-cols-3">
+        <DataPreview title={preview[0].title} rows={preview[0].rows} columns={preview[0].columns} shared={shared} href={preview[0].href} />
+        <DataPreview title={preview[1].title} rows={preview[1].rows} columns={preview[1].columns} shared={shared} href={preview[1].href} />
         <PanelCard title={panel === 'super-admin' ? 'Penggunaan Modul (Top 10)' : 'Aksi Cepat'}>
           {panel === 'super-admin' ? <ProgressList items={dashboard.moduleUsage || []} /> : <QuickActions items={dashboard.quickActions || ['Tambah Data', 'Import CSV', 'Export CSV', 'Cetak PDF', 'Pengaturan']} panel={panel} />}
         </PanelCard>
       </section>
-      <section className="grid gap-5 xl:grid-cols-2">
-        <DataPreview title={preview[2].title} rows={preview[2].rows} shared={shared} href={preview[2].href} />
+      <section className="grid items-start gap-5 xl:grid-cols-2">
+        <DataPreview title={preview[2].title} rows={preview[2].rows} columns={preview[2].columns} shared={shared} href={preview[2].href} />
         <PanelCard title="Notifikasi Penting">
           <div className="space-y-3">{(shared.notifications || []).map((n) => <ActivityRow key={n.id} item={{ title: n.title, description: n.body, time: 'Baru saja' }} />)}</div>
         </PanelCard>
@@ -272,7 +273,7 @@ function RoleDashboard({ dashboard, shared, panel }) {
         {(dashboard.summary || []).map((item) => <StatCard key={item.label} item={{ label: item.label, value: item.value, trend: 'Data aktif', icon: roleSummaryIcon(item.label), tone: roleSummaryTone(item.label) }} />)}
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
+      <section className="grid items-start gap-5 xl:grid-cols-[1.2fr_0.8fr]">
         <PanelCard title={primary.title} action="Lihat Semua" actionHref={primary.href}>
           <Table rows={primary.rows} shared={shared} compact />
         </PanelCard>
@@ -284,7 +285,7 @@ function RoleDashboard({ dashboard, shared, panel }) {
         </PanelCard>
       </section>
 
-      <section className="grid gap-5 xl:grid-cols-3">
+      <section className="grid items-start gap-5 xl:grid-cols-3">
         <PanelCard title="Jadwal">
           <Table rows={dashboard.schedules} shared={shared} compact />
         </PanelCard>
@@ -495,6 +496,12 @@ function CrudModule({ meta, shared }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const requestSequence = useRef(0);
+  const filterFields = meta.fields || [];
+  const supportsStatusFilter = filterFields.some((field) => field.name === 'status');
+  const supportsDateFilter = filterFields.some((field) => ['date', 'datetime-local'].includes(field.type));
+  const supportsClassFilter = filterFields.some((field) => field.name === 'class_id');
+  const supportsStudentFilter = filterFields.some((field) => field.name === 'student_id');
   const canCreate = meta.canCreate !== false && Boolean(meta.resource);
   const canEdit = meta.canEdit !== false && Boolean(meta.resource);
   const canDelete = meta.canDelete !== false && Boolean(meta.resource);
@@ -502,8 +509,8 @@ function CrudModule({ meta, shared }) {
   const canImport = canCreate;
   const canBulk = (canEdit || canDelete) && Boolean(meta.resource);
   const canView = meta.canView !== false;
-  const canEditPermissions = ['super-admin', 'owner'].includes(meta.panel);
-  const canMonitorQueue = ['super-admin', 'owner'].includes(meta.panel);
+  const canEditPermissions = ['super-admin', 'owner'].includes(meta.panel) && ['users', 'memberships'].includes(meta.resource);
+  const canMonitorQueue = meta.panel === 'super-admin' && ['backups', 'system-settings'].includes(meta.resource);
   const canEditPdfTemplates = meta.resource === 'system-settings' && canEdit;
   const ImportIcon = icons.Upload || icons.Download;
   const BulkIcon = icons.ListChecks || icons.CheckSquare || icons.CircleCheck;
@@ -564,11 +571,16 @@ function CrudModule({ meta, shared }) {
 
   const loadRows = async (query = search) => {
     if (!meta.resource) return;
+    const sequence = ++requestSequence.current;
     setLoading(true);
     setError('');
     const params = buildParams(query);
     try {
-      const json = await apiJson(`/web-api/${meta.resource}?${params.toString()}`);
+      const [json, report] = await Promise.all([
+        apiJson(`/web-api/${meta.resource}?${params.toString()}`),
+        apiJson(`/web-api/${meta.resource}/analytics?${params.toString()}`).catch(() => null),
+      ]);
+      if (sequence !== requestSequence.current) return;
       setRows(rowsOf(json.data));
       setSelectedIds([]);
       setPagination({
@@ -577,12 +589,12 @@ function CrudModule({ meta, shared }) {
         total: json.total ?? rowsOf(json.data).length,
         per_page: json.per_page || perPage,
       });
-      const report = await apiJson(`/web-api/${meta.resource}/analytics?${params.toString()}`);
       setAnalytics(report);
     } catch (err) {
+      if (sequence !== requestSequence.current) return;
       setError(err.message);
     } finally {
-      setLoading(false);
+      if (sequence === requestSequence.current) setLoading(false);
     }
   };
 
@@ -867,39 +879,33 @@ function CrudModule({ meta, shared }) {
       {(message || error) && <Alert tone={error ? 'error' : 'success'}>{error || message}</Alert>}
       <PanelCard>
         <div className="mb-5 flex flex-col gap-4 border-b border-neutral-100 pb-5 2xl:flex-row 2xl:items-start 2xl:justify-between">
-          <div className="grid flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="grid min-w-0 flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
             <div className="relative w-full"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 bg-white py-2.5 pl-10 pr-3 text-sm shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" placeholder={`Cari ${meta.title.toLowerCase()}...`} aria-label={`Cari ${meta.title.toLowerCase()}`} /></div>
-            <select value={status} onChange={(event) => setStatus(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70"><option>Semua Status</option>{statusOptions.map((item) => <option key={item}>{item}</option>)}</select>
-            {meta.enableFilters !== false && <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" title="Tanggal mulai" aria-label="Tanggal mulai" />}
-            {meta.enableFilters !== false && <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" title="Tanggal akhir" aria-label="Tanggal akhir" />}
-            {meta.enableFilters !== false && (
-              <select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70">
+            {supportsStatusFilter && <label className="grid gap-1 text-xs font-medium text-neutral-600"><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value)} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70"><option>Semua Status</option>{statusOptions.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}</select></label>}
+            {meta.enableFilters !== false && supportsDateFilter && <label className="grid gap-1 text-xs font-medium text-neutral-600"><span>Dari tanggal</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" /></label>}
+            {meta.enableFilters !== false && supportsDateFilter && <label className="grid gap-1 text-xs font-medium text-neutral-600"><span>Sampai tanggal</span><input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" /></label>}
+            {meta.enableFilters !== false && supportsClassFilter && (
+              <label className="grid gap-1 text-xs font-medium text-neutral-600"><span>Kelas</span><select value={classFilter} onChange={(event) => setClassFilter(event.target.value)} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70">
                 <option value="">Semua Kelas</option>
                 {rowsOf(shared.classes).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
+              </select></label>
             )}
-            {meta.enableFilters !== false && (
-              <select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} className="rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70">
+            {meta.enableFilters !== false && supportsStudentFilter && (
+              <label className="grid gap-1 text-xs font-medium text-neutral-600"><span>Santri</span><select value={studentFilter} onChange={(event) => setStudentFilter(event.target.value)} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70">
                 <option value="">Semua Santri</option>
                 {rowsOf(shared.students).map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select>
+              </select></label>
             )}
           </div>
-          <div className="flex flex-wrap gap-2 2xl:max-w-[48rem] 2xl:justify-end">
+          <div className="flex flex-wrap items-start gap-2 2xl:max-w-[48rem] 2xl:justify-end">
             {meta.resource === 'backups' && <button onClick={runBackup} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Database className="h-4 w-4" /> Jalankan Backup</button>}
             {meta.resource === 'backups' && meta.panel === 'super-admin' && <button onClick={() => setRestoreApprovalOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Shield className="h-4 w-4" /> Persetujuan Restore</button>}
-            {canExport && <button onClick={() => exportResource(meta.resource, meta.title, 'csv', buildParams())} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Download className="h-4 w-4" /> CSV</button>}
-            {canExport && <button onClick={() => exportResource(meta.resource, meta.title, 'excel', buildParams())} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.FileText className="h-4 w-4" /> Excel</button>}
-            {canExport && <button onClick={() => exportResource(meta.resource, meta.title, 'pdf', buildParams())} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.FileText className="h-4 w-4" /> PDF</button>}
-            {canExport && <button onClick={() => queueExport('excel')} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Database className="h-4 w-4" /> Export Job</button>}
-            <button onClick={() => { setDownloadManagerOpen(true); loadJobs(); }} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Download className="h-4 w-4" /> Download Manager</button>
             {canImport && <button onClick={() => setImportOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><ImportIcon className="h-4 w-4" /> Import Excel</button>}
             {canBulk && selectedIds.length > 0 && <button onClick={() => setBulkOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-amber-50 px-3 py-2 text-sm font-semibold text-amber-800 shadow-sm transition hover:border-amber-300 focus:outline-none focus:ring-2 focus:ring-amber-200"><BulkIcon className="h-4 w-4" /> Aksi Massal ({selectedIds.length})</button>}
-            {canEditPermissions && <button onClick={() => setPermissionOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Shield className="h-4 w-4" /> Permission</button>}
-            {canEditPermissions && <button onClick={() => setCustomRoleOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.UserCog className="h-4 w-4" /> Custom Role</button>}
-            {canMonitorQueue && <button onClick={() => setQueueMonitorOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Activity className="h-4 w-4" /> Queue Monitor</button>}
             {canEditPdfTemplates && <button onClick={() => setPdfTemplateOpen(true)} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.FileText className="h-4 w-4" /> Template PDF</button>}
             <button onClick={() => loadRows()} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.RefreshCcw className="h-4 w-4" /> Refresh</button>
+            {canExport && <details className="relative"><summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.Download className="h-4 w-4" /> Ekspor</summary><div className="absolute right-0 top-12 z-20 grid min-w-52 gap-1 rounded-xl border border-neutral-200 bg-white p-2 shadow-xl"><button onClick={() => exportResource(meta.resource, meta.title, 'csv', buildParams())} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-50">Unduh CSV</button><button onClick={() => exportResource(meta.resource, meta.title, 'excel', buildParams())} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-50">Unduh Excel</button><button onClick={() => exportResource(meta.resource, meta.title, 'pdf', buildParams())} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-50">Unduh PDF</button><button onClick={() => queueExport('excel')} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-50">Ekspor di latar belakang</button></div></details>}
+            {(canEditPermissions || canMonitorQueue || canExport || canImport) && <details className="relative"><summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.MoreHorizontal className="h-4 w-4" /> Lainnya</summary><div className="absolute right-0 top-12 z-20 grid min-w-56 gap-1 rounded-xl border border-neutral-200 bg-white p-2 shadow-xl"><button onClick={() => { setDownloadManagerOpen(true); loadJobs(); }} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-50">Hasil unduhan</button>{canEditPermissions && <button onClick={() => setPermissionOpen(true)} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-50">Matriks izin</button>}{canEditPermissions && <button onClick={() => setCustomRoleOpen(true)} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-50">Role khusus</button>}{canMonitorQueue && <button onClick={() => setQueueMonitorOpen(true)} className="rounded-lg px-3 py-2 text-left text-sm hover:bg-neutral-50">Monitor antrean</button>}</div></details>}
             {canCreate && <button onClick={createRow} className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"><icons.Plus className="h-4 w-4" /> {meta.createLabel || 'Tambah Data'}</button>}
           </div>
         </div>
@@ -1125,7 +1131,7 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
   return (
     <header ref={topbarRef} className="sticky top-0 z-10 border-b border-white/70 bg-white/80 px-4 py-3 shadow-[0_1px_0_rgba(15,23,42,0.03)] backdrop-blur-xl lg:px-7">
       <div className="flex items-center gap-2.5 sm:gap-4">
-        <button type="button" onClick={onMenuOpen} className="rounded-xl border border-neutral-200 bg-white p-2 text-neutral-600 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 lg:hidden" aria-label="Buka menu"><icons.Menu className="h-5 w-5" /></button>
+        <button type="button" onClick={onMenuOpen} className="grid min-h-11 min-w-11 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40 lg:hidden" aria-label="Buka menu"><icons.Menu className="h-5 w-5" /></button>
         <form onSubmit={submitSearch} className="relative flex-1">
           <icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
           <input
@@ -1164,7 +1170,7 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
         )}
         <div className="hidden rounded-xl border border-primary-100/80 bg-primary-50/60 px-3 py-2 text-xs font-medium text-primary-700 lg:block">{academicYear}</div>
         <div className="relative">
-          <button type="button" onClick={() => { setNotificationsOpen((open) => !open); setAccountOpen(false); }} className="relative rounded-xl border border-neutral-200 bg-white p-2 text-neutral-600 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Buka notifikasi" aria-expanded={notificationsOpen}>
+          <button type="button" onClick={() => { setNotificationsOpen((open) => !open); setAccountOpen(false); }} className="relative grid min-h-11 min-w-11 place-items-center rounded-xl border border-neutral-200 bg-white text-neutral-600 shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Buka notifikasi" aria-expanded={notificationsOpen}>
             <icons.Bell className="h-5 w-5" />
             {unreadCount > 0 && <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">{unreadCount}</span>}
           </button>
@@ -1232,11 +1238,11 @@ function ChartLoading() {
 
 function PanelCard({ title, action, actionHref, onAction, children }) {
   return (
-    <section className="rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-[0_4px_18px_rgba(15,23,42,0.035)] sm:p-5">
+    <section className="min-w-0 rounded-2xl border border-neutral-200/90 bg-white p-4 shadow-[0_4px_18px_rgba(15,23,42,0.035)] sm:p-5">
       {title && (
         <div className="mb-4 flex items-center justify-between gap-3">
           <h2 className="min-w-0 font-semibold tracking-tight text-neutral-800">{title}</h2>
-          {actionHref ? <Link href={actionHref} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</Link> : action ? <button type="button" onClick={onAction} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</button> : null}
+          {actionHref ? <Link href={actionHref} className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</Link> : action ? <button type="button" onClick={onAction} className="inline-flex min-h-11 shrink-0 items-center rounded-lg px-3 py-2 text-xs font-semibold text-primary-700 transition hover:bg-primary-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40">{action}</button> : null}
         </div>
       )}
       {children}
@@ -1249,8 +1255,8 @@ function SideItem({ label, icon, href, active, light, collapsed, onClick }) {
   return <Link href={href} onClick={onClick} aria-label={collapsed ? label : undefined} title={collapsed ? label : undefined} aria-current={active ? 'page' : undefined} className={`group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-primary-500/50 ${active ? light ? 'bg-primary-50 text-primary-700 shadow-sm' : 'bg-white/15 text-white shadow-sm' : light ? 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900' : 'text-white/75 hover:bg-white/10 hover:text-white'}`}><span className={`absolute left-0 h-5 w-0.5 rounded-r-full transition ${active ? light ? 'bg-primary-600' : 'bg-primary-500' : 'bg-transparent'}`} /><Icon className={`h-4 w-4 shrink-0 transition ${active ? '' : 'group-hover:scale-110'}`} />{!collapsed && <span className="truncate">{label}</span>}</Link>;
 }
 
-function DataPreview({ title, rows, shared, href }) {
-  return <PanelCard title={title} action="Lihat Semua" actionHref={href}><Table rows={rows} shared={shared} compact /></PanelCard>;
+function DataPreview({ title, rows, columns, shared, href }) {
+  return <PanelCard title={title} action="Lihat Semua" actionHref={href}><Table rows={rows} columns={columns} shared={shared} compact /></PanelCard>;
 }
 
 function rolePrimaryRows(panel, dashboard, shared) {
@@ -1607,17 +1613,17 @@ function profileRows(dashboard) {
 function dashboardPreview(panel, shared) {
   if (panel === 'super-admin') {
     return [
-      { title: 'Pesantren Terbaru', rows: shared.pesantrens, href: '/super-admin/module/pesantrens' },
-      { title: 'Owner & User Platform', rows: shared.memberships, href: '/super-admin/module/owner' },
-      { title: 'Subscription Aktif', rows: shared.subscriptions, href: '/super-admin/module/subscriptions' },
+      { title: 'Pesantren Terbaru', rows: shared.pesantrens, columns: ['name', 'city', 'status'], href: '/super-admin/module/pesantrens' },
+      { title: 'Owner & User Platform', rows: shared.memberships, columns: ['user_id', 'role_id', 'status'], href: '/super-admin/module/owner' },
+      { title: 'Subscription Aktif', rows: shared.subscriptions, columns: ['pesantren_id', 'plan_id', 'status'], href: '/super-admin/module/subscriptions' },
     ];
   }
 
   if (panel === 'owner') {
     return [
-      { title: 'User & Role Tenant', rows: shared.memberships, href: '/owner/module/user-dan-role' },
-      { title: 'Modul Tenant', rows: shared.modules, href: '/owner/module/modul-aktif' },
-      { title: 'Paket & Subscription', rows: shared.subscriptions, href: '/owner/module/paket-dan-subscription' },
+      { title: 'User & Role Tenant', rows: shared.memberships, columns: ['user_id', 'role_id', 'status'], href: '/owner/module/user-dan-role' },
+      { title: 'Modul Tenant', rows: shared.modules, columns: ['module', 'is_enabled'], href: '/owner/module/modul-aktif' },
+      { title: 'Paket & Subscription', rows: shared.subscriptions, columns: ['plan_id', 'status', 'ends_at'], href: '/owner/module/paket-dan-subscription' },
     ];
   }
 
@@ -1658,7 +1664,9 @@ function Table({ rows = [], compact = false, columns: preferredColumns, shared =
   if (loading) return <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 p-8 text-center text-sm text-neutral-500"><span className="inline-flex items-center gap-2"><icons.Loader2 className="h-4 w-4 animate-spin text-primary-600" /> Memuat data...</span></div>;
   if (!normalized.length) return <div className="grid min-h-44 place-items-center rounded-2xl border border-dashed border-neutral-200 bg-neutral-50/70 p-8 text-center text-sm text-neutral-500"><span><icons.Inbox className="mx-auto mb-2 h-6 w-6 text-neutral-400" />Belum ada data.</span></div>;
   return (
-    <div className="overflow-x-auto rounded-xl border border-neutral-100">
+    <div className="min-w-0">
+      <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-neutral-500 md:hidden" aria-hidden="true"><icons.MoveHorizontal className="h-3.5 w-3.5" /> Geser untuk melihat kolom lainnya</div>
+      <div className="relative min-w-0 overflow-x-auto rounded-xl border border-neutral-100 [scrollbar-width:thin]">
       <table className="w-full min-w-[640px] text-left text-sm">
         <thead><tr className="border-b border-neutral-200 bg-neutral-50/90 text-[11px] font-semibold uppercase tracking-[0.08em] text-neutral-500">{selectable && <th className="w-10 px-3 py-3"><input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll?.(selectableIds, event.target.checked)} className="h-4 w-4 rounded accent-primary-600" aria-label="Pilih semua baris halaman ini" /></th>}{columns.map((c) => <th key={c} className="whitespace-nowrap px-3 py-3 font-semibold">{columnTitle(c)}</th>)}{hasActions && <th className="px-3 py-3 font-semibold">Aksi</th>}</tr></thead>
         <tbody>{visibleRows.map((row, i) => {
@@ -1667,14 +1675,15 @@ function Table({ rows = [], compact = false, columns: preferredColumns, shared =
             <tr key={row.id || i} className="border-b border-neutral-100 transition-colors last:border-b-0 hover:bg-primary-50/35">
               {selectable && <td className="px-3 py-3"><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => onToggleRow?.(row.id)} className="h-4 w-4 rounded accent-primary-600" aria-label={`Pilih baris ${row.id}`} /></td>}
               <>{columns.map((c) => <td key={c} className="max-w-64 px-3 py-3.5 align-middle text-neutral-700">{renderCell(c, row[c], row, shared, fieldMap[c])}</td>)}</>
-              {hasActions && <td className="px-3 py-3"><div className="flex flex-wrap gap-1.5">{visibleCustomActions.map((action) => {
+              {hasActions && <td className="sticky right-0 bg-white/95 px-3 py-3 shadow-[-10px_0_18px_-18px_rgba(15,23,42,0.8)] backdrop-blur-sm"><div className="flex flex-wrap justify-end gap-1.5">{visibleCustomActions.map((action) => {
                 const Icon = icons[action.icon] || icons.CircleCheck;
-                return <button key={action.key} type="button" title={action.label} aria-label={action.label} onClick={() => action.onClick(row)} className={`rounded-lg border p-1.5 transition focus:outline-none focus:ring-2 ${action.tone === 'danger' ? 'border-red-200 text-red-600 hover:border-red-500 hover:bg-red-50 focus:ring-red-200' : 'border-neutral-200 bg-white hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:ring-primary-200'}`}><Icon className="h-3.5 w-3.5" /></button>;
-              })}{onView && <button type="button" title="Lihat" aria-label="Lihat detail" onClick={() => onView(row)} className="rounded-lg border border-neutral-200 bg-white p-1.5 transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Eye className="h-3.5 w-3.5" /></button>}{onEdit && <button type="button" title="Edit" aria-label="Edit data" onClick={() => onEdit(row)} className="rounded-lg border border-neutral-200 bg-white p-1.5 transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Edit2 className="h-3.5 w-3.5" /></button>}{onDelete && <button type="button" title="Hapus" aria-label="Hapus data" onClick={() => onDelete(row)} className="rounded-lg border border-neutral-200 bg-white p-1.5 transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200"><icons.Trash2 className="h-3.5 w-3.5" /></button>}</div></td>}
+                return <button key={action.key} type="button" title={action.label} aria-label={action.label} onClick={() => action.onClick(row)} className={`grid min-h-9 min-w-9 place-items-center rounded-lg border transition focus:outline-none focus:ring-2 ${action.tone === 'danger' ? 'border-red-200 text-red-600 hover:border-red-500 hover:bg-red-50 focus:ring-red-200' : 'border-neutral-200 bg-white hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:ring-primary-200'}`}><Icon className="h-4 w-4" /></button>;
+              })}{onView && <button type="button" title="Lihat" aria-label="Lihat detail" onClick={() => onView(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Eye className="h-4 w-4" /></button>}{onEdit && <button type="button" title="Edit" aria-label="Edit data" onClick={() => onEdit(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Edit2 className="h-4 w-4" /></button>}{onDelete && <button type="button" title="Hapus" aria-label="Hapus data" onClick={() => onDelete(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200"><icons.Trash2 className="h-4 w-4" /></button>}</div></td>}
             </tr>
           );
         })}</tbody>
       </table>
+      </div>
     </div>
   );
 }
@@ -1725,12 +1734,21 @@ const relationColumnLabels = {
   user_id: 'Pengguna',
 };
 
+const fieldLabels = {
+  name: 'Nama', city: 'Kota', phone: 'Telepon', email: 'Email', address: 'Alamat', status: 'Status',
+  code: 'Kode', title: 'Judul', description: 'Deskripsi', date: 'Tanggal', starts_at: 'Tanggal Mulai',
+  ends_at: 'Tanggal Selesai', amount: 'Nominal', monthly_price: 'Harga Bulanan', max_students: 'Batas Santri',
+  max_users: 'Batas Pengguna', is_enabled: 'Aktif', is_active: 'Aktif', role: 'Peran', module: 'Modul',
+  invoice_number: 'Nomor Tagihan', due_date: 'Jatuh Tempo', paid_at: 'Waktu Bayar', created_at: 'Dibuat',
+};
+
 function isVisibleTableColumn(key) {
   return !hiddenTableColumns.has(key);
 }
 
 function columnTitle(key) {
   if (relationColumnLabels[key]) return relationColumnLabels[key];
+  if (fieldLabels[key]) return fieldLabels[key];
   return titleFromSlug(key.endsWith('_id') ? key.slice(0, -3) : key);
 }
 
@@ -1775,9 +1793,18 @@ function relationFallbackLabel(key, value, row) {
 }
 
 function Badge({ label }) {
-  const lower = label.toLowerCase();
-  const cls = lower.includes('paid') || lower.includes('active') || lower.includes('approved') || lower.includes('aktif') || lower.includes('success') || lower.includes('berhasil') || lower.includes('selesai') || lower.includes('done') || lower.includes('info') ? 'bg-green-50 text-green-700' : lower.includes('pending') || lower.includes('unpaid') || lower.includes('waiting') || lower.includes('in_progress') || lower.includes('warning') || lower.includes('peringatan') || lower.includes('dipantau') ? 'bg-amber-50 text-amber-700' : lower.includes('error') || lower.includes('rejected') || lower.includes('cancelled') || lower.includes('ditolak') || lower.includes('diblokir') ? 'bg-red-50 text-red-700' : 'bg-neutral-100 text-neutral-600';
-  return <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${cls}`}>{label.replace('paid', 'Lunas').replace('unpaid', 'Belum Lunas').replace('active', 'Aktif').replace('approved', 'Disetujui').replace('rejected', 'Ditolak').replace('waiting', 'Menunggu').replace('in_progress', 'Diproses').replace('cancelled', 'Dibatalkan')}</span>;
+  const lower = String(label).toLowerCase();
+  const cls = lower.includes('inactive') || lower.includes('unpaid') || lower.includes('error') || lower.includes('rejected') || lower.includes('cancelled') || lower.includes('ditolak') || lower.includes('diblokir') ? 'bg-red-50 text-red-700' : lower.includes('pending') || lower.includes('waiting') || lower.includes('in_progress') || lower.includes('warning') || lower.includes('peringatan') || lower.includes('dipantau') ? 'bg-amber-50 text-amber-700' : lower.includes('paid') || lower.includes('active') || lower.includes('approved') || lower.includes('aktif') || lower.includes('success') || lower.includes('berhasil') || lower.includes('selesai') || lower.includes('done') || lower.includes('info') ? 'bg-green-50 text-green-700' : 'bg-neutral-100 text-neutral-600';
+  return <span className={`inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[11px] font-semibold ${cls}`}>{statusLabel(label)}</span>;
+}
+
+function statusLabel(value) {
+  const key = String(value ?? '').toLowerCase();
+  return {
+    active: 'Aktif', inactive: 'Tidak Aktif', pending: 'Menunggu', paid: 'Lunas', unpaid: 'Belum Lunas',
+    success: 'Berhasil', waiting: 'Menunggu', draft: 'Draf', published: 'Terbit', done: 'Selesai',
+    approved: 'Disetujui', rejected: 'Ditolak', cancelled: 'Dibatalkan', in_progress: 'Diproses',
+  }[key] || titleFromSlug(String(value ?? '-'));
 }
 
 function ActivityRow({ item }) {
@@ -1891,6 +1918,7 @@ function ImportModal({ title, resource, loading, onSubmit, onClose }) {
   const [previewLoading, setPreviewLoading] = useState(false);
   const [error, setError] = useState('');
   const UploadIcon = icons.Upload || icons.Download;
+  const dialogRef = useDialogLifecycle(onClose);
 
   const previewFile = async () => {
     if (!file || !resource) return;
@@ -1913,7 +1941,7 @@ function ImportModal({ title, resource, loading, onSubmit, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={`Impor ${title}`}>
       <form onSubmit={submit} className="flex max-h-[90vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div>
@@ -2015,6 +2043,7 @@ function JobStatusStrip({ jobs, onRefresh }) {
 
 function DownloadManagerModal({ jobs, onRefresh, onClose }) {
   const [status, setStatus] = useState('all');
+  const dialogRef = useDialogLifecycle(onClose);
   const filtered = rowsOf(jobs).filter((job) => status === 'all' || job.status === status);
   const remove = async (job) => {
     if (!window.confirm(`Hapus file job ${String(job.uuid).slice(0, 8)}?`)) return;
@@ -2022,7 +2051,7 @@ function DownloadManagerModal({ jobs, onRefresh, onClose }) {
     await onRefresh();
   };
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Hasil unduhan">
       <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div><h2 className="font-semibold">Download Manager</h2><p className="text-xs text-neutral-500">Hasil export dan laporan import yang tersimpan sementara.</p></div>
@@ -2044,8 +2073,9 @@ function QueueMonitorModal({ onClose }) {
   useEffect(() => { load(); }, []);
   const retry = async (uuid) => { await apiJson(`/web-actions/queue/failed/${uuid}/retry`, { method: 'POST', body: '{}' }); await load(); };
   const forget = async (uuid) => { await apiJson(`/web-actions/queue/failed/${uuid}`, { method: 'DELETE' }); await load(); };
+  const dialogRef = useDialogLifecycle(onClose);
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Monitor antrean">
       <div className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4"><div><h2 className="font-semibold">Queue Monitor</h2><p className="text-xs text-neutral-500">Pantau worker, operation job, dan failed jobs.</p></div><button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 p-2" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button></div>
         <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-5">{error && <Alert tone="error">{error}</Alert>}<div className="grid gap-3 sm:grid-cols-3">{Object.entries(data?.workers || {}).map(([key, value]) => <StatPill key={key} label={`Worker ${key}`} value={value} />)}</div><div className="grid gap-3 sm:grid-cols-4">{Object.entries(data?.operations || {}).map(([key, value]) => <StatPill key={key} label={`Operation ${key}`} value={value} />)}</div><PanelCard title="Failed Jobs" action="Refresh" onAction={load}><div className="space-y-3">{rowsOf(data?.failed_jobs).map((job) => <div key={job.uuid} className="rounded-xl border border-red-100 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="font-semibold">{job.job}</div><div className="text-xs text-neutral-500">{job.queue} - {job.failed_at}</div></div><div className="flex gap-2"><button type="button" onClick={() => retry(job.uuid)} className="rounded-lg border border-neutral-200 px-3 py-2 text-xs">Retry</button><button type="button" onClick={() => forget(job.uuid)} className="rounded-lg border border-red-200 px-3 py-2 text-xs text-red-600">Hapus</button></div></div><div className="mt-2 text-xs text-red-600">{job.exception}</div></div>)}{rowsOf(data?.failed_jobs).length === 0 && <div className="text-sm text-neutral-500">Tidak ada failed job.</div>}</div></PanelCard></div>
@@ -2089,6 +2119,7 @@ function CustomRoleModal({ onClose }) {
 function BulkModal({ count, canDelete, loading, onSubmit, onClose }) {
   const [action, setAction] = useState('status');
   const [status, setStatus] = useState('active');
+  const dialogRef = useDialogLifecycle(onClose);
 
   const submit = (event) => {
     event.preventDefault();
@@ -2096,7 +2127,7 @@ function BulkModal({ count, canDelete, loading, onSubmit, onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Aksi massal">
       <form onSubmit={submit} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div>
@@ -2143,6 +2174,7 @@ function PermissionMatrixModal({ onClose }) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const dialogRef = useDialogLifecycle(onClose);
 
   useEffect(() => {
     let mounted = true;
@@ -2189,7 +2221,7 @@ function PermissionMatrixModal({ onClose }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Matriks izin">
       <form onSubmit={save} className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div>
@@ -2246,6 +2278,7 @@ function PdfTemplateModal({ shared, onClose, onSaved }) {
   const [loadingSettings, setLoadingSettings] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const dialogRef = useDialogLifecycle(onClose);
 
   useEffect(() => {
     let mounted = true;
@@ -2289,7 +2322,7 @@ function PdfTemplateModal({ shared, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Template PDF tenant">
       <form onSubmit={save} className="flex max-h-[90vh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div>
@@ -2355,9 +2388,10 @@ function PdfTemplateModal({ shared, onClose, onSaved }) {
 function CrudModal({ meta, shared, formData, setFormData, editing, mode, saving, formErrors = {}, onSubmit, onClose, timeline = [], timelineLoading = false }) {
   const viewOnly = mode === 'view';
   const title = viewOnly ? `Detail ${meta.title}` : `${editing && mode === 'edit' ? 'Edit' : 'Tambah'} ${meta.title}`;
+  const dialogRef = useDialogLifecycle(onClose);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-950/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title}>
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-950/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title}>
       <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-3xl border border-white/70 bg-white shadow-[0_24px_80px_rgba(15,23,42,0.24)]">
         <div className="flex items-center justify-between border-b border-neutral-100 px-5 py-4">
           <div>
@@ -2376,7 +2410,7 @@ function CrudModal({ meta, shared, formData, setFormData, editing, mode, saving,
             {!viewOnly && (
               <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
                 {saving ? <icons.Loader2 className="h-4 w-4 animate-spin" /> : <icons.Save className="h-4 w-4" />}
-                {editing && mode === 'edit' ? 'Simpan Perubahan' : 'Tambah Data'}
+                {editing && mode === 'edit' ? 'Simpan Perubahan' : (meta.createLabel || `Tambah ${meta.title}`)}
               </button>
             )}
           </div>
@@ -2390,9 +2424,10 @@ function WorkflowModal({ draft, note, setNote, saving, onSubmit, onClose }) {
   const { row, action } = draft;
   const required = action.requiresNote;
   const title = `${action.label} ${row.name || row.title || row.invoice_number || row.queue_number || `#${row.id}`}`;
+  const dialogRef = useDialogLifecycle(onClose);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title}>
       <form onSubmit={onSubmit} className="w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div>
@@ -2472,9 +2507,10 @@ function AuditLogModal({ row, shared, onClose }) {
   const changes = fields
     .map((field) => ({ field, before: before?.[field], after: after?.[field] }))
     .filter((change) => JSON.stringify(change.before ?? null) !== JSON.stringify(change.after ?? null));
+  const dialogRef = useDialogLifecycle(onClose);
 
   return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true">
+    <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-900/50 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Detail audit log">
       <div className="flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-4">
           <div>
@@ -2517,36 +2553,93 @@ function AuditLogModal({ row, shared, onClose }) {
 }
 
 function FieldInput({ field, shared, value, disabled = false, error, onChange }) {
-  const label = titleFromSlug(field.name);
+  const label = columnTitle(field.name);
   const options = optionsFor(field, shared);
   const errorText = Array.isArray(error) ? error[0] : error;
+  const inputId = `field-${slug(field.name)}`;
+  const errorId = `${inputId}-error`;
+  const accessibilityProps = {
+    id: inputId,
+    'aria-invalid': Boolean(errorText),
+    'aria-describedby': errorText ? errorId : undefined,
+  };
 
   if (field.type === 'textarea') {
-    return <label className="block text-sm md:col-span-2"><span className="mb-1.5 block font-semibold text-neutral-700">{label}</span><textarea disabled={disabled} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`h-28 w-full rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40 focus:ring-red-100' : 'border-neutral-200'}`} />{errorText && <span className="mt-1.5 block text-xs font-medium text-red-600">{errorText}</span>}</label>;
+    return <label htmlFor={inputId} className="block text-sm md:col-span-2"><span className="mb-1.5 block font-semibold text-neutral-700">{label}</span><textarea {...accessibilityProps} disabled={disabled} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`h-28 w-full rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40 focus:ring-red-100' : 'border-neutral-200'}`} />{errorText && <span id={errorId} role="alert" className="mt-1.5 block text-xs font-medium text-red-600">{errorText}</span>}</label>;
   }
 
   if (field.type === 'boolean') {
-    return <label className={`flex items-center gap-3 rounded-xl border bg-white px-3 py-3 text-sm shadow-sm transition ${errorText ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 hover:border-primary-200'}`}><input type="checkbox" disabled={disabled} checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 rounded accent-primary-600 disabled:opacity-50" /><span className="font-semibold text-neutral-700">{label}</span>{errorText && <span className="text-xs font-medium text-red-600">{errorText}</span>}</label>;
+    return <label htmlFor={inputId} className={`flex items-center gap-3 rounded-xl border bg-white px-3 py-3 text-sm shadow-sm transition ${errorText ? 'border-red-300 bg-red-50/40' : 'border-neutral-200 hover:border-primary-200'}`}><input {...accessibilityProps} type="checkbox" disabled={disabled} checked={Boolean(value)} onChange={(event) => onChange(event.target.checked)} className="h-4 w-4 rounded accent-primary-600 disabled:opacity-50" /><span className="font-semibold text-neutral-700">{label}</span>{errorText && <span id={errorId} role="alert" className="text-xs font-medium text-red-600">{errorText}</span>}</label>;
   }
 
   if (field.type?.startsWith('select')) {
     return (
-      <label className="block text-sm">
+      <label htmlFor={inputId} className="block text-sm">
         <span className="mb-1.5 block font-semibold text-neutral-700">{label}</span>
-        <select disabled={disabled} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40 focus:ring-red-100' : 'border-neutral-200'}`}>
+        <select {...accessibilityProps} disabled={disabled} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40 focus:ring-red-100' : 'border-neutral-200'}`}>
           <option value="">Pilih {label}</option>
           {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
         </select>
-        {errorText && <span className="mt-1.5 block text-xs font-medium text-red-600">{errorText}</span>}
+        {errorText && <span id={errorId} role="alert" className="mt-1.5 block text-xs font-medium text-red-600">{errorText}</span>}
       </label>
     );
   }
 
-  return <label className="block text-sm"><span className="mb-1.5 block font-semibold text-neutral-700">{label}</span><input disabled={disabled} type={field.type || 'text'} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40 focus:ring-red-100' : 'border-neutral-200'}`} />{errorText && <span className="mt-1.5 block text-xs font-medium text-red-600">{errorText}</span>}</label>;
+  return <label htmlFor={inputId} className="block text-sm"><span className="mb-1.5 block font-semibold text-neutral-700">{label}</span><input {...accessibilityProps} disabled={disabled} type={field.type || 'text'} value={value ?? ''} onChange={(event) => onChange(event.target.value)} className={`w-full rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70 disabled:bg-neutral-50 disabled:text-neutral-500 ${errorText ? 'border-red-300 bg-red-50/40 focus:ring-red-100' : 'border-neutral-200'}`} />{errorText && <span id={errorId} role="alert" className="mt-1.5 block text-xs font-medium text-red-600">{errorText}</span>}</label>;
 }
 
 function Logo() {
   return <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-current/15 bg-white/10 shadow-sm"><svg viewBox="0 0 48 48" className="h-8 w-8" fill="none"><path d="M24 5 43 41H5L24 5Z" stroke="currentColor" strokeWidth="2" /><path d="M24 15v18M18 32c4-2 8-2 12 0M16 36h16" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg></div>;
+}
+
+function useDialogLifecycle(onClose, open = true) {
+  const dialogRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const dialog = dialogRef.current;
+    const previousFocus = document.activeElement;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const focusFirst = () => dialog?.querySelector(focusableSelector)?.focus();
+    const frame = window.requestAnimationFrame(focusFirst);
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== 'Tab' || !dialog) return;
+      const focusable = Array.from(dialog.querySelectorAll(focusableSelector)).filter((element) => element.offsetParent !== null);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus instanceof HTMLElement) previousFocus.focus();
+    };
+  }, [open]);
+
+  return dialogRef;
 }
 
 function rowsOf(rows) {
@@ -3009,6 +3102,7 @@ function moduleMeta(module, shared, panel) {
     canEdit: !readOnly,
     canDelete: !readOnly,
     canView: true,
+    createLabel: `Tambah ${title}`,
     showInsights: !readOnly,
   };
 }

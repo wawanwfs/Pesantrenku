@@ -35,6 +35,14 @@ async function login(page, panel, email) {
   await page.waitForLoadState('domcontentloaded');
 }
 
+async function clickDetailsAction(page, summary, action) {
+  const button = page.getByRole('button', { name: action, exact: true });
+  if (!await button.isVisible({ timeout: 300 }).catch(() => false)) {
+    await page.getByText(summary, { exact: true }).click();
+  }
+  await button.click();
+}
+
 async function apiJson(page, path, options = {}) {
   return page.evaluate(async ({ path, options }) => {
     const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -104,11 +112,79 @@ for (const [panel, email] of roles) {
   });
 }
 
+test('Pixel 7 login form stays fully visible without horizontal clipping', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'Regresi ini khusus viewport Pixel 7.');
+  await navigate(page, '/login');
+
+  const form = page.locator('form');
+  const submit = page.getByRole('button', { name: 'Masuk' });
+  await expect(form).toBeVisible();
+  await expect(submit).toBeVisible();
+
+  const clipped = await page.locator('form, form input, form button').evaluateAll((elements) => elements
+    .map((element) => {
+      const rect = element.getBoundingClientRect();
+      return {
+        element: element.tagName.toLowerCase(),
+        left: rect.left,
+        right: rect.right,
+        width: rect.width,
+      };
+    })
+    .filter((rect) => rect.left < -1 || rect.right > window.innerWidth + 1));
+
+  expect(clipped).toEqual([]);
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+});
+
+test('table cards do not widen the Pixel 7 viewport', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'Regresi ini khusus viewport Pixel 7.');
+  await login(page, 'tu', 'tu@pesantenku.test');
+  await navigate(page, '/tu/module/santri');
+
+  const card = page.locator('main section.rounded-2xl').first();
+  await expect(card, `${page.url()}\n${(await page.locator('body').innerText()).slice(0, 500)}`).toBeVisible();
+
+  const geometry = await card.evaluate((element) => {
+    const cardRect = element.getBoundingClientRect();
+    const scroller = element.querySelector('table')?.parentElement;
+    const scrollerRect = scroller?.getBoundingClientRect();
+
+    return {
+      viewportWidth: window.innerWidth,
+      documentOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+      cardLeft: cardRect.left,
+      cardRight: cardRect.right,
+      scrollerLeft: scrollerRect?.left,
+      scrollerRight: scrollerRect?.right,
+    };
+  });
+
+  expect(geometry.documentOverflow).toBeLessThanOrEqual(1);
+  expect(geometry.cardLeft).toBeGreaterThanOrEqual(-1);
+  expect(geometry.cardRight).toBeLessThanOrEqual(geometry.viewportWidth + 1);
+  expect(geometry.scrollerLeft).toBeGreaterThanOrEqual(geometry.cardLeft - 1);
+  expect(geometry.scrollerRight).toBeLessThanOrEqual(geometry.cardRight + 1);
+});
+
+test('Escape closes the mobile navigation drawer', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'Regresi ini khusus viewport Pixel 7.');
+  await login(page, 'tu', 'tu@pesantenku.test');
+
+  const menuButton = page.getByRole('button', { name: 'Buka menu', exact: true });
+  await expect(menuButton).toBeVisible({ timeout: 15_000 });
+  await menuButton.click();
+  const drawer = page.getByRole('dialog', { name: 'Navigasi utama' });
+  await expect(drawer).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(drawer).toBeHidden();
+});
+
 test('owner can open and save permission matrix and PDF template editor', async ({ page }, testInfo) => {
   test.skip(!testInfo.project.metadata.workflows, 'Workflow suite dijalankan pada shard utama tiap viewport.');
   await login(page, 'owner', 'owner@pesantenku.test');
   await navigate(page, '/owner/module/user-dan-role');
-  await page.getByRole('button', { name: 'Permission' }).click();
+  await clickDetailsAction(page, 'Lainnya', 'Matriks izin');
   await expect(page.getByRole('heading', { name: 'Permission Matrix' })).toBeVisible();
   await Promise.all([
     page.waitForResponse((response) => response.url().includes('/web-api/permissions/matrix') && response.request().method() !== 'GET' && response.status() === 200),
@@ -181,24 +257,29 @@ test('owner scaling tools custom role queue monitor download manager and restore
   await login(page, 'owner', 'owner@pesantenku.test');
   await navigate(page, '/owner/module/user-dan-role');
 
-  await page.getByRole('button', { name: 'Custom Role' }).click();
+  await clickDetailsAction(page, 'Lainnya', 'Role khusus');
   await expect(page.getByRole('heading', { name: 'Custom Role Tenant' })).toBeVisible();
-  await page.getByLabel('Tutup modal').click();
-
-  await page.getByRole('button', { name: 'Queue Monitor' }).click();
-  await expect(page.getByRole('heading', { name: 'Queue Monitor' })).toBeVisible();
   await page.getByLabel('Tutup modal').click();
 
   const [exportResponse] = await Promise.all([
     page.waitForResponse((response) => response.url().includes('/export/queue') && response.request().method() === 'POST'),
-    page.getByRole('button', { name: 'Export Job' }).click(),
+    (async () => {
+      await clickDetailsAction(page, 'Ekspor', 'Ekspor di latar belakang');
+    })(),
   ]);
   expect(exportResponse.status()).toBe(202);
-  await page.getByRole('button', { name: 'Download Manager' }).click();
+  await clickDetailsAction(page, 'Lainnya', 'Hasil unduhan');
   await expect(page.getByRole('heading', { name: 'Download Manager' })).toBeVisible();
   await expect(page.getByRole('dialog').getByText('export memberships', { exact: true }).first()).toBeVisible();
   await page.getByLabel('Tutup modal').click();
 
+  await login(page, 'super-admin', 'superadmin@pesantenku.test');
+  await navigate(page, '/super-admin/module/backups');
+  await clickDetailsAction(page, 'Lainnya', 'Monitor antrean');
+  await expect(page.getByRole('heading', { name: 'Queue Monitor' })).toBeVisible();
+  await page.getByLabel('Tutup modal').click();
+
+  await login(page, 'owner', 'owner@pesantenku.test');
   await navigate(page, '/owner/module/backup-dan-restore');
   const [backupResponse] = await Promise.all([
     page.waitForResponse((response) => response.url().includes('/backup/run') && response.request().method() === 'POST'),

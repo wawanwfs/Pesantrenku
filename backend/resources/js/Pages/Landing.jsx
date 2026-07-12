@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
   BarChart3,
@@ -50,8 +50,32 @@ const steps = [
 
 export default function Landing({ auth }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuButtonRef = useRef(null);
+  const mobileMenuRef = useRef(null);
   const isSignedIn = Boolean(auth?.user);
   const destination = isSignedIn ? dashboardHref(auth?.roles?.[0]) : '/login';
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    mobileMenuRef.current?.querySelector('a')?.focus();
+
+    const closeMenu = (event) => {
+      if (event.type === 'keydown' && event.key !== 'Escape') return;
+      if (event.type === 'pointerdown' && (mobileMenuRef.current?.contains(event.target) || menuButtonRef.current?.contains(event.target))) return;
+
+      setMenuOpen(false);
+      window.requestAnimationFrame(() => menuButtonRef.current?.focus());
+    };
+
+    document.addEventListener('keydown', closeMenu);
+    document.addEventListener('pointerdown', closeMenu);
+
+    return () => {
+      document.removeEventListener('keydown', closeMenu);
+      document.removeEventListener('pointerdown', closeMenu);
+    };
+  }, [menuOpen]);
 
   const tiltScene = (event) => {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
@@ -87,6 +111,7 @@ export default function Landing({ auth }) {
           {isSignedIn ? 'Buka dashboard' : 'Masuk'} <ArrowRight size={16} aria-hidden="true" />
         </a>
         <button
+          ref={menuButtonRef}
           type="button"
           className="landing-menu-button"
           aria-expanded={menuOpen}
@@ -98,7 +123,7 @@ export default function Landing({ auth }) {
         </button>
       </header>
 
-      <nav id="landing-mobile-menu" className={`landing-mobile-menu ${menuOpen ? 'is-open' : ''}`} aria-label="Navigasi seluler">
+      <nav ref={mobileMenuRef} id="landing-mobile-menu" className={`landing-mobile-menu ${menuOpen ? 'is-open' : ''}`} aria-label="Navigasi seluler">
         <a href="#keunggulan" onClick={() => setMenuOpen(false)}>Keunggulan</a>
         <a href="#alur" onClick={() => setMenuOpen(false)}>Cara kerja</a>
         <a href="#cerita" onClick={() => setMenuOpen(false)}>Cerita kami</a>

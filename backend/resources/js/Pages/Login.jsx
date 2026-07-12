@@ -58,8 +58,8 @@ export default function Login({ auth, app }) {
     <main className="relative isolate min-h-screen overflow-hidden bg-[#f4f8f4] px-4 py-5 text-neutral-900 sm:px-6 sm:py-8 lg:grid lg:place-items-center lg:p-10">
       <Backdrop />
 
-      <section className="relative mx-auto grid w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 shadow-[0_32px_90px_-28px_rgba(6,64,42,0.34)] backdrop-blur-xl lg:grid-cols-[1.06fr_0.94fr]">
-        <aside className="relative overflow-hidden bg-[#06402A] p-6 text-white sm:p-9 lg:p-11">
+      <section className="relative mx-auto grid min-w-0 w-full max-w-6xl overflow-hidden rounded-[2rem] border border-white/80 bg-white/90 shadow-[0_32px_90px_-28px_rgba(6,64,42,0.34)] backdrop-blur-xl lg:grid-cols-[1.06fr_0.94fr]">
+        <aside className="relative min-w-0 overflow-hidden bg-[#06402A] p-6 text-white sm:p-9 lg:p-11">
           <LoginBrand />
           <HeroArtwork />
           <div className="relative mt-8 max-w-md lg:mt-12">
@@ -82,7 +82,7 @@ export default function Login({ auth, app }) {
           </div>
         </aside>
 
-        <div className="flex min-h-full flex-col p-6 sm:p-9 lg:p-11">
+        <div className="flex min-h-full min-w-0 flex-col p-6 sm:p-9 lg:p-11">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-semibold text-primary-700">Portal Pesantenku</p>
@@ -97,12 +97,12 @@ export default function Login({ auth, app }) {
           </div>
 
           {demoEnabled && (
-            <div className="mt-7">
+            <div className="mt-7 min-w-0">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-600">Akses cepat demo</p>
                 <span className="text-xs text-neutral-400">10 peran tersedia</span>
               </div>
-              <div className="mt-3 flex gap-2 overflow-x-auto pb-2 [scrollbar-width:thin]" aria-label="Pilih akun demo">
+              <div className="mt-3 flex max-w-full gap-2 overflow-x-auto pb-2 [scrollbar-width:thin]" aria-label="Pilih akun demo">
                 {demoAccounts.map(([email, role]) => {
                   const selected = data.login === email;
                   return (
