@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import * as THREE from 'three';
 import {
   ArrowRight,
   BarChart3,
@@ -17,6 +16,8 @@ import {
   X,
 } from 'lucide-react';
 import '../../css/landing.css';
+
+let THREE;
 
 const featureCards = [
   {
@@ -230,6 +231,50 @@ export default function Landing({ auth }) {
 }
 
 function ThreeCampus() {
+  const [runtimeState, setRuntimeState] = useState('loading');
+
+  useEffect(() => {
+    if (!supportsWebGL()) {
+      setRuntimeState('fallback');
+      return undefined;
+    }
+
+    let cancelled = false;
+    const cancelLoad = scheduleAfterFirstPaint(async () => {
+      try {
+        THREE = await import('./LandingThreeRuntime.js');
+        if (!cancelled) setRuntimeState('ready');
+      } catch {
+        if (!cancelled) setRuntimeState('fallback');
+      }
+    });
+
+    return () => {
+      cancelled = true;
+      cancelLoad();
+    };
+  }, []);
+
+  if (runtimeState === 'ready') return <ThreeCampusScene />;
+
+  return (
+    <div
+      className={`landing-three-scene is-${runtimeState}`}
+      role="img"
+      aria-label="Kampus Pesantrenku tiga dimensi dengan masjid, asrama, taman, dan santri yang bergerak"
+    >
+      {runtimeState === 'loading' && (
+        <div className="landing-three-loading" aria-live="polite">
+          <i aria-hidden="true" />
+          <span>Menyiapkan kampus</span>
+        </div>
+      )}
+      <CampusFallback hidden={runtimeState !== 'fallback'} />
+    </div>
+  );
+}
+
+function ThreeCampusScene() {
   const mountRef = useRef(null);
   const [sceneState, setSceneState] = useState('loading');
 
@@ -446,13 +491,47 @@ function ThreeCampus() {
           <span>Menyiapkan kampus</span>
         </div>
       )}
-      <div className="landing-three-fallback" aria-hidden={sceneState !== 'fallback'}>
-        <span className="fallback-building" />
-        <span className="fallback-minaret fallback-minaret-left" />
-        <span className="fallback-minaret fallback-minaret-right" />
-      </div>
+      <CampusFallback hidden={sceneState !== 'fallback'} />
     </div>
   );
+}
+
+function CampusFallback({ hidden }) {
+  return (
+    <div className="landing-three-fallback" aria-hidden={hidden}>
+      <span className="fallback-building" />
+      <span className="fallback-minaret fallback-minaret-left" />
+      <span className="fallback-minaret fallback-minaret-right" />
+    </div>
+  );
+}
+
+function supportsWebGL() {
+  try {
+    const probe = document.createElement('canvas');
+    return Boolean(probe.getContext('webgl2') || probe.getContext('webgl'));
+  } catch {
+    return false;
+  }
+}
+
+function scheduleAfterFirstPaint(task) {
+  let idleId;
+  let timeoutId;
+  const frameId = window.requestAnimationFrame(() => {
+    if ('requestIdleCallback' in window) {
+      idleId = window.requestIdleCallback(task, { timeout: 1200 });
+      return;
+    }
+
+    timeoutId = window.setTimeout(task, 0);
+  });
+
+  return () => {
+    window.cancelAnimationFrame(frameId);
+    if (idleId !== undefined) window.cancelIdleCallback(idleId);
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  };
 }
 
 function createCampusMaterials() {
