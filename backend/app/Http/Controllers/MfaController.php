@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\MfaRecoveryService;
 use App\Services\TotpService;
 use App\Services\UserAccessRevoker;
+use App\Support\PrivilegedAccess;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
@@ -107,11 +108,26 @@ class MfaController extends Controller
             'mfa' => ['required', 'string', 'max:64'],
         ]);
         $user = $request->user()->loadMissing('roles');
-        abort_if($this->isPrivileged($user), 403, 'MFA tidak dapat dinonaktifkan untuk akun privileged.');
+
+        // Privileged accounts may never drop their second factor. Elevated
+        // access can come from a tenant custom role as well as from a global or
+        // built-in tenant role, so all three paths are evaluated here.
+        if ($this->isPrivileged($user)) {
+            $this->audit($user, 'Penolakan menonaktifkan MFA akun privileged', [
+                'privileged_reasons' => PrivilegedAccess::reasons($user),
+            ]);
+
+            abort(403, 'MFA tidak dapat dinonaktifkan untuk akun privileged, termasuk pemegang custom role tenant dengan izin sensitif.');
+        }
+
         abort_unless(Hash::check($validated['password'], $user->password), 422, 'Password saat ini tidak valid.');
         abort_unless($this->verifyFactor($user, $validated['mfa'], 'disable'), 422, 'Kode MFA atau recovery tidak valid.');
 
         DB::transaction(function () use ($user) {
+            // Re-check inside the mutation transaction: a membership or custom
+            // role could have been granted between the guard and the write.
+            abort_if($this->isPrivileged($user), 403, 'Akun menjadi privileged saat permintaan berjalan; MFA tetap aktif.');
+
             $user->forceFill([
                 'mfa_secret' => null,
                 'mfa_enabled' => false,
@@ -140,17 +156,7 @@ class MfaController extends Controller
 
     private function isPrivileged(User $user): bool
     {
-        $roles = config('pesantrenku.auth.privileged_roles', ['super_admin', 'owner_pesantren']);
-        if ($user->hasRole($roles)) {
-            return true;
-        }
-
-        return DB::table('pesantren_user')
-            ->join('roles', 'roles.id', '=', 'pesantren_user.role_id')
-            ->where('pesantren_user.user_id', $user->id)
-            ->where('pesantren_user.status', 'active')
-            ->whereIn('roles.name', $roles)
-            ->exists();
+        return PrivilegedAccess::isPrivileged($user);
     }
 
     private function verifyFactor(User $user, string $factor, string $purpose): bool
@@ -165,7 +171,10 @@ class MfaController extends Controller
         return "pesantenku:mfa-enrollment:{$user->id}";
     }
 
-    private function audit(User $user, string $action): void
+    /**
+     * @param  array<string, mixed>  $metadata
+     */
+    private function audit(User $user, string $action, array $metadata = []): void
     {
         DB::table('audit_logs')->insert([
             'pesantren_id' => null,
@@ -173,7 +182,7 @@ class MfaController extends Controller
             'action' => $action,
             'module' => 'auth',
             'ip_address' => request()->ip(),
-            'metadata' => json_encode(['security_change' => true], JSON_THROW_ON_ERROR),
+            'metadata' => json_encode(['security_change' => true] + $metadata, JSON_THROW_ON_ERROR),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
