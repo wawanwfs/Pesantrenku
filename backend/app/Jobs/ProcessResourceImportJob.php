@@ -3,8 +3,10 @@
 namespace App\Jobs;
 
 use App\Services\EntitlementService;
+use App\Services\OperationalScope;
 use App\Services\OperationStorage;
 use App\Services\ResourceAuthorization;
+use App\Support\ImportRowScope;
 use App\Support\QueueNames;
 use App\Support\ResourceCatalog;
 use App\Support\SignedImportRow;
@@ -44,6 +46,7 @@ class ProcessResourceImportJob implements ShouldQueue
         OperationStorage $storage,
         ResourceAuthorization $authorization,
         EntitlementService $entitlements,
+        OperationalScope $operationalScope,
     ): void {
         $lock = Cache::lock("operation-job:import:{$this->jobId}", $this->timeout + 120);
         if (! $lock->get()) {
@@ -52,7 +55,7 @@ class ProcessResourceImportJob implements ShouldQueue
 
         $nextOffset = null;
         try {
-            $nextOffset = $this->process($storage, $authorization, $entitlements);
+            $nextOffset = $this->process($storage, $authorization, $entitlements, $operationalScope);
         } finally {
             $lock->release();
         }
@@ -87,6 +90,7 @@ class ProcessResourceImportJob implements ShouldQueue
         OperationStorage $storage,
         ResourceAuthorization $authorization,
         EntitlementService $entitlements,
+        OperationalScope $operationalScope,
     ): ?int {
         $job = DB::table('operation_jobs')->where('id', $this->jobId)->first();
         if (! $job || in_array($job->status, ['completed', 'cancelled', 'expired'], true)) {
@@ -103,13 +107,23 @@ class ProcessResourceImportJob implements ShouldQueue
         ) {
             throw new \RuntimeException('Identitas queued import tidak cocok dengan operation job.');
         }
-        $this->assertActorBinding($job, $payload);
+        $actorRole = $this->assertActorBinding($job, $payload);
         $authorization->assertQueuedActor(
             (int) $job->user_id,
             $this->tenantId,
             (string) $job->resource,
             'write',
             is_array($payload['actor_context'] ?? null) ? $payload['actor_context'] : [],
+        );
+
+        // Resource-level permissions are not sufficient. Roles bound to an
+        // assignment (guru, musyrif) and personal roles must also satisfy the
+        // same row-level scope that the synchronous path enforces on reads.
+        $rowScope = $operationalScope->importRowScope(
+            $this->tenantId,
+            (int) $job->user_id,
+            $actorRole,
+            $this->table,
         );
 
         DB::table('operation_jobs')->where('id', $this->jobId)->update([
@@ -132,7 +146,7 @@ class ProcessResourceImportJob implements ShouldQueue
             }
 
             try {
-                $chunk = $this->readChunk($handle, $schema);
+                $chunk = $this->readChunk($handle, $schema, $rowScope);
             } finally {
                 fclose($handle);
             }
@@ -257,7 +271,7 @@ class ProcessResourceImportJob implements ShouldQueue
         }
     }
 
-    private function readChunk($handle, array $schema): array
+    private function readChunk($handle, array $schema, ImportRowScope $rowScope): array
     {
         $lineNumber = 0;
         $read = 0;
@@ -308,16 +322,31 @@ class ProcessResourceImportJob implements ShouldQueue
                 $data['updated_at'] = now();
             }
 
+            $data = collect($data)->only($schema)->all();
+
+            $deniedReason = $rowScope->deniedReason($data);
+            if ($deniedReason !== null) {
+                $skipped++;
+                if (count($errors) < 20) {
+                    $errors[] = [
+                        'row' => $this->offset + $read,
+                        'message' => Str::limit('Baris di luar cakupan penugasan actor: '.$deniedReason, 1000),
+                    ];
+                }
+
+                continue;
+            }
+
             $rows[] = [
                 'row' => $this->offset + $read,
-                'data' => collect($data)->only($schema)->all(),
+                'data' => $data,
             ];
         }
 
         return compact('read', 'skipped', 'errors', 'rows');
     }
 
-    private function assertActorBinding(object $job, array $payload): void
+    private function assertActorBinding(object $job, array $payload): string
     {
         $actorContext = $payload['actor_context'] ?? null;
         if (
@@ -348,7 +377,7 @@ class ProcessResourceImportJob implements ShouldQueue
                 throw new \RuntimeException('Role platform actor queued import sudah dicabut.');
             }
 
-            return;
+            return 'super_admin';
         }
 
         if (! $this->tenantId) {
@@ -374,5 +403,7 @@ class ProcessResourceImportJob implements ShouldQueue
         ) {
             throw new \RuntimeException('Membership actor queued import sudah tidak aktif.');
         }
+
+        return (string) $membership->role;
     }
 }
