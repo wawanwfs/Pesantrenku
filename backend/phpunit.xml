@@ -21,6 +21,7 @@
         </include>
     </source>
     <php>
+        <ini name="max_execution_time" value="0"/>
         <env name="APP_ENV" value="testing"/>
         <env name="APP_KEY" value="base64:dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHR0dHQ="/>
         <env name="APP_MAINTENANCE_DRIVER" value="file"/>
