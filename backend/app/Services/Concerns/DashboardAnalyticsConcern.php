@@ -95,42 +95,117 @@ trait DashboardAnalyticsConcern
 
     private function financeChart(?Request $request): array
     {
-        return $this->monthBuckets()->map(function (Carbon $month) use ($request) {
-            return [
-                'month' => $this->monthLabel($month),
-                'Pemasukan' => (float) $this->query($request, 'payments')->where('status', 'success')->whereBetween('paid_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->sum('amount'),
-                'Pengeluaran' => (float) $this->query($request, 'expenses')->whereBetween('date', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->sum('amount'),
-            ];
-        })->all();
+        $buckets = $this->monthBuckets();
+        $start   = $buckets->first()->copy()->startOfMonth();
+        $end     = $buckets->last()->copy()->endOfMonth();
+
+        // 1 query: sum payments per month
+        $payments = $this->query($request, 'payments')
+            ->where('status', 'success')
+            ->whereNotNull('paid_at')
+            ->whereBetween('paid_at', [$start, $end])
+            ->selectRaw('YEAR(paid_at) as yr, MONTH(paid_at) as mo, SUM(amount) as total')
+            ->groupByRaw('YEAR(paid_at), MONTH(paid_at)')
+            ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
+
+        // 1 query: sum expenses per month
+        $expenses = $this->query($request, 'expenses')
+            ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
+            ->selectRaw('YEAR(date) as yr, MONTH(date) as mo, SUM(amount) as total')
+            ->groupByRaw('YEAR(date), MONTH(date)')
+            ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
+
+        return $buckets->map(fn (Carbon $month) => [
+            'month'       => $this->monthLabel($month),
+            'Pemasukan'   => (float) ($payments->get("{$month->year}-{$month->month}")?->total ?? 0),
+            'Pengeluaran' => (float) ($expenses->get("{$month->year}-{$month->month}")?->total ?? 0),
+        ])->all();
     }
 
     private function platformChart(): array
     {
-        return $this->monthBuckets()->map(fn (Carbon $month) => [
-            'month' => $this->monthLabel($month),
-            'Pengguna Baru' => $this->query(null, 'users')->whereBetween('created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->count(),
-            'Transaksi' => $this->query(null, 'payments')->where('status', 'success')->whereBetween('paid_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->count(),
+        $buckets = $this->monthBuckets();
+        $start   = $buckets->first()->copy()->startOfMonth();
+        $end     = $buckets->last()->copy()->endOfMonth();
+
+        // 1 query: new users per month
+        $users = $this->query(null, 'users')
+            ->whereBetween('created_at', [$start, $end])
+            ->selectRaw('YEAR(created_at) as yr, MONTH(created_at) as mo, COUNT(*) as cnt')
+            ->groupByRaw('YEAR(created_at), MONTH(created_at)')
+            ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
+
+        // 1 query: successful payment count per month
+        $payments = $this->query(null, 'payments')
+            ->where('status', 'success')
+            ->whereNotNull('paid_at')
+            ->whereBetween('paid_at', [$start, $end])
+            ->selectRaw('YEAR(paid_at) as yr, MONTH(paid_at) as mo, COUNT(*) as cnt')
+            ->groupByRaw('YEAR(paid_at), MONTH(paid_at)')
+            ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
+
+        return $buckets->map(fn (Carbon $month) => [
+            'month'         => $this->monthLabel($month),
+            'Pengguna Baru' => (int) ($users->get("{$month->year}-{$month->month}")?->cnt ?? 0),
+            'Transaksi'     => (int) ($payments->get("{$month->year}-{$month->month}")?->cnt ?? 0),
         ])->all();
     }
 
     private function tenantActivityChart(?Request $request): array
     {
-        return $this->monthBuckets()->map(fn (Carbon $month) => [
-            'month' => $this->monthLabel($month),
-            'Santri Baru' => $this->query($request, 'students')->whereBetween('created_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->count(),
-            'Transaksi' => $this->query($request, 'payments')->where('status', 'success')->whereBetween('paid_at', [$month->copy()->startOfMonth(), $month->copy()->endOfMonth()])->count(),
+        $buckets = $this->monthBuckets();
+        $start   = $buckets->first()->copy()->startOfMonth();
+        $end     = $buckets->last()->copy()->endOfMonth();
+
+        // 1 query: new students per month
+        $students = $this->query($request, 'students')
+            ->whereBetween('created_at', [$start, $end])
+            ->selectRaw('YEAR(created_at) as yr, MONTH(created_at) as mo, COUNT(*) as cnt')
+            ->groupByRaw('YEAR(created_at), MONTH(created_at)')
+            ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
+
+        // 1 query: successful payment count per month
+        $payments = $this->query($request, 'payments')
+            ->where('status', 'success')
+            ->whereNotNull('paid_at')
+            ->whereBetween('paid_at', [$start, $end])
+            ->selectRaw('YEAR(paid_at) as yr, MONTH(paid_at) as mo, COUNT(*) as cnt')
+            ->groupByRaw('YEAR(paid_at), MONTH(paid_at)')
+            ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
+
+        return $buckets->map(fn (Carbon $month) => [
+            'month'       => $this->monthLabel($month),
+            'Santri Baru' => (int) ($students->get("{$month->year}-{$month->month}")?->cnt ?? 0),
+            'Transaksi'   => (int) ($payments->get("{$month->year}-{$month->month}")?->cnt ?? 0),
         ])->all();
     }
 
     private function studentTrend(?Request $request): array
     {
-        return $this->monthBuckets()->map(function (Carbon $month) use ($request) {
-            $end = $month->copy()->endOfMonth();
+        $buckets = $this->monthBuckets();
+        $start   = $buckets->first()->copy()->startOfMonth();
+        $end     = $buckets->last()->copy()->endOfMonth();
+
+        // 1 query: new students per month
+        $newByMonth = $this->query($request, 'students')
+            ->whereBetween('created_at', [$start, $end])
+            ->selectRaw('YEAR(created_at) as yr, MONTH(created_at) as mo, COUNT(*) as cnt')
+            ->groupByRaw('YEAR(created_at), MONTH(created_at)')
+            ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
+
+        // 1 query: all active student created_at values for cumulative count in PHP
+        $activeDates = $this->query($request, 'students')
+            ->where('status', 'active')
+            ->where('created_at', '<=', $end)
+            ->pluck('created_at');
+
+        return $buckets->map(function (Carbon $month) use ($newByMonth, $activeDates) {
+            $monthEnd = $month->copy()->endOfMonth()->toDateTimeString();
 
             return [
-                'month' => $this->monthLabel($month),
-                'Santri Baru' => $this->query($request, 'students')->whereBetween('created_at', [$month->copy()->startOfMonth(), $end])->count(),
-                'Total Aktif' => $this->query($request, 'students')->where('status', 'active')->where('created_at', '<=', $end)->count(),
+                'month'       => $this->monthLabel($month),
+                'Santri Baru' => (int) ($newByMonth->get("{$month->year}-{$month->month}")?->cnt ?? 0),
+                'Total Aktif' => $activeDates->filter(fn ($d) => $d <= $monthEnd)->count(),
             ];
         })->all();
     }

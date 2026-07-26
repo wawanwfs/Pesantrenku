@@ -39,7 +39,7 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
 
   return (
     <div className="app-shell min-h-screen overflow-x-hidden text-neutral-900 selection:bg-primary-100 selection:text-primary-900">
-      <aside className={`app-sidebar ${collapsed ? 'w-20' : 'w-72'} fixed inset-y-0 left-0 z-20 hidden border-r transition-[width] duration-300 lg:block ${config.light ? 'app-sidebar-light border-neutral-200 bg-white text-neutral-900' : 'app-sidebar-dark border-white/10 text-white'}`}>
+      <aside className={`app-sidebar ${collapsed ? 'w-20' : 'w-72'} fixed inset-y-0 left-0 z-30 hidden border-r transition-[width] duration-300 lg:block ${config.light ? 'app-sidebar-light border-neutral-200 bg-white text-neutral-900' : 'app-sidebar-dark border-white/10 text-white'}`}>
         <div className="relative flex h-full flex-col p-3.5">
           <div className="flex items-center gap-3 px-2 py-2">
             <Logo />

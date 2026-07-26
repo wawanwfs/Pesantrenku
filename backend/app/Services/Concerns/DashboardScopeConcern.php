@@ -4,6 +4,7 @@ namespace App\Services\Concerns;
 
 use App\Support\ResourceCatalog;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
@@ -291,14 +292,22 @@ trait DashboardScopeConcern
 
     private function hasColumn(string $table, string $column): bool
     {
-        $this->schemaColumns[$table] ??= Schema::getColumnListing($table);
+        $this->schemaColumns[$table] ??= Cache::remember(
+            "pesantenku.schema.columns.{$table}",
+            now()->addHours(24),
+            fn () => Schema::getColumnListing($table)
+        );
 
         return in_array($column, $this->schemaColumns[$table], true);
     }
 
     private function hasTable(string $table): bool
     {
-        return $this->schemaTables[$table] ??= Schema::hasTable($table);
+        return $this->schemaTables[$table] ??= Cache::remember(
+            "pesantenku.schema.tables.{$table}",
+            now()->addHours(24),
+            fn () => Schema::hasTable($table)
+        );
     }
 
     private function requestMemo(Request $request, string $key, callable $resolver): mixed
