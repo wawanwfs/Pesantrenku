@@ -1,0 +1,124 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-27T03:40:00+07:00",
+  "project": "Pesantrenku",
+  "memory_type": "total_system_audit_and_ui_motion_remediation",
+  "candidate": "RC8-ui-motion",
+  "audit_method": {
+    "mode": "static repository audit melalui GitHub API",
+    "executed_gates": "tidak ada",
+    "limitation": "Audit ini membaca kode, konfigurasi, dokumentasi, dan memory sebelumnya. Tidak ada perintah build, test, lint, container, atau browser yang dijalankan pada sesi ini. Semua klaim runtime harus dibuktikan ulang secara lokal atau di CI."
+  },
+  "baseline": {
+    "audited_commit": "639923200a958b127f787bd739dd7e62f87a23b0",
+    "previous_memory": [
+      "memory/2026-07-27-total-system-audit-rc7.json",
+      "memory/2026-07-27-audit-remediation-handoff.md",
+      "memory/2026-07-27-rc6-hardening-handoff.json",
+      "memory/2026-07-12-system-audit.json"
+    ],
+    "history_policy": "Memory RC6/RC7 tetap dipertahankan. File ini hanya menambah status RC8 dan tidak menghapus temuan lama."
+  },
+  "repository_inventory": {
+    "backend": "Laravel + Inertia React 19, Vite 8, Tailwind 4, Playwright, quality gate script (csp, openapi, parity, hardening, performance budget)",
+    "frontend_entry": [
+      "backend/resources/css/app.css",
+      "backend/resources/js/app.jsx"
+    ],
+    "frontend_pages": [
+      "backend/resources/js/Pages/Landing.jsx (32 KB, Three.js progresif + fallback WebGL)",
+      "backend/resources/js/Pages/App.jsx (101 KB, seluruh workspace/CRUD dalam satu file)",
+      "backend/resources/js/Pages/Login.jsx (18 KB)"
+    ],
+    "mobile": "Flutter multi-role",
+    "ops": "docker-compose (dev, production, integration, observability, recovery, local-domain), deploy/, load-tests/, docs/"
+  },
+  "release_decision": {
+    "status": "NO-GO production",
+    "reason": "Tujuh temuan RC7 masih terbuka dan seluruh gate runtime (PHPUnit, Vite build, Playwright, performance budget, Docker/MySQL, Kubernetes canary, Flutter) belum dijalankan ulang terhadap commit ini.",
+    "promotion_rule": "Status hanya boleh naik setelah temuan terbuka ditutup dan seluruh gate lulus terhadap commit serta image digest yang sama."
+  },
+  "carried_over_open_findings": [
+    { "id": "H-REMAIN-01", "severity": "high", "title": "Queued import belum mengulang row-level operational scope", "status": "open" },
+    { "id": "H-REMAIN-02", "severity": "high", "title": "Provisioning plan/subscription production belum menjadi workflow resmi dan teraudit", "status": "open" },
+    { "id": "MH-REMAIN-03", "severity": "medium-high", "title": "Queued export membekukan scope hasil query awal", "status": "open" },
+    { "id": "M-REMAIN-04", "severity": "medium", "title": "Canary belum membuktikan worker panjang, scheduler, dan Reverb", "status": "open" },
+    { "id": "M-REMAIN-05", "severity": "medium", "title": "MFA privileged custom role saat disable belum konsisten", "status": "open" },
+    { "id": "M-REMAIN-06", "severity": "medium", "title": "Timeline historis dapat membuka before/after pemilik sebelumnya", "status": "open" },
+    { "id": "M-REMAIN-07", "severity": "medium", "title": "Android dependency supply chain belum memiliki SBOM/attestation", "status": "open" }
+  ],
+  "new_findings": [
+    {
+      "id": "UX-01",
+      "severity": "medium",
+      "area": "web UI",
+      "title": "App shell hampir tanpa umpan balik gerak",
+      "detail": "app.css hanya memiliki transisi pada .icon-button dan progress bar. Panel, kartu statistik, tabel, sidebar, dialog, dan tombol tidak memiliki transisi/animasi, sehingga perubahan state terasa datar dan hierarki interaksi kurang terbaca.",
+      "status": "fixed_in_rc8",
+      "remediation": "Menambahkan lapisan motion terpusat backend/resources/css/motion.css yang diimpor app.css: reveal saat konten masuk, hover lift pada panel/kartu, penekanan tombol, animasi dialog dan menu mengambang, skeleton shimmer, dan spinner tanpa dependensi baru."
+    },
+    {
+      "id": "UX-02",
+      "severity": "medium",
+      "area": "web UI",
+      "title": "Tidak ada strategi scroll reveal yang aman",
+      "detail": "Landing hanya memakai .landing-reveal statis, dan dashboard tidak memiliki reveal sama sekali. Menambah observer JS akan menambah bundle dan risiko CSP.",
+      "status": "fixed_in_rc8",
+      "remediation": "Reveal memakai animation-timeline: view() di dalam @supports, dengan fallback animasi sekali jalan dan base state tetap terlihat, sehingga tidak ada konten yang bisa terjebak invisible."
+    },
+    {
+      "id": "UX-03",
+      "severity": "low",
+      "area": "web UI",
+      "title": "Aturan .app-shell { min-width: 0 } terduplikasi di app.css",
+      "detail": "Dua blok .app-shell berurutan menyimpan properti yang bisa digabung.",
+      "status": "fixed_in_rc8",
+      "remediation": "Blok digabung tanpa mengubah hasil komputasi."
+    },
+    {
+      "id": "UX-04",
+      "severity": "low",
+      "area": "accessibility",
+      "title": "prefers-reduced-motion hanya menyasar .app-shell",
+      "detail": "Landing page (.landing-shell) memiliki marquee, scan line, dan orbit tetapi tidak tercakup aturan reduced motion global di app.css.",
+      "status": "fixed_in_rc8",
+      "remediation": "motion.css menonaktifkan animasi/transisi untuk .app-shell, .landing-shell, dan seluruh utilitas pk-* pada prefers-reduced-motion: reduce."
+    },
+    {
+      "id": "MAINT-01",
+      "severity": "medium",
+      "area": "frontend maintainability",
+      "title": "Pages/App.jsx berukuran ~101 KB dalam satu file",
+      "detail": "Seluruh workspace, CRUD, dialog, dan panel berada dalam satu modul. Ini menyulitkan review, code splitting per rute, dan pengujian unit UI.",
+      "status": "open",
+      "next_action": "Pecah bertahap menjadi modul per domain (workspace shell, tabel, dialog, panel) dengan lazy import agar bundle awal turun dan review lebih aman."
+    },
+    {
+      "id": "MAINT-02",
+      "severity": "low",
+      "area": "quality gates",
+      "title": "Tidak ada gate yang memverifikasi kebijakan reduced motion dan budget CSS motion",
+      "detail": "CSP dan performance budget sudah ada, tetapi tidak ada pemeriksaan bahwa animasi baru menghormati prefers-reduced-motion.",
+      "status": "open",
+      "next_action": "Tambahkan assertion Playwright pada emulasi reduced motion untuk memastikan elemen kunci tidak beranimasi dan tetap terlihat."
+    }
+  ],
+  "changes_in_rc8": [
+    "backend/resources/css/motion.css: lapisan motion baru (keyframes, reveal, hover, press, dialog, skeleton, spinner, kebijakan reduced motion).",
+    "backend/resources/css/app.css: mengimpor motion.css dan menggabungkan blok .app-shell duplikat.",
+    "memory/2026-07-27-total-system-audit-rc8.json dan memory/2026-07-27-ui-motion-handoff.md: catatan audit dan handoff."
+  ],
+  "required_local_gates_before_merge": [
+    "cd backend && npm run build",
+    "cd backend && npm run check:performance-budget",
+    "cd backend && npm run lint:csp",
+    "cd backend && php artisan test",
+    "cd backend && npm run test:e2e",
+    "cd backend && npm run audit:ui"
+  ],
+  "not_run": [
+    "Vite build dan performance budget: tidak dieksekusi pada sesi ini.",
+    "PHPUnit, Playwright, visual audit: tidak dieksekusi pada sesi ini.",
+    "Docker Compose, MySQL 8.4, Kubernetes canary, PITR, Flutter analyze/test: memerlukan CI/staging."
+  ]
+}
