@@ -1,0 +1,151 @@
+name: Android Supply Chain
+
+# The container image published by release.yml already carries a cosign-signed
+# SBOM and SLSA provenance. The signed Android App Bundle did not, so a store
+# artifact could not be traced back to a specific commit and dependency set.
+#
+# This workflow builds the release bundle with the same signing inputs as
+# release.yml, then produces:
+#   - an SPDX SBOM of the mobile dependency tree,
+#   - a GitHub build-provenance attestation bound to the bundle digest,
+#   - an SBOM attestation bound to that same digest.
+#
+# Attestations require a public repository or a plan that includes private
+# attestations. Verify a downloaded bundle with:
+#   gh attestation verify app-release.aab --repo wawanwfs/Pesantrenku
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+concurrency:
+  group: pesantenku-android-supply-chain-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  android-artifact-attestation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Required to mint the Sigstore signing certificate and to record the
+      # attestations against this repository.
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+
+      - name: Resolve locked dependencies
+        working-directory: mobile
+        run: |
+          flutter pub get --enforce-lockfile
+          git diff --exit-code -- pubspec.lock
+
+      - name: Validate Android release inputs
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          case "$MOBILE_API_BASE_URL" in
+            https://*) ;;
+            *) echo "MOBILE_API_BASE_URL must use HTTPS" >&2; exit 1 ;;
+          esac
+
+      - name: Configure Android release signing
+        working-directory: mobile
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          KEYSTORE_PATH="$RUNNER_TEMP/pesantenku-upload.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=$KEYSTORE_PATH
+          EOF
+          chmod 600 android/key.properties
+
+      - name: Build signed Android App Bundle
+        working-directory: mobile
+        env:
+          MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL }}
+        run: flutter build appbundle --release --dart-define=API_BASE_URL="$MOBILE_API_BASE_URL"
+
+      - name: Verify bundle signature and record digest
+        id: artifact
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          BUNDLE=build/app/outputs/bundle/release/app-release.aab
+          jarsigner -verify -strict -verbose "$BUNDLE" > "$BUNDLE.signature.txt"
+          sha256sum "$BUNDLE" > "$BUNDLE.sha256"
+          digest=$(cut -d' ' -f1 < "$BUNDLE.sha256")
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      # Paths below are workspace-relative: these steps are JavaScript actions
+      # and do not inherit a shell working directory.
+      - name: Generate SBOM for the mobile dependency tree
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          path: mobile
+          format: spdx-json
+          output-file: pesantenku-android-sbom.spdx.json
+          upload-artifact: false
+
+      - name: Attest build provenance of the bundle
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: mobile/build/app/outputs/bundle/release/app-release.aab
+
+      - name: Attest the SBOM against the bundle
+        uses: actions/attest-sbom@4651f806c01d8637787e274ac3bdf724ef169f34 # v3
+        with:
+          subject-path: mobile/build/app/outputs/bundle/release/app-release.aab
+          sbom-path: pesantenku-android-sbom.spdx.json
+
+      - name: Publish bundle evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pesantenku-android-supply-chain-${{ github.ref_name }}
+          path: |
+            pesantenku-android-sbom.spdx.json
+            mobile/build/app/outputs/bundle/release/app-release.aab.sha256
+            mobile/build/app/outputs/bundle/release/app-release.aab.signature.txt
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Summarize
+        env:
+          BUNDLE_DIGEST: ${{ steps.artifact.outputs.digest }}
+        run: |
+          {
+            echo '### Android supply chain'
+            echo
+            echo "Bundle sha256: \`$BUNDLE_DIGEST\`"
+            echo
+            echo 'Verify a downloaded bundle:'
+            echo
+            echo '```'
+            echo "gh attestation verify app-release.aab --repo $GITHUB_REPOSITORY"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
