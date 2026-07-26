@@ -112,9 +112,16 @@ class BuildResourceExportJob implements ShouldQueue
                 throw new \RuntimeException("Tabel export {$this->table} tidak memiliki primary key id.");
             }
 
+            // The row-level scope is resolved once and frozen for the whole
+            // export so every page describes the same result set. It is then
+            // re-resolved per page; a shrinking or shifting assignment must stop
+            // the export instead of streaming rows from a stale scope.
+            $actorScope = $this->resolveActorScope($job, $payload);
+            $scopeFingerprint = $this->scopeFingerprint($actorScope);
+
             $query = DB::table($this->table);
             $this->applyTenantScope($query);
-            $this->applyActorScope($query, $job, $payload);
+            $this->applyResolvedScope($query, $actorScope);
             $this->applyFilters($query, $filters);
             if (Schema::hasColumn($this->table, 'deleted_at')) {
                 $query->whereNull("{$this->table}.deleted_at");
@@ -147,6 +154,9 @@ class BuildResourceExportJob implements ShouldQueue
                     'read',
                     is_array($payload['actor_context'] ?? null) ? $payload['actor_context'] : [],
                 );
+                if ($this->scopeFingerprint($this->resolveActorScope($job, $payload)) !== $scopeFingerprint) {
+                    throw new \RuntimeException('Cakupan baris actor queued export berubah saat proses berjalan. Export dihentikan agar tidak mengeluarkan baris di luar cakupan terbaru.');
+                }
                 $pageSize = min(500, $total - $processed);
                 $rows = (clone $query)
                     ->where("{$this->table}.id", '>', $lastId)
@@ -268,14 +278,33 @@ class BuildResourceExportJob implements ShouldQueue
         }
     }
 
-    private function applyActorScope($query, object $job, array $payload): void
+    /**
+     * Read the actor's current row-level scope from the database.
+     *
+     * The returned snapshot is deterministic (all id lists sorted) so it can be
+     * fingerprinted and compared between pages.
+     *
+     * @return array<string, mixed>
+     */
+    private function resolveActorScope(object $job, array $payload): array
     {
+        $empty = [
+            'role' => null,
+            'user_id' => 0,
+            'teacher_ids' => [],
+            'teacher_names' => [],
+            'class_ids' => [],
+            'subject_ids' => [],
+            'student_ids' => [],
+            'room_ids' => [],
+        ];
+
         if (! $job->user_id) {
             if ($this->tenantId || ! in_array($this->table, self::GLOBAL_TABLES, true)) {
                 throw new \RuntimeException('Queued export tenant tidak memiliki actor yang dapat diverifikasi.');
             }
 
-            return;
+            return $empty;
         }
 
         $actorContext = $payload['actor_context'] ?? null;
@@ -296,17 +325,19 @@ class BuildResourceExportJob implements ShouldQueue
             throw new \RuntimeException('Actor queued export sudah tidak aktif.');
         }
 
+        $userId = (int) $job->user_id;
+
         if (($actorContext['role'] ?? null) === 'super_admin') {
             $isSuperAdmin = DB::table('role_user')
                 ->join('roles', 'role_user.role_id', '=', 'roles.id')
-                ->where('role_user.user_id', $job->user_id)
+                ->where('role_user.user_id', $userId)
                 ->where('roles.name', 'super_admin')
                 ->exists();
             if (! $isSuperAdmin) {
                 throw new \RuntimeException('Role platform actor queued export sudah dicabut.');
             }
 
-            return;
+            return array_merge($empty, ['role' => 'super_admin', 'user_id' => $userId]);
         }
 
         if (! $this->tenantId) {
@@ -317,7 +348,7 @@ class BuildResourceExportJob implements ShouldQueue
             ->join('roles', 'pesantren_user.role_id', '=', 'roles.id')
             ->join('pesantrens', 'pesantren_user.pesantren_id', '=', 'pesantrens.id')
             ->where('pesantren_user.id', (int) ($actorContext['membership_id'] ?? 0))
-            ->where('pesantren_user.user_id', $job->user_id)
+            ->where('pesantren_user.user_id', $userId)
             ->where('pesantren_user.pesantren_id', $this->tenantId)
             ->where('pesantren_user.status', 'active')
             ->where('pesantrens.status', 'active')
@@ -332,27 +363,83 @@ class BuildResourceExportJob implements ShouldQueue
         ) {
             throw new \RuntimeException('Membership actor queued export sudah tidak aktif.');
         }
+
         $role = (string) $membership->role;
+        $scope = array_merge($empty, ['role' => $role, 'user_id' => $userId]);
+
+        if (in_array($role, ['santri', 'wali_murid'], true)) {
+            $scope['student_ids'] = $this->familyStudentIds($role, $userId);
+            $scope['class_ids'] = DB::table('students')
+                ->whereIn('id', $scope['student_ids'] ?: [0])
+                ->pluck('class_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+        } elseif ($role === 'guru') {
+            $scope = array_merge($scope, $this->teacherScope($userId));
+        } elseif ($role === 'musyrif') {
+            $scope = array_merge($scope, $this->dormScope($userId));
+        }
+
+        foreach (['teacher_ids', 'teacher_names', 'class_ids', 'subject_ids', 'student_ids', 'room_ids'] as $key) {
+            $values = array_values(array_unique($scope[$key]));
+            sort($values);
+            $scope[$key] = $values;
+        }
+
+        return $scope;
+    }
+
+    /**
+     * @param  array<string, mixed>  $scope
+     */
+    private function scopeFingerprint(array $scope): string
+    {
+        return hash('sha256', json_encode($scope, JSON_THROW_ON_ERROR));
+    }
+
+    /**
+     * @param  array<string, mixed>  $scope
+     */
+    private function applyResolvedScope($query, array $scope): void
+    {
+        $role = $scope['role'] ?? null;
+        if ($role === null || $role === 'super_admin') {
+            return;
+        }
 
         if ($this->table === 'notification_logs' && $role !== 'owner_pesantren') {
-            $query->where(function ($notifications) use ($job) {
+            $userId = (int) $scope['user_id'];
+            $query->where(function ($notifications) use ($userId) {
                 $notifications->whereNull('notification_logs.user_id')
-                    ->orWhere('notification_logs.user_id', $job->user_id);
+                    ->orWhere('notification_logs.user_id', $userId);
             });
         }
 
         if (in_array($role, ['santri', 'wali_murid'], true)) {
-            $this->applyStudentFamilyScope($query, $role, (int) $job->user_id);
-        } elseif ($role === 'guru') {
-            $this->applyTeacherScope($query, (int) $job->user_id);
-        } elseif ($role === 'musyrif') {
-            $this->applyDormScope($query, (int) $job->user_id);
+            $this->applyStudentFamilyScope($query, $scope['student_ids'], $scope['class_ids']);
+
+            return;
+        }
+
+        if ($role === 'guru') {
+            $this->applyTeacherScope($query, $scope);
+
+            return;
+        }
+
+        if ($role === 'musyrif') {
+            $this->applyDormScope($query, $scope);
         }
     }
 
-    private function applyStudentFamilyScope($query, string $role, int $userId): void
+    /**
+     * @return array<int, int>
+     */
+    private function familyStudentIds(string $role, int $userId): array
     {
-        $studentIds = $role === 'santri'
+        return $role === 'santri'
             ? DB::table('students')
                 ->where('pesantren_id', $this->tenantId)
                 ->where('user_id', $userId)
@@ -368,7 +455,87 @@ class BuildResourceExportJob implements ShouldQueue
                 ->whereNull('guardians.deleted_at')
                 ->pluck('students.id')
                 ->all();
+    }
 
+    /**
+     * @return array{teacher_ids: array<int, int>, teacher_names: array<int, string>, class_ids: array<int, int>, subject_ids: array<int, int>, student_ids: array<int, int>}
+     */
+    private function teacherScope(int $userId): array
+    {
+        $teachers = DB::table('teachers')
+            ->where('pesantren_id', $this->tenantId)
+            ->where('user_id', $userId)
+            ->whereNull('deleted_at')
+            ->get();
+        $teacherIds = $teachers->pluck('id')->all();
+        $teacherNames = $teachers->pluck('name')->filter()->values()->all();
+
+        $assignments = DB::table('teacher_assignments')
+            ->where('pesantren_id', $this->tenantId)
+            ->where('status', 'active')
+            ->whereIn('teacher_id', $teacherIds ?: [0])
+            ->where(fn ($query) => $query->whereNull('assigned_at')->orWhere('assigned_at', '<=', today()))
+            ->where(fn ($query) => $query->whereNull('ended_at')->orWhere('ended_at', '>=', today()))
+            ->get();
+        $classIds = $assignments->pluck('class_id')->filter()->unique()->values()->all();
+        $subjectIds = $assignments->pluck('subject_id')->filter()->unique()->values()->all();
+
+        $studentIds = DB::table('students')
+            ->where('pesantren_id', $this->tenantId)
+            ->whereIn('class_id', $classIds ?: [0])
+            ->whereNull('deleted_at')
+            ->pluck('id')
+            ->all();
+
+        return [
+            'teacher_ids' => $teacherIds,
+            'teacher_names' => $teacherNames,
+            'class_ids' => $classIds,
+            'subject_ids' => $subjectIds,
+            'student_ids' => $studentIds,
+        ];
+    }
+
+    /**
+     * @return array{room_ids: array<int, int>, student_ids: array<int, int>}
+     */
+    private function dormScope(int $userId): array
+    {
+        $roomIds = DB::table('musyrif_room_assignments')
+            ->where('pesantren_id', $this->tenantId)
+            ->where('user_id', $userId)
+            ->where('status', 'active')
+            ->where(fn ($query) => $query->whereNull('assigned_at')->orWhere('assigned_at', '<=', today()))
+            ->where(fn ($query) => $query->whereNull('ended_at')->orWhere('ended_at', '>=', today()))
+            ->pluck('room_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $studentIds = DB::table('room_assignments')
+            ->where('pesantren_id', $this->tenantId)
+            ->where('status', 'active')
+            ->whereIn('room_id', $roomIds ?: [0])
+            ->where(fn ($query) => $query->whereNull('assigned_at')->orWhere('assigned_at', '<=', today()))
+            ->where(fn ($query) => $query->whereNull('ended_at')->orWhere('ended_at', '>=', today()))
+            ->pluck('student_id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'room_ids' => $roomIds,
+            'student_ids' => $studentIds,
+        ];
+    }
+
+    /**
+     * @param  array<int, int>  $studentIds
+     * @param  array<int, int>  $classIds
+     */
+    private function applyStudentFamilyScope($query, array $studentIds, array $classIds): void
+    {
         if ($this->table === 'students') {
             $query->whereIn('students.id', $studentIds ?: [0]);
 
@@ -380,7 +547,6 @@ class BuildResourceExportJob implements ShouldQueue
             return;
         }
         if ($this->table === 'schedules') {
-            $classIds = DB::table('students')->whereIn('id', $studentIds ?: [0])->pluck('class_id')->filter()->all();
             $query->whereIn('schedules.class_id', $classIds ?: [0]);
 
             return;
@@ -407,36 +573,16 @@ class BuildResourceExportJob implements ShouldQueue
         }
     }
 
-    private function applyTeacherScope($query, int $userId): void
+    /**
+     * @param  array<string, mixed>  $scope
+     */
+    private function applyTeacherScope($query, array $scope): void
     {
-        $teacherIds = DB::table('teachers')
-            ->where('pesantren_id', $this->tenantId)
-            ->where('user_id', $userId)
-            ->whereNull('deleted_at')
-            ->pluck('id')
-            ->all();
-        $teacherNames = DB::table('teachers')
-            ->where('pesantren_id', $this->tenantId)
-            ->whereIn('id', $teacherIds ?: [0])
-            ->whereNull('deleted_at')
-            ->pluck('name')
-            ->filter()
-            ->all();
-        $assignments = DB::table('teacher_assignments')
-            ->where('pesantren_id', $this->tenantId)
-            ->where('status', 'active')
-            ->whereIn('teacher_id', $teacherIds ?: [0])
-            ->where(fn ($query) => $query->whereNull('assigned_at')->orWhere('assigned_at', '<=', today()))
-            ->where(fn ($query) => $query->whereNull('ended_at')->orWhere('ended_at', '>=', today()))
-            ->get();
-        $classIds = $assignments->pluck('class_id')->filter()->unique()->all();
-        $subjectIds = $assignments->pluck('subject_id')->filter()->unique()->all();
-        $studentIds = DB::table('students')
-            ->where('pesantren_id', $this->tenantId)
-            ->whereIn('class_id', $classIds ?: [0])
-            ->whereNull('deleted_at')
-            ->pluck('id')
-            ->all();
+        $teacherIds = $scope['teacher_ids'];
+        $teacherNames = $scope['teacher_names'];
+        $classIds = $scope['class_ids'];
+        $subjectIds = $scope['subject_ids'];
+        $studentIds = $scope['student_ids'];
 
         if ($this->table === 'teachers') {
             $query->whereIn('teachers.id', $teacherIds ?: [0]);
@@ -461,28 +607,13 @@ class BuildResourceExportJob implements ShouldQueue
         }
     }
 
-    private function applyDormScope($query, int $userId): void
+    /**
+     * @param  array<string, mixed>  $scope
+     */
+    private function applyDormScope($query, array $scope): void
     {
-        $roomIds = DB::table('musyrif_room_assignments')
-            ->where('pesantren_id', $this->tenantId)
-            ->where('user_id', $userId)
-            ->where('status', 'active')
-            ->where(fn ($query) => $query->whereNull('assigned_at')->orWhere('assigned_at', '<=', today()))
-            ->where(fn ($query) => $query->whereNull('ended_at')->orWhere('ended_at', '>=', today()))
-            ->pluck('room_id')
-            ->filter()
-            ->unique()
-            ->all();
-        $studentIds = DB::table('room_assignments')
-            ->where('pesantren_id', $this->tenantId)
-            ->where('status', 'active')
-            ->whereIn('room_id', $roomIds ?: [0])
-            ->where(fn ($query) => $query->whereNull('assigned_at')->orWhere('assigned_at', '<=', today()))
-            ->where(fn ($query) => $query->whereNull('ended_at')->orWhere('ended_at', '>=', today()))
-            ->pluck('student_id')
-            ->filter()
-            ->unique()
-            ->all();
+        $roomIds = $scope['room_ids'];
+        $studentIds = $scope['student_ids'];
 
         if ($this->table === 'rooms') {
             $query->whereIn('rooms.id', $roomIds ?: [0]);
