@@ -1,4 +1,5 @@
 @import 'tailwindcss';
+@import './motion.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
@@ -152,15 +153,12 @@ body.app-scroll-locked {
 .app-progress-tone-5::-moz-progress-bar { background: #22C55E; }
 
 .app-shell {
+    min-width: 0;
     background:
         linear-gradient(180deg, rgba(222, 238, 233, 0.64) 0, rgba(246, 248, 250, 0) 15rem),
         linear-gradient(90deg, rgba(15, 118, 110, 0.025) 1px, transparent 1px),
         #F4F7F8;
     background-size: auto, 28px 28px, auto;
-}
-
-.app-shell {
-    min-width: 0;
 }
 
 .app-shell [class*='tracking-'] {
