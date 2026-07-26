@@ -2,18 +2,20 @@
 
 ## Arsitektur Minimum
 
-- Caddy sebagai reverse proxy publik pada port `80/443` dan penerbit sertifikat TLS otomatis.
-- Dua atau lebih instance web Laravel di belakang reverse proxy/load balancer.
+`docker-compose.production.yml` adalah baseline satu-node untuk staging atau deployment awal yang terkendali. Production dengan kebutuhan high availability harus menjalankan image yang sama pada sedikitnya dua instance web dan dua instance Reverb di belakang load balancer/orchestrator eksternal; Compose ini tidak otomatis memberi failover lintas host.
+
+- Caddy atau load balancer terkelola sebagai reverse proxy publik pada port `80/443` dan penerbit sertifikat TLS otomatis.
+- Dua atau lebih instance web Laravel di belakang reverse proxy/load balancer untuk deployment high availability.
 - MySQL 8 dengan binary log `ROW` untuk point-in-time recovery.
 - Redis untuk cache, session, queue, rate limit, dan Reverb scaling.
-- Worker queue terpisah untuk `default`, `imports`, dan `exports`.
+- Worker queue terpisah untuk `default`, `backups-v1`, `imports-v3`, dan `exports-v3`. Suffix versi adalah boundary kompatibilitas payload saat rolling deployment; jangan mengarahkan worker lama ke queue versi baru.
 - Scheduler Laravel, service Reverb, S3-compatible object storage, Prometheus, dan structured log collector.
 
 ## Environment Wajib
 
 Gunakan [`.env.production.example`](../backend/.env.production.example) sebagai baseline. Nilai minimum yang harus disediakan secret manager:
 
-Salin menjadi `backend/.env.production` pada host Compose. `PESANTRENKU_IMAGE` harus menunjuk image immutable yang sudah dipublikasikan ke registry.
+Salin menjadi `backend/.env.production` pada host Compose. `PESANTRENKU_IMAGE` wajib menunjuk image immutable `repository@sha256:digest`; script deployment menolak tag bergerak dan placeholder.
 Token `PESANTRENKU_METRICS_TOKEN` dipasang oleh Compose sebagai secret file khusus Prometheus; tidak memerlukan Docker Swarm.
 
 ```dotenv
@@ -31,8 +33,8 @@ QUEUE_CONNECTION=redis
 
 BROADCAST_CONNECTION=reverb
 REVERB_APP_ID=pesantenku
-REVERB_APP_KEY=change-me
-REVERB_APP_SECRET=change-me
+REVERB_APP_KEY=<random-minimum-16-karakter>
+REVERB_APP_SECRET=<random-minimum-32-karakter>
 REVERB_HOST=ws.pesantrenku.ai
 REVERB_PORT=443
 REVERB_SCHEME=https
@@ -40,9 +42,18 @@ REVERB_SCALING_ENABLED=true
 
 FILESYSTEM_DISK=s3
 PESANTRENKU_OPERATION_DISK=s3
-PESANTRENKU_METRICS_TOKEN=change-me
+PESANTRENKU_METRICS_TOKEN=<secret-random-kuat>
 PESANTRENKU_REQUIRE_IDEMPOTENCY_KEY=true
+AWS_BUCKET=<private-bucket>
+AWS_KMS_BACKUP_KEY_ID=<kms-key-arn>
+MAIL_MAILER=smtp
+MAIL_HOST=<smtp-host>
+MAIL_USERNAME=<smtp-user>
+MAIL_PASSWORD=<random-minimum-12-karakter>
+MAIL_FROM_ADDRESS=noreply@pesantrenku.ai
 ```
+
+Buat `APP_KEY` valid dengan `php artisan key:generate --show`, simpan seluruh secret di secret manager, dan gunakan password database/root/Grafana minimal 16 karakter serta metrics token minimal 32 karakter. Untuk transport non-SMTP, isi variabel sesuai provider dan jangan memakai mailer `log` atau `array`.
 
 Jangan gunakan SQLite, `APP_DEBUG=true`, credential default, atau local operation storage pada deployment multi-server.
 
@@ -87,7 +98,11 @@ Jika memakai Cloudflare, gunakan SSL mode `Full (strict)`, aktifkan WebSocket, d
 composer install --no-dev --prefer-dist --optimize-autoloader
 npm ci
 npm run build
+php artisan pesantenku:production-check --skip-database
+php artisan pesantenku:domain-preflight
 php artisan migrate --force
+php artisan pesantenku:production-check
+php artisan pesantenku:domain-preflight
 php artisan optimize
 php artisan queue:restart
 php artisan reverb:restart
@@ -97,10 +112,13 @@ Frontend memisahkan halaman, grafik, Laravel Echo, dan Pusher ke chunk terpisah.
 
 ## Worker, Scheduler, dan Reverb
 
+Baseline Compose menjalankan `queue-default`, `queue-backup`, `queue-import`, dan `queue-export` sebagai service terpisah. Pemisahan ini mencegah backup/import/export yang berjalan lama saling menahan atau menahan job default yang sensitif terhadap latency. Pada orchestrator lain, pertahankan pemisahan queue dan timeout berikut:
+
 ```bash
+php artisan queue:work redis --queue=backups-v1 --sleep=1 --tries=3 --timeout=900
 php artisan queue:work redis --queue=default --sleep=1 --tries=3 --timeout=120
-php artisan queue:work redis --queue=imports --sleep=1 --tries=3 --timeout=900
-php artisan queue:work redis --queue=exports --sleep=1 --tries=3 --timeout=900
+php artisan queue:work redis --queue=imports-v3 --sleep=1 --tries=3 --timeout=900
+php artisan queue:work redis --queue=exports-v3 --sleep=1 --tries=3 --timeout=900
 php artisan schedule:work
 php artisan reverb:start --host=0.0.0.0 --port=8080
 ```
@@ -108,6 +126,8 @@ php artisan reverb:start --host=0.0.0.0 --port=8080
 Reverb mengirim `notifications.changed` melalui private channel `tenant.{tenantId}.user.{userId}` dan autentikasi `/broadcasting/auth`. Aktifkan `REVERB_SCALING_ENABLED=true` agar beberapa node Reverb berbagi event melalui Redis. Reverse proxy harus meneruskan WebSocket upgrade dan memiliki idle timeout yang memadai.
 
 ## Object Storage
+
+Scheduler menjalankan `pesantenku:recover-operations` setiap 10 menit. Job import/export yang kehilangan heartbeat didispatch ulang secara terbatas dan idempoten; setelah batas recovery tercapai status berubah menjadi `failed`. Backup queued/processing yang melewati batas waktu juga ditandai gagal dan file parsial dihapus.
 
 Semua temporary import, chunk report, export, backup, signed download, cleanup, dan DR report menggunakan `PESANTRENKU_OPERATION_DISK`. Bucket wajib private, versioning dan server-side encryption aktif, serta memiliki lifecycle rule untuk prefix `imports/`, `exports/`, `backups/`, dan `dr-drills/`.
 
@@ -139,7 +159,7 @@ Forward `stderr` ke OpenTelemetry Collector, Loki, OpenSearch, atau provider obs
 
 ## Idempotency
 
-Workflow, pembayaran, dan restore mendukung `Idempotency-Key`. Production mewajibkan key pada operasi kritis dengan `PESANTRENKU_REQUIRE_IDEMPOTENCY_KEY=true`.
+Mutasi resource, workflow, QR, notification read, permission, import, export antrean, queue control, job deletion, backup, dan restore menggunakan `Idempotency-Key`. Production mewajibkan key pada endpoint tersebut dengan `PESANTRENKU_REQUIRE_IDEMPOTENCY_KEY=true`. Scope key mencakup user, tenant, method, route, query, payload, dan fingerprint file.
 
 - Key yang sama dan payload identik mengembalikan response tersimpan dengan `Idempotency-Replayed: true`.
 - Key yang sama dengan payload berbeda ditolak `409`.
@@ -148,7 +168,7 @@ Workflow, pembayaran, dan restore mendukung `Idempotency-Key`. Production mewaji
 
 ## Backup dan Disaster Recovery
 
-- Backup tenant dibuat dan dipulihkan dari UI dengan scope tenant.
+- Backup tenant dibuat dan dipulihkan dari UI dengan scope tenant, KMS envelope encryption, checksum, batas ukuran/baris, dan cleanup atomik metadata/object.
 - Download object storage menggunakan signed URL berumur pendek.
 - Restore membutuhkan konfirmasi `RESTORE`.
 - Jalankan `php artisan pesantenku:dr-drill --backup-id=<id>` untuk memverifikasi checksum, umur backup, tenant scope, object storage, dan kesiapan binary log.
@@ -156,9 +176,15 @@ Workflow, pembayaran, dan restore mendukung `Idempotency-Key`. Production mewaji
 
 ## CI/CD
 
-Workflow [ci.yml](../.github/workflows/ci.yml) menjalankan backend test, frontend build, Composer audit, npm audit, Playwright desktop/mobile, dan deployment smoke test. Set repository variable `DEPLOYMENT_URL` untuk smoke test manual.
+Workflow [ci.yml](../.github/workflows/ci.yml) menjalankan backend test SQLite, integration test MySQL 8.4 termasuk migration/domain preflight, frontend build, validasi kontrak OpenAPI, guard kompatibilitas CSP tanpa inline style, Composer audit, npm audit, Playwright desktop/mobile, Flutter lockfile enforcement/analyze/test/Android compile, dan deployment smoke test. Set repository variable `DEPLOYMENT_URL` untuk smoke test manual.
 
-Pipeline deployment harus memakai immutable image digest, menjalankan migrasi satu kali, me-restart worker dan Reverb, lalu memverifikasi health, metrics, login, workflow idempotent, queue, dan notifikasi realtime.
+Release mobile membutuhkan variable `MOBILE_API_BASE_URL` ber-HTTPS serta secrets `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, dan `ANDROID_KEY_PASSWORD`. Tag release hanya lulus setelah AAB bertanda tangan berhasil dibuat dan diunggah sebagai artifact.
+
+Workflow release hanya menerima tag semantic `vMAJOR.MINOR.PATCH` yang commit-nya dapat dijangkau dari `main`; dispatch manual juga harus menunjuk commit pada `main`. Concurrency release mencegah dua rollout production berjalan bersamaan.
+
+Canary Kubernetes membutuhkan secret `KUBE_CONFIG`, variable `CANARY_HEALTH_HOST` dan `PROMETHEUS_URL`, serta Deployment yang memiliki container `app`, `default-worker`, `backup-worker`, `import-worker`, dan `export-worker` seperti [canary.yaml](../deploy/k8s/canary.yaml). Runner deployment wajib menyediakan `kubectl`, `curl`, PHP CLI, dan `sha256sum`; workflow GitHub menyiapkan kubectl dan PHP secara eksplisit. Kegagalan apa pun setelah image Deployment diperbarui memicu rollback otomatis.
+
+Pipeline deployment harus memakai immutable image digest, menjalankan production readiness dan domain preflight, menjalankan migrasi satu kali, me-restart worker dan Reverb, lalu memverifikasi health, metrics, login, workflow idempotent, queue, dan notifikasi realtime.
 
 ## Rollout dan Rollback
 
@@ -182,3 +208,9 @@ curl -fsS https://api.pesantrenku.ai/up
 curl -fsS https://monitor.pesantrenku.ai/api/health
 curl -fsS -H "Authorization: Bearer $PESANTRENKU_METRICS_TOKEN" https://pesantrenku.ai/metrics
 ```
+
+- Snapshot restore tenant memakai manifest versi 4, memverifikasi checksum per tabel, foreign reference, collision ID lintas tenant, batas ukuran/baris, lalu memulihkan tabel tenant dalam urutan dependency-safe dengan foreign key tetap aktif.
+
+- Aktifkan `PESANTRENKU_ENFORCE_ALLOWED_HOSTS=true` dan isi `PESANTRENKU_ALLOWED_HOSTS` dengan hostname publik, hostname API, dan hostname internal `app` yang dipakai Prometheus.
+
+Endpoint `/health` berfungsi sebagai readiness probe: dependency database, tabel antrean, atau object storage yang gagal akan menghasilkan HTTP 503. Gunakan `/up` hanya sebagai liveness probe proses aplikasi.

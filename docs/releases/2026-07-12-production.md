@@ -1,4 +1,6 @@
-# Pesantrenku Production Release 2026-07-12
+# Pesantrenku Production Release 2026-07-12 (Superseded)
+
+> **Status:** Superseded by the current hardening runbook and `deploy/scripts/production-up.sh`. Do not execute the historical commands below without reconciling them against the current Compose services and required security gates.
 
 ## Artifact
 
@@ -45,7 +47,7 @@ curl -fsS https://api.pesantrenku.ai/up
 curl -fsS https://monitor.pesantrenku.ai/api/health
 docker compose -f docker-compose.production.yml ps
 docker compose -f docker-compose.production.yml exec app php artisan migrate:status
-docker compose -f docker-compose.production.yml exec app php artisan queue:monitor default,imports,exports --max=100
+docker compose -f docker-compose.production.yml exec app php artisan queue:monitor default,backups-v1,imports-v3,exports-v3 --max=100
 ```
 
 Verify WebSocket upgrade against `wss://ws.pesantrenku.ai/app/<REVERB_APP_KEY>` and execute a signed object-storage download plus a tenant backup before accepting production traffic.
@@ -57,8 +59,8 @@ Rollback changes the image digest only. Database migrations must remain backward
 ```bash
 PREVIOUS_IMAGE="wawanwfs/pesantrenku@sha256:<previous-digest>"
 sed -i "s|^PESANTRENKU_IMAGE=.*|PESANTRENKU_IMAGE=${PREVIOUS_IMAGE}|" backend/.env.production
-docker compose --env-file backend/.env.production -f docker-compose.production.yml pull app queue scheduler reverb
-docker compose --env-file backend/.env.production -f docker-compose.production.yml up -d --no-deps app queue scheduler reverb
+docker compose --env-file backend/.env.production -f docker-compose.production.yml pull app queue-default queue-backup queue-import queue-export scheduler reverb
+docker compose --env-file backend/.env.production -f docker-compose.production.yml up -d --no-deps app queue-default queue-backup queue-import queue-export scheduler reverb
 curl -fsS --retry 12 --retry-delay 5 https://pesantrenku.ai/health
 ```
 

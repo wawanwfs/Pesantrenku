@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\DashboardService;
+use App\Services\EntitlementService;
 use App\Services\TenantContext;
 use Illuminate\Http\Request;
 
@@ -11,6 +12,7 @@ class DashboardController extends Controller
     public function __construct(
         private readonly DashboardService $dashboard,
         private readonly TenantContext $tenantContext,
+        private readonly EntitlementService $entitlements,
     ) {}
 
     public function show(Request $request, string $role)
@@ -22,8 +24,10 @@ class DashboardController extends Controller
             'akademik' => 'admin_akademik',
             'tu' => 'admin_tu',
             'wali-murid' => 'wali_murid',
-            default => str_replace('-', '_', $role),
+            'santri', 'guru', 'musyrif', 'klinik' => str_replace('-', '_', $role),
+            default => null,
         };
+        abort_if($required === null, 404);
 
         $user = $request->user()->loadMissing('roles');
 
@@ -33,6 +37,8 @@ class DashboardController extends Controller
             abort_if($user->hasRole('super_admin'), 403);
             $this->tenantContext->activePesantrenId($request, $required);
         }
+
+        $this->entitlements->assertDashboard($request, $role);
 
         return response()->json([
             'data' => $this->dashboard->for($role, $request),

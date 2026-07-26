@@ -2,7 +2,11 @@ import { defineConfig, devices } from '@playwright/test';
 import { resolve } from 'node:path';
 
 const commonEnv = {
-  APP_ENV: 'local',
+  APP_ENV: 'production',
+  APP_DEBUG: 'false',
+  PESANTRENKU_SECURITY_HEADERS: 'true',
+  PESANTRENKU_ENFORCE_ALLOWED_HOSTS: 'true',
+  PESANTRENKU_ALLOWED_HOSTS: '127.0.0.1,localhost',
   CACHE_STORE: 'file',
   SESSION_DRIVER: 'file',
   QUEUE_CONNECTION: 'sync',

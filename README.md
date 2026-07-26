@@ -1,18 +1,16 @@
-# Pesantenku
+# Pesantrenku
 
-Monorepo Pesantenku berisi backend Laravel 13 dan aplikasi mobile Flutter multi-role untuk manajemen pesantren berbasis SaaS: Super Admin platform, Owner Pesantren, Keuangan, Akademik, Tata Usaha, Santri, Wali Murid, Musyrif, Guru, dan Klinik.
+Monorepo Pesantrenku berisi backend Laravel 13, panel web Inertia React, dan aplikasi Flutter multi-role untuk pengelolaan pesantren berbasis SaaS multi-tenant.
 
-## Struktur
+## Komponen
 
-- `backend/` Laravel 13 API + web panel Inertia React.
-- `mobile/` Flutter stable multi-role app.
-- `docs/` dokumentasi arsitektur dan OpenAPI.
-- `docs/production-deployment.md` runbook deployment, queue, Redis, WebSocket, backup, dan rollback.
-- `docker-compose.yml` layanan database, redis, mailhog, dan app PHP.
-- `docker-compose.production.yml` deployment publik melalui Caddy dengan SSL otomatis untuk `pesantrenku.ai` dan subdomain service.
-- `docker-compose.local-domain.yml` development HTTPS tanpa port melalui `pesantrenku.localhost`; lihat `docs/local-domain.md`.
+- `backend/`: API Sanctum, panel web, queue, Reverb, import/export, audit, backup tenant terenkripsi, dan workflow domain.
+- `mobile/`: aplikasi Flutter dengan autentikasi API, secure storage, pemilihan tenant, pembacaan resource sesuai permission, dan pemindai QR kamera.
+- `docs/`: arsitektur, kontrak OpenAPI, deployment production, observability, dan disaster recovery.
+- `docker-compose.yml`: development MySQL, Redis, Reverb, worker, scheduler, dan MailHog.
+- `docker-compose.production.yml`: deployment Caddy/TLS, aplikasi, worker, Reverb, observability, MySQL, dan Redis.
 
-## Menjalankan Backend
+## Development Backend
 
 ```bash
 cd backend
@@ -25,9 +23,9 @@ npm run build
 php artisan serve
 ```
 
-Web panel tersedia di `http://127.0.0.1:8000`.
+Panel web tersedia di `http://127.0.0.1:8000`.
 
-Alternatif Docker (MySQL, Redis, Reverb, queue worker, dan MailHog):
+Dengan Docker:
 
 ```bash
 docker compose build
@@ -35,92 +33,90 @@ docker compose run --rm app php artisan migrate:fresh --seed --force
 docker compose up -d
 ```
 
-Setelah container sehat, panel tersedia di `http://localhost:8000` dan MailHog di `http://localhost:8025`.
+## Development Mobile
 
-Untuk mode development frontend:
-
-```bash
-cd backend
-npm run dev -- --host 127.0.0.1 --port 5173
-```
-
-Catatan: jalankan `php artisan serve --host=127.0.0.1 --port=8000` dan Vite dev server bersamaan saat memakai mode development.
-
-## Menjalankan Mobile
+Android emulator:
 
 ```bash
 cd mobile
 flutter pub get
-flutter run
+flutter run --dart-define=API_BASE_URL=http://10.0.2.2:8000/api/v1
 ```
 
-Android emulator memakai base URL `http://10.0.2.2:8000/api/v1`. Jika menjalankan di device fisik, ubah `baseUrl` di `mobile/lib/core/network/api_client.dart`.
+Device fisik harus memakai alamat backend yang dapat dijangkau device. Build release hanya menerima HTTPS:
 
-Catatan Windows: plugin Flutter seperti `mobile_scanner` memerlukan Developer Mode karena symlink.
+```bash
+flutter build appbundle \
+  --release \
+  --dart-define=API_BASE_URL=https://api.example.id/api/v1
+```
 
-## Akun Demo
+Konfigurasi signing Android dijelaskan di [`mobile/README.md`](mobile/README.md). Token sesi disimpan melalui secure storage; kegagalan autentikasi tidak membuat sesi demo atau fallback offline palsu.
 
-Semua password: `password`.
+## Tenant dan Otorisasi
 
-- `superadmin@pesantenku.test`
-- `owner@pesantenku.test`
-- `keuangan@pesantenku.test`
-- `akademik@pesantenku.test`
-- `tu@pesantenku.test`
-- `santri@pesantenku.test`
-- `wali@pesantenku.test`
-- `guru@pesantenku.test`
-- `musyrif@pesantenku.test`
-- `klinik@pesantenku.test`
+- Role efektif diambil dari membership `pesantren_user` pada tenant aktif, bukan dari role global pengguna.
+- Header `X-Pesantren-Id` memiliki prioritas tertinggi untuk request API dan hanya diterima bila pengguna memiliki membership yang sesuai; super admin dapat memilih tenant secara eksplisit.
+- Custom role hanya dapat mendelegasikan resource tenant yang masuk katalog aman. Resource platform, audit, backup, role, plan, dan workflow khusus tidak dapat dibuka melalui CRUD generik.
+- Workflow permit, payment, dan antrean medis memakai state transition khusus, row lock, audit, dan idempotency.
+- Import/export/backup berjalan di queue berversi untuk rolling deployment; import chunk atomik dan idempoten, export memiliki hard row cap, dan scheduler memulihkan worker yang kehilangan heartbeat secara terbatas.
 
-Seed membuat dua tenant:
-
-- `Pondok Pesantren Darul Hikmah`
-- `Pesantren Al-Falah`
-
-`owner@pesantenku.test` punya akses ke keduanya dan bisa mengganti pesantren aktif dari topbar. Role operasional seperti Keuangan, Akademik, TU, Santri, Wali, Guru, Musyrif, dan Klinik hanya membaca data sesuai membership pesantrennya.
-
-## Endpoint Utama
+## API Utama
 
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/logout`
 - `GET /api/v1/auth/me`
 - `POST /api/v1/tenant/switch`
-- `GET /api/v1/dashboard/super-admin`
-- `GET /api/v1/dashboard/owner`
-- `GET /api/v1/dashboard/keuangan`
-- `GET /api/v1/dashboard/akademik`
-- `GET /api/v1/dashboard/tu`
-- `GET /api/v1/dashboard/santri`
-- `GET /api/v1/dashboard/wali-murid`
-- `GET /api/v1/dashboard/musyrif`
-- `GET /api/v1/dashboard/guru`
-- `GET /api/v1/dashboard/klinik`
+- `GET /api/v1/dashboard/{role}`
+- `POST /api/v1/qr/generate`
+- `POST /api/v1/qr/scan`
+- `POST /api/v1/workflow/{resource}/{id}/{transition}`
+- `GET|POST /api/v1/{resource}` untuk resource yang terdaftar dan diizinkan
 
-CRUD generik tersedia untuk resource utama, misalnya `students`, `classes`, `subjects`, `invoices`, `payments`, `rooms`, `medical-records`, `announcements`, dengan format:
+Kontrak lengkap tersedia di [`docs/openapi.yaml`](docs/openapi.yaml). Mutasi yang ditandai wajib mengirim `Idempotency-Key` berukuran 8–128 karakter pada production.
 
-- `GET /api/v1/{resource}`
-- `POST /api/v1/{resource}`
-- `GET /api/v1/{resource}/{id}`
-- `PUT/PATCH /api/v1/{resource}/{id}`
-- `DELETE /api/v1/{resource}/{id}`
-- `GET /api/v1/{resource}/export`
-- `POST /api/v1/{resource}/import`
+## Data Demo
 
-Untuk API tenant, kirim header `X-Pesantren-Id` jika user punya lebih dari satu membership. Jika header kosong, backend memakai membership aktif/default. User tanpa membership ke tenant tersebut akan menerima `403`.
+Seeder development membuat dua tenant dan akun dengan password `password`. Data tersebut hanya untuk local/test dan tidak boleh dijalankan pada database production.
 
-## Verifikasi
+## Quality Gates
 
 ```bash
 cd backend
 php artisan test
+php artisan pesantenku:domain-preflight
+npm run lint:openapi
+npm run lint:csp
 npm run build
+npm run test:e2e
+composer audit --locked
+npm audit --audit-level=high
 
 cd ../mobile
 flutter analyze
 flutter test
 ```
 
-## Cakupan Saat Ini
+Sebelum deployment, jalankan juga:
 
-Implementasi ini berisi fondasi production-ready: Laravel 13, Sanctum, role-based user, tenant membership `pesantren_user`, migration dan seed data multi-pesantren, dashboard API tenant-scoped, CRUD generik tenant-scoped, audit/notification/backup dummy, web panel Inertia React responsive, Flutter multi-role dengan API login dan fallback offline, OpenAPI, dan test isolasi tenant. Fitur kompleks seperti workflow approval detail, PDF raport penuh, dan scanner kamera real sudah disiapkan struktur dan dependency-nya untuk pengembangan lanjutan.
+```bash
+php artisan pesantenku:production-check
+```
+
+Command tersebut memblokir konfigurasi production yang tidak aman, antara lain debug aktif, storage lokal, queue sinkron, cookie tidak aman, mailer log, origin Reverb wildcard, KMS/bucket kosong, dan idempotency opsional.
+
+## Deployment
+
+Gunakan [`backend/.env.production.example`](backend/.env.production.example) dan image container immutable berbentuk `repository@sha256:digest`.
+
+```bash
+cp backend/.env.production.example backend/.env.production
+# Isi seluruh secret, KMS key, object storage, mail, domain, dan image digest.
+bash deploy/scripts/production-up.sh
+```
+
+Runbook lengkap: [`docs/production-deployment.md`](docs/production-deployment.md). Prosedur restore dan PITR: [`docs/disaster-recovery.md`](docs/disaster-recovery.md).
+
+## Batas Operasional
+
+Backup dari UI adalah snapshot tenant terenkripsi dan dibatasi jumlah baris/ukuran agar tidak menghabiskan memori worker. Full database backup, binary log, point-in-time recovery, rotasi secret, monitoring, dan uji restore berkala tetap merupakan tanggung jawab lapisan infrastruktur.

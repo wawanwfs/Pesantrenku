@@ -4,6 +4,19 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$requiredBuildImages = @('NODE_BASE_IMAGE', 'COMPOSER_BASE_IMAGE', 'RUNTIME_BASE_IMAGE')
+foreach ($name in $requiredBuildImages) {
+    $value = [Environment]::GetEnvironmentVariable($name)
+    if ([string]::IsNullOrWhiteSpace($value) -or $value -notmatch '@sha256:[a-f0-9]{64}$') {
+        throw "$name must be set to an immutable image digest before building."
+    }
+}
+$dockerBuildArgs = @(
+    '--build-arg', "NODE_BASE_IMAGE=$env:NODE_BASE_IMAGE",
+    '--build-arg', "COMPOSER_BASE_IMAGE=$env:COMPOSER_BASE_IMAGE",
+    '--build-arg', "RUNTIME_BASE_IMAGE=$env:RUNTIME_BASE_IMAGE"
+)
+
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $compose = Join-Path $root 'docker-compose.local-domain.yml'
 $image = 'pesantrenku:local-domain'
@@ -15,7 +28,7 @@ $shards = @(
 )
 
 if (-not $SkipBuild) {
-    docker build -t $image (Join-Path $root 'backend')
+    docker build @dockerBuildArgs -t $image (Join-Path $root 'backend')
     if ($LASTEXITCODE -ne 0) {
         throw 'Gagal membangun image E2E Pesantrenku.'
     }

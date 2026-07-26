@@ -1,0 +1,50 @@
+apiVersion: kyverno.io/v1
+kind: ClusterPolicy
+metadata:
+  name: pesantenku-verify-signed-images
+  annotations:
+    policies.kyverno.io/title: Verify Pesantenku Images
+    policies.kyverno.io/category: Supply Chain Security
+spec:
+  validationFailureAction: Enforce
+  webhookTimeoutSeconds: 30
+  failurePolicy: Fail
+  background: true
+  rules:
+    - name: verify-keyless-signature
+      match:
+        any:
+          - resources:
+              kinds: [Pod]
+              namespaces: [__NAMESPACE__]
+      verifyImages:
+        - imageReferences:
+            - '__IMAGE_REPOSITORY__*'
+          required: true
+          verifyDigest: true
+          mutateDigest: false
+          failureAction: Enforce
+          attestors:
+            - entries:
+                - keyless:
+                    subject: '__COSIGN_IDENTITY__'
+                    issuer: '__COSIGN_ISSUER__'
+                    rekor:
+                      url: https://rekor.sigstore.dev
+          attestations:
+            - predicateType: https://slsa.dev/provenance/v0.2
+              attestors:
+                - entries:
+                    - keyless:
+                        subject: '__COSIGN_IDENTITY__'
+                        issuer: '__COSIGN_ISSUER__'
+                        rekor:
+                          url: https://rekor.sigstore.dev
+            - predicateType: https://spdx.dev/Document
+              attestors:
+                - entries:
+                    - keyless:
+                        subject: '__COSIGN_IDENTITY__'
+                        issuer: '__COSIGN_ISSUER__'
+                        rekor:
+                          url: https://rekor.sigstore.dev

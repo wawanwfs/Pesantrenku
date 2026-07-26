@@ -2,21 +2,32 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Controllers\Concerns\CrudAuthorizationConcern;
+use App\Http\Controllers\Concerns\CrudExportConcern;
+use App\Http\Controllers\Concerns\CrudImportConcern;
+use App\Http\Controllers\Concerns\CrudPayloadConcern;
+use App\Http\Controllers\Concerns\CrudPermissionConcern;
 use App\Jobs\BuildResourceExportJob;
 use App\Jobs\ProcessResourceImportJob;
+use App\Services\EntitlementService;
 use App\Services\OperationStorage;
+use App\Services\ResourceAuthorization;
+use App\Services\StepUpMfaService;
 use App\Services\TenantContext;
-use Illuminate\Http\Exceptions\HttpResponseException;
+use App\Services\UserAccessRevoker;
+use App\Support\QueueNames;
+use App\Support\ResourceCatalog;
+use App\Support\SafeSpreadsheet;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class CrudController extends Controller
 {
+    use CrudAuthorizationConcern, CrudExportConcern, CrudImportConcern, CrudPayloadConcern, CrudPermissionConcern;
+
     private const USER_SENSITIVE_COLUMNS = ['password', 'remember_token', 'mfa_secret'];
 
     private const PROTECTED_SETTING_PREFIXES = ['permissions.', 'security.', 'auth.', 'backup-security.'];
@@ -29,59 +40,12 @@ class CrudController extends Controller
 
     public function __construct(
         private readonly TenantContext $tenantContext,
+        private readonly EntitlementService $entitlements,
         private readonly OperationStorage $operationStorage,
+        private readonly ResourceAuthorization $resourceAuthorization,
+        private readonly UserAccessRevoker $accessRevoker,
+        private readonly StepUpMfaService $stepUpMfa,
     ) {}
-
-    private array $allowed = [
-        'users', 'roles', 'pesantrens', 'plans', 'subscriptions', 'tenant-modules', 'memberships',
-        'academic-years', 'classes', 'programs', 'subjects', 'teacher-assignments', 'students', 'guardians',
-        'teachers', 'staff', 'rooms', 'room-assignments', 'musyrif-room-assignments', 'attendances', 'dorm-attendances', 'grades',
-        'report-cards', 'memorization-records', 'schedules', 'assignments', 'materials', 'announcements',
-        'violations', 'permits', 'daily-notes', 'invoices', 'invoice-items', 'payments', 'payment-methods',
-        'bank-accounts', 'expense-categories', 'expenses', 'cashflow-entries', 'discounts', 'letters',
-        'room-mutations', 'alumni', 'clinics', 'doctors', 'medicines', 'medicine-stocks', 'medical-queues',
-        'medical-records', 'medical-examinations', 'prescriptions', 'sick-letters', 'referrals',
-        'notifications', 'audit-logs', 'system-settings', 'backups',
-    ];
-
-    private array $roleResources = [
-        'owner_pesantren' => [
-            'read' => ['pesantrens', 'memberships', 'tenant-modules', 'subscriptions', 'plans', 'audit-logs', 'system-settings', 'academic-years', 'classes', 'programs', 'subjects', 'teacher-assignments', 'students', 'guardians', 'teachers', 'staff', 'rooms', 'room-assignments', 'musyrif-room-assignments', 'attendances', 'dorm-attendances', 'grades', 'report-cards', 'memorization-records', 'schedules', 'assignments', 'materials', 'announcements', 'violations', 'permits', 'daily-notes', 'invoices', 'invoice-items', 'payments', 'payment-methods', 'bank-accounts', 'expense-categories', 'expenses', 'cashflow-entries', 'discounts', 'letters', 'room-mutations', 'alumni', 'clinics', 'doctors', 'medicines', 'medicine-stocks', 'medical-queues', 'medical-records', 'medical-examinations', 'prescriptions', 'sick-letters', 'referrals', 'notifications', 'backups'],
-            'write' => ['pesantrens', 'memberships', 'tenant-modules', 'teacher-assignments', 'musyrif-room-assignments', 'system-settings'],
-        ],
-        'admin_keuangan' => [
-            'read' => ['students', 'guardians', 'programs', 'invoice-items', 'bank-accounts', 'academic-years', 'invoices', 'payments', 'payment-methods', 'discounts', 'cashflow-entries', 'expenses', 'system-settings', 'memberships'],
-            'write' => ['students', 'guardians', 'programs', 'invoice-items', 'bank-accounts', 'academic-years', 'invoices', 'payments', 'payment-methods', 'discounts', 'cashflow-entries', 'expenses', 'system-settings', 'memberships'],
-        ],
-        'admin_akademik' => [
-            'read' => ['academic-years', 'programs', 'subjects', 'classes', 'teachers', 'teacher-assignments', 'schedules', 'attendances', 'grades', 'report-cards', 'students', 'announcements', 'system-settings'],
-            'write' => ['academic-years', 'programs', 'subjects', 'classes', 'teachers', 'teacher-assignments', 'schedules', 'attendances', 'grades', 'report-cards', 'students', 'announcements', 'system-settings'],
-        ],
-        'admin_tu' => [
-            'read' => ['students', 'guardians', 'teachers', 'staff', 'classes', 'rooms', 'room-assignments', 'musyrif-room-assignments', 'programs', 'letters', 'room-mutations', 'alumni', 'announcements', 'system-settings'],
-            'write' => ['students', 'guardians', 'teachers', 'staff', 'classes', 'rooms', 'room-assignments', 'musyrif-room-assignments', 'programs', 'letters', 'room-mutations', 'alumni', 'announcements', 'system-settings'],
-        ],
-        'santri' => [
-            'read' => ['students', 'grades', 'report-cards', 'memorization-records', 'attendances', 'permits', 'violations', 'medical-records', 'invoices', 'payments', 'announcements', 'notifications', 'schedules'],
-            'write' => ['permits', 'payments'],
-        ],
-        'wali_murid' => [
-            'read' => ['students', 'grades', 'report-cards', 'attendances', 'permits', 'violations', 'medical-records', 'invoices', 'payments', 'announcements', 'notifications', 'schedules'],
-            'write' => ['permits', 'payments'],
-        ],
-        'guru' => [
-            'read' => ['students', 'classes', 'subjects', 'teacher-assignments', 'schedules', 'attendances', 'grades', 'assignments', 'materials', 'report-cards', 'daily-notes', 'announcements'],
-            'write' => ['attendances', 'grades', 'assignments', 'materials', 'daily-notes'],
-        ],
-        'musyrif' => [
-            'read' => ['students', 'rooms', 'musyrif-room-assignments', 'dorm-attendances', 'permits', 'violations', 'daily-notes', 'room-mutations', 'schedules', 'announcements'],
-            'write' => ['dorm-attendances', 'permits', 'violations', 'daily-notes', 'room-mutations'],
-        ],
-        'klinik' => [
-            'read' => ['students', 'medical-queues', 'medical-records', 'medical-examinations', 'medicines', 'medicine-stocks', 'prescriptions', 'sick-letters', 'referrals', 'doctors', 'announcements'],
-            'write' => ['medical-queues', 'medical-records', 'medical-examinations', 'medicines', 'medicine-stocks', 'prescriptions', 'sick-letters', 'referrals', 'doctors'],
-        ],
-    ];
 
     public function index(Request $request, string $resource)
     {
@@ -100,32 +64,47 @@ class CrudController extends Controller
     public function store(Request $request, string $resource)
     {
         $this->authorizeResourceAccess($request, $resource, 'write');
+        $this->assertGenericMutationAllowed($resource, 'store');
         $table = $this->table($resource);
+        $this->assertAccessAdministrationStepUp($request, $table);
+        $this->assertPlatformMutationAllowed($request, $table, 'store');
         $data = $this->tenantContext->withTenantPayload($request, $table, $this->payload($request, $table));
+        $this->assertUserTransitionAllowed($request, $table, $data);
+        $this->assertMembershipTransitionAllowed($request, $table, $data);
         $this->assertSystemSettingPayloadAllowed($request, $table, $data);
         $this->assertPersonalPayload($request, $table, $data);
         $this->assertOperationalPayload($request, $table, $data);
 
-        if ($table === 'system_settings') {
-            $existing = $this->scopedQuery($request, $table)
-                ->where("{$table}.key", $data['key'])
-                ->first();
-            if ($existing) {
-                DB::table($table)->where('id', $existing->id)->update($data);
-                $after = DB::table($table)->find($existing->id);
-                $this->audit($request, 'update', $table, $existing->id, $existing, $after);
-                $this->invalidateContextCache($table, $existing, $after);
+        [$row, $status, $before] = DB::transaction(function () use ($request, $resource, $table, $data) {
+            $this->entitlements->assertWriteQuota($request, $resource);
+            $this->assertMembershipTransitionAllowed($request, $table, $data);
+            if ($table === 'system_settings') {
+                $existing = $this->scopedQuery($request, $table)
+                    ->where("{$table}.key", $data['key'])
+                    ->lockForUpdate()
+                    ->first();
+                if ($existing) {
+                    DB::table($table)->where('id', $existing->id)->update($data);
+                    $after = DB::table($table)->find($existing->id);
+                    $this->audit($request, 'update', $table, $existing->id, $existing, $after);
 
-                return response()->json($this->enrichRow($table, $after));
+                    return [$after, 200, $existing];
+                }
             }
-        }
 
-        $id = DB::table($table)->insertGetId($data);
-        $row = DB::table($table)->find($id);
-        $this->audit($request, 'create', $table, $id, null, $row);
-        $this->invalidateContextCache($table, null, $row);
+            $id = DB::table($table)->insertGetId($data);
+            $row = DB::table($table)->find($id);
+            $this->audit($request, 'create', $table, $id, null, $row);
+            if ($table === 'pesantren_user') {
+                $this->accessRevoker->revoke((int) $row->user_id);
+            }
 
-        return response()->json($this->enrichRow($table, $row), 201);
+            return [$row, 201, null];
+        }, 3);
+
+        $this->invalidateContextCache($table, $before, $row);
+
+        return response()->json($this->enrichRow($table, $row), $status);
     }
 
     public function show(Request $request, string $resource, int $id)
@@ -148,12 +127,12 @@ class CrudController extends Controller
         $logs = DB::table('audit_logs')
             ->leftJoin('users', 'audit_logs.user_id', '=', 'users.id')
             ->where('audit_logs.module', $table)
+            ->where('audit_logs.row_id', $id)
             ->when(isset($row->pesantren_id), fn ($query) => $query->where('audit_logs.pesantren_id', $row->pesantren_id))
             ->select('audit_logs.*', 'users.name as actor_name')
             ->latest('audit_logs.id')
-            ->limit(100)
-            ->get()
-            ->map(function ($log) use ($table) {
+            ->paginate(min(100, max(10, (int) $request->integer('per_page', 50))))
+            ->through(function ($log) use ($table) {
                 $metadata = json_decode($log->metadata ?: '{}', true) ?: [];
 
                 return [
@@ -168,28 +147,50 @@ class CrudController extends Controller
                     'created_at' => $log->created_at,
                     'row_id' => (int) ($metadata['row_id'] ?? 0),
                 ];
-            })
-            ->filter(fn ($log) => $log['row_id'] === $id)
-            ->values();
+            });
 
-        return response()->json(['data' => $logs]);
+        return response()->json($logs);
     }
 
     public function update(Request $request, string $resource, int $id)
     {
         $this->authorizeResourceAccess($request, $resource, 'write');
+        $this->assertGenericMutationAllowed($resource, 'update');
         $table = $this->table($resource);
+        $this->assertAccessAdministrationStepUp($request, $table);
         $this->assertMembershipMutationAllowed($request, $table);
-        $row = $this->scopedQuery($request, $table)->where("{$table}.id", $id)->first();
-        abort_unless($row, 404);
+        $snapshot = $this->scopedQuery($request, $table)->where("{$table}.id", $id)->first();
+        abort_unless($snapshot, 404);
+        $this->assertPlatformMutationAllowed($request, $table, 'update', $snapshot);
+        $this->assertWorkflowRecordEditable($resource, $snapshot);
 
         $data = $this->tenantContext->withTenantPayload($request, $table, $this->payload($request, $table, false));
-        $this->assertSystemSettingPayloadAllowed($request, $table, $data, $row);
+        $this->assertUserTransitionAllowed($request, $table, $data, $snapshot);
+        $this->assertSystemSettingPayloadAllowed($request, $table, $data, $snapshot);
         $this->assertPersonalPayload($request, $table, $data);
-        $this->assertOperationalPayload($request, $table, $data);
-        DB::table($table)->where('id', $id)->update($data);
-        $after = $this->scopedQuery($request, $table)->where("{$table}.id", $id)->first();
-        $this->audit($request, 'update', $table, $id, $row, $after);
+        $this->assertOperationalPayload($request, $table, $data, $snapshot);
+
+        [$row, $after] = DB::transaction(function () use ($request, $resource, $table, $id, $data) {
+            $row = $this->scopedQuery($request, $table)
+                ->where("{$table}.id", $id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($row, 404);
+            $this->assertMembershipTransitionAllowed($request, $table, $data, $row);
+            $this->assertWorkflowRecordEditable($resource, $row);
+            DB::table($table)->where('id', $id)->update($data);
+            $after = $this->scopedQuery($request, $table)->where("{$table}.id", $id)->first();
+            $this->audit($request, 'update', $table, $id, $row, $after);
+            if ($table === 'users') {
+                $this->revokeUserAccessWhenSecurityChanges($table, $id, $data);
+            }
+            if ($table === 'pesantren_user') {
+                $this->accessRevoker->revokeMany([(int) $row->user_id, (int) $after->user_id]);
+            }
+
+            return [$row, $after];
+        }, 3);
+
         $this->invalidateContextCache($table, $row, $after);
 
         return response()->json($this->enrichRow($table, $after));
@@ -198,16 +199,35 @@ class CrudController extends Controller
     public function destroy(Request $request, string $resource, int $id)
     {
         $this->authorizeResourceAccess($request, $resource, 'write');
+        $this->assertGenericMutationAllowed($resource, 'delete');
         $table = $this->table($resource);
+        $this->assertAccessAdministrationStepUp($request, $table);
         $this->assertMembershipMutationAllowed($request, $table);
-        $row = $this->scopedQuery($request, $table)->where("{$table}.id", $id)->first();
-        abort_unless($row, 404);
-        $this->assertSystemSettingPayloadAllowed($request, $table, [], $row);
 
-        $this->hasColumn($table, 'deleted_at')
-            ? DB::table($table)->where('id', $id)->update(['deleted_at' => now(), 'updated_at' => now()])
-            : DB::table($table)->where('id', $id)->delete();
-        $this->audit($request, 'delete', $table, $id, $row, null);
+        $row = DB::transaction(function () use ($request, $table, $id) {
+            $row = $this->scopedQuery($request, $table)
+                ->where("{$table}.id", $id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($row, 404);
+            $this->assertPlatformMutationAllowed($request, $table, 'delete', $row);
+            $this->assertMembershipTransitionAllowed($request, $table, [], $row, true);
+            $this->assertSystemSettingPayloadAllowed($request, $table, [], $row);
+
+            $this->hasColumn($table, 'deleted_at')
+                ? DB::table($table)->where('id', $id)->update(['deleted_at' => now(), 'updated_at' => now()])
+                : DB::table($table)->where('id', $id)->delete();
+            $this->audit($request, 'delete', $table, $id, $row, null);
+            if ($table === 'users') {
+                $this->accessRevoker->revoke($id);
+            }
+            if ($table === 'pesantren_user') {
+                $this->accessRevoker->revoke((int) $row->user_id);
+            }
+
+            return $row;
+        }, 3);
+
         $this->invalidateContextCache($table, $row, null);
 
         return response()->json(['message' => 'Data berhasil dihapus.']);
@@ -226,14 +246,17 @@ class CrudController extends Controller
         $format = strtolower((string) $request->query('format', 'csv'));
 
         if (in_array($format, ['xls', 'xlsx', 'excel'], true)) {
-            $tsv = implode("\t", $columns)."\n";
+            $xml = SafeSpreadsheet::xmlHeader(Str::limit(Str::headline($table), 31, ''));
+            $xml .= SafeSpreadsheet::xmlRow($columns);
             foreach ($formatted as $row) {
-                $tsv .= collect($columns)->map(fn ($column) => str_replace(["\t", "\r", "\n"], ' ', (string) ($row[$column] ?? '')))->implode("\t")."\n";
+                $xml .= SafeSpreadsheet::xmlRow(collect($columns)->map(fn ($column) => $row[$column] ?? '')->all());
             }
+            $xml .= SafeSpreadsheet::xmlFooter();
 
-            return response($tsv, 200, [
+            return response($xml, 200, [
                 'Content-Type' => 'application/vnd.ms-excel; charset=UTF-8',
                 'Content-Disposition' => "attachment; filename={$table}.xls",
+                'X-Content-Type-Options' => 'nosniff',
             ]);
         }
 
@@ -244,10 +267,10 @@ class CrudController extends Controller
                 'Dicetak: '.now()->toDateTimeString(),
                 '',
             ];
-            foreach (array_slice($formatted, 0, 40) as $row) {
+            foreach ($formatted as $row) {
                 $lines[] = collect($columns)
                     ->filter(fn ($column) => ! in_array($column, ['deleted_at', 'metadata'], true))
-                    ->map(fn ($column) => "{$column}: ".($row[$column] ?? '-'))
+                    ->map(fn ($column) => "{$column}: ".SafeSpreadsheet::plainText($row[$column] ?? '-'))
                     ->implode(' | ');
             }
             if (! empty($template['footer'])) {
@@ -258,14 +281,15 @@ class CrudController extends Controller
             return $this->pdfResponse($template['title'] ?? "Laporan {$table}", $lines, "{$table}.pdf");
         }
 
-        $csv = implode(',', $columns)."\n";
+        $csv = "\xEF\xBB\xBF".SafeSpreadsheet::csvLine($columns)."\n";
         foreach ($formatted as $row) {
-            $csv .= collect($columns)->map(fn ($column) => '"'.str_replace('"', '""', (string) ($row[$column] ?? '')).'"')->implode(',')."\n";
+            $csv .= SafeSpreadsheet::csvLine(collect($columns)->map(fn ($column) => $row[$column] ?? '')->all())."\n";
         }
 
         return response($csv, 200, [
-            'Content-Type' => 'text/csv',
+            'Content-Type' => 'text/csv; charset=UTF-8',
             'Content-Disposition' => "attachment; filename={$table}.csv",
+            'X-Content-Type-Options' => 'nosniff',
         ]);
     }
 
@@ -277,7 +301,7 @@ class CrudController extends Controller
         abort_unless(in_array($format, ['csv', 'xls', 'xlsx', 'excel'], true), 422, 'Export job mendukung CSV atau Excel.');
 
         $user = $request->user();
-        $tenantId = $user?->hasRole('super_admin') ? null : $this->tenantContext->activePesantrenId($request);
+        $tenantId = $this->tenantContext->tenantIdForTable($request, $table);
         $uuid = (string) Str::uuid();
         $jobId = DB::table('operation_jobs')->insertGetId([
             'uuid' => $uuid,
@@ -287,17 +311,19 @@ class CrudController extends Controller
             'resource' => $resource,
             'status' => 'queued',
             'progress' => 0,
-            'queue_name' => 'exports',
+            'queue_name' => QueueNames::EXPORTS,
             'payload' => json_encode([
                 'format' => $format,
+                'table' => $table,
                 'filters' => $request->except(['_token']),
+                'actor_context' => $this->queuedActorContext($request, $tenantId),
             ]),
             'expires_at' => now()->addDays((int) config('pesantrenku.operations.file_retention_days', 7)),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
 
-        BuildResourceExportJob::dispatch($jobId, $table, $tenantId, $format)->onQueue('exports');
+        BuildResourceExportJob::dispatch($jobId, $table, $tenantId, $format)->onQueue(QueueNames::EXPORTS);
         $this->audit($request, 'queue export', 'operation_jobs', $jobId, null, DB::table('operation_jobs')->find($jobId));
 
         return response()->json([
@@ -371,21 +397,23 @@ class CrudController extends Controller
     public function importPreview(Request $request, string $resource)
     {
         $this->authorizeResourceAccess($request, $resource, 'write');
-        $request->validate(['file' => ['required', 'file']]);
-        $extension = strtolower($request->file('file')->getClientOriginalExtension());
-        abort_unless(in_array($extension, ['csv', 'txt', 'xls', 'xlsx'], true), 422, 'Format import harus CSV, TXT, XLS, atau XLSX.');
+        $this->assertGenericMutationAllowed($resource, 'import');
         $table = $this->table($resource);
-        $rows = $this->rowsFromImportFile($request->file('file')->getRealPath(), $extension);
+        $this->assertPlatformMutationAllowed($request, $table, 'import');
+        $this->tenantContext->tenantIdForTable($request, $table);
+        $request->validate(['file' => ['required', 'file', 'max:'.config('pesantrenku.import.max_kilobytes', 10240)]]);
+        [$extension, $path] = $this->validatedImportFile($request);
+        $rows = $this->rowsFromImportFile($path, $extension);
         $schema = $this->columns($table);
         $headers = collect($rows)->flatMap(fn ($row) => array_keys($row))->unique()->values()->all();
-        $mapping = $this->importMapping($request->input('mapping'), $schema, $headers, $table);
+        $mapping = $this->importMapping($request, $request->input('mapping'), $schema, $headers, $table);
         $this->assertImportRowsAllowed($request, $table, $rows, $schema, $mapping);
         $analysis = $this->analyzeImportRows($request, $table, $rows, $schema, $mapping);
 
         return response()->json([
             'resource' => $resource,
             'headers' => $headers,
-            'columns' => $this->importableColumns($table),
+            'columns' => $this->importableColumns($request, $table),
             'mapping' => $mapping,
             'row_count' => count($rows),
             'preview' => collect($rows)->take((int) config('pesantrenku.import.preview_rows', 5))->values(),
@@ -401,44 +429,54 @@ class CrudController extends Controller
     public function import(Request $request, string $resource)
     {
         $this->authorizeResourceAccess($request, $resource, 'write');
-        $request->validate([
-            'file' => ['required', 'file'],
-            'mapping' => ['nullable'],
-            'queue' => ['nullable'],
-        ]);
-        $extension = strtolower($request->file('file')->getClientOriginalExtension());
-        abort_unless(in_array($extension, ['csv', 'txt', 'xls', 'xlsx'], true), 422, 'Format import harus CSV, TXT, XLS, atau XLSX.');
+        $this->assertGenericMutationAllowed($resource, 'import');
         $table = $this->table($resource);
-        $rows = $this->rowsFromImportFile($request->file('file')->getRealPath(), $extension);
+        $this->assertPlatformMutationAllowed($request, $table, 'import');
+        $tenantId = $this->tenantContext->tenantIdForTable($request, $table);
+        $request->validate([
+            'file' => ['required', 'file', 'max:'.config('pesantrenku.import.max_kilobytes', 10240)],
+            'mapping' => ['nullable'],
+            'queue' => ['nullable', 'boolean'],
+        ]);
+        [$extension, $path] = $this->validatedImportFile($request);
+        $rows = $this->rowsFromImportFile($path, $extension);
         $schema = $this->columns($table);
         $headers = collect($rows)->flatMap(fn ($row) => array_keys($row))->unique()->values()->all();
-        $mapping = $this->importMapping($request->input('mapping'), $schema, $headers, $table);
+        $mapping = $this->importMapping($request, $request->input('mapping'), $schema, $headers, $table);
         $this->assertImportRowsAllowed($request, $table, $rows, $schema, $mapping);
         $inserted = 0;
         $skipped = 0;
         $errors = [];
 
-        if ($request->boolean('queue')) {
+        $queueThreshold = max(1, (int) config('pesantrenku.import.queue_threshold', 500));
+        if ($request->boolean('queue') || count($rows) >= $queueThreshold) {
             $user = $request->user();
-            $tenantId = $user?->hasRole('super_admin') ? null : $this->tenantContext->activePesantrenId($request);
             $preparedRows = [];
             $queueErrors = [];
             foreach ($rows as $rowNumber => $row) {
                 $raw = $this->mappedImportRow($row, $schema, $mapping);
-                $data = $this->tenantContext->withTenantPayload($request, $table, $this->preparePayload($request, $table, $raw));
-                $validator = Validator::make($data, $this->validationRules($request, $table, true), [], $this->validationAttributes());
+                if (! $raw) {
+                    continue;
+                }
+
+                $validator = Validator::make($raw, $this->validationRules($request, $table, true), [], $this->validationAttributes());
+                if ($validator->fails()) {
+                    $queueErrors[] = ['row' => $rowNumber, 'messages' => $validator->errors()->all()];
+
+                    continue;
+                }
+
+                $data = $this->tenantContext->withTenantPayload(
+                    $request,
+                    $table,
+                    $this->preparePayload($request, $table, $validator->validated()),
+                );
 
                 try {
                     $this->assertPersonalPayload($request, $table, $data);
                     $this->assertOperationalPayload($request, $table, $data);
                 } catch (\Throwable $exception) {
-                    $queueErrors[] = ['row' => $rowNumber + 1, 'messages' => [$exception->getMessage() ?: 'Data di luar scope akses role.']];
-
-                    continue;
-                }
-
-                if ($validator->fails()) {
-                    $queueErrors[] = ['row' => $rowNumber + 1, 'messages' => $validator->errors()->all()];
+                    $queueErrors[] = ['row' => $rowNumber, 'messages' => [$exception->getMessage() ?: 'Data di luar scope akses role.']];
 
                     continue;
                 }
@@ -453,6 +491,8 @@ class CrudController extends Controller
                 ], 422);
             }
 
+            $this->entitlements->assertWriteQuota($request, $resource, count($preparedRows));
+
             $uuid = (string) Str::uuid();
             $sourcePath = $this->storeImportRows($uuid, $preparedRows);
             $queuedMapping = collect($schema)->mapWithKeys(fn (string $column) => [$column => $column])->all();
@@ -466,12 +506,15 @@ class CrudController extends Controller
                 'progress' => 0,
                 'total_rows' => count($preparedRows),
                 'processed_rows' => 0,
-                'queue_name' => 'imports',
+                'queue_name' => QueueNames::IMPORTS,
                 'source_path' => $sourcePath,
                 'payload' => json_encode([
                     'mapping' => $queuedMapping,
+                    'table' => $table,
+                    'chunk_size' => (int) config('pesantrenku.import.chunk_size', 250),
                     'row_count' => count($preparedRows),
                     'file' => $request->file('file')->getClientOriginalName(),
+                    'actor_context' => $this->queuedActorContext($request, $tenantId),
                 ], JSON_UNESCAPED_UNICODE),
                 'expires_at' => now()->addDays((int) config('pesantrenku.operations.file_retention_days', 7)),
                 'created_at' => now(),
@@ -486,7 +529,7 @@ class CrudController extends Controller
                 $queuedMapping,
                 0,
                 (int) config('pesantrenku.import.chunk_size', 250),
-            )->onQueue('imports');
+            )->onQueue(QueueNames::IMPORTS);
             $this->audit($request, 'queue import', 'operation_jobs', $jobId, null, DB::table('operation_jobs')->find($jobId));
 
             return response()->json([
@@ -501,7 +544,7 @@ class CrudController extends Controller
             ], 202);
         }
 
-        DB::transaction(function () use ($rows, $schema, $table, $request, $mapping, &$inserted, &$skipped, &$errors) {
+        DB::transaction(function () use ($rows, $schema, $table, $resource, $request, $mapping, &$inserted, &$skipped, &$errors) {
             foreach ($rows as $rowNumber => $row) {
                 $raw = $this->mappedImportRow($row, $schema, $mapping);
 
@@ -517,8 +560,7 @@ class CrudController extends Controller
                     continue;
                 }
 
-                $data = $this->tenantContext->withTenantPayload($request, $table, $this->preparePayload($request, $table, $raw));
-                $validator = Validator::make($data, $this->validationRules($request, $table, true), [], $this->validationAttributes());
+                $validator = Validator::make($raw, $this->validationRules($request, $table, true), [], $this->validationAttributes());
                 if ($validator->fails()) {
                     $skipped++;
                     if (count($errors) < 10) {
@@ -527,6 +569,12 @@ class CrudController extends Controller
 
                     continue;
                 }
+
+                $data = $this->tenantContext->withTenantPayload(
+                    $request,
+                    $table,
+                    $this->preparePayload($request, $table, $validator->validated()),
+                );
 
                 try {
                     $this->assertPersonalPayload($request, $table, $data);
@@ -540,6 +588,7 @@ class CrudController extends Controller
                     continue;
                 }
 
+                $this->entitlements->assertWriteQuota($request, $resource);
                 DB::table($table)->insert($data);
                 $inserted++;
             }
@@ -557,44 +606,37 @@ class CrudController extends Controller
     public function bulk(Request $request, string $resource)
     {
         $this->authorizeResourceAccess($request, $resource, 'write');
+        $this->assertGenericMutationAllowed($resource, 'bulk');
+        $table = $this->table($resource);
+        $this->assertPlatformMutationAllowed($request, $table, 'bulk');
+        $this->tenantContext->tenantIdForTable($request, $table);
         $validated = $request->validate([
-            'action' => ['required', Rule::in(['delete', 'status'])],
+            'action' => ['required', Rule::in(['delete'])],
             'ids' => ['required', 'array', 'min:1', 'max:100'],
             'ids.*' => ['integer'],
-            'status' => ['required_if:action,status', 'nullable', 'string', 'max:60'],
         ]);
 
-        $table = $this->table($resource);
         $this->assertMembershipMutationAllowed($request, $table);
         $ids = collect($validated['ids'])->map(fn ($id) => (int) $id)->unique()->values();
         $rows = $this->scopedQuery($request, $table)->whereIn("{$table}.id", $ids->all())->get()->keyBy('id');
         abort_if($rows->isEmpty(), 404, 'Tidak ada data yang sesuai scope akses.');
 
         $updated = 0;
-        DB::transaction(function () use ($request, $table, $validated, $rows, &$updated) {
+        DB::transaction(function () use ($request, $table, $rows, &$updated) {
             foreach ($rows as $row) {
-                if ($validated['action'] === 'delete') {
-                    $this->hasColumn($table, 'deleted_at')
-                        ? DB::table($table)->where('id', $row->id)->update(['deleted_at' => now(), 'updated_at' => now()])
-                        : DB::table($table)->where('id', $row->id)->delete();
-                    $this->audit($request, 'bulk delete', $table, $row->id, $row, null);
-                    $updated++;
-
-                    continue;
-                }
-
-                abort_unless($this->hasColumn($table, 'status'), 422, 'Resource ini tidak memiliki kolom status.');
-                DB::table($table)->where('id', $row->id)->update(['status' => $validated['status'], 'updated_at' => now()]);
-                $after = DB::table($table)->where('id', $row->id)->first();
-                $this->audit($request, 'bulk status', $table, $row->id, $row, $after);
+                $this->hasColumn($table, 'deleted_at')
+                    ? DB::table($table)->where('id', $row->id)->update(['deleted_at' => now(), 'updated_at' => now()])
+                    : DB::table($table)->where('id', $row->id)->delete();
+                $this->audit($request, 'bulk delete', $table, $row->id, $row, null);
+                $this->invalidateContextCache($table, $row, null);
                 $updated++;
             }
         });
 
         return response()->json([
-            'message' => "{$updated} data berhasil diproses.",
+            'message' => "{$updated} data berhasil dihapus.",
             'updated' => $updated,
-            'action' => $validated['action'],
+            'action' => 'delete',
         ]);
     }
 
@@ -602,7 +644,10 @@ class CrudController extends Controller
     {
         $user = $request->user()?->loadMissing('roles');
         abort_unless($user, 401);
-        abort_unless($user->hasRole(['super_admin', 'owner_pesantren']), 403, 'Hanya super admin dan owner yang dapat membuka matriks permission.');
+        $isSuperAdmin = $this->tenantContext->isSuperAdmin($request);
+        if (! $isSuperAdmin) {
+            $this->tenantContext->authorizeActiveRole($request, 'owner_pesantren', false, 'Hanya super admin dan owner tenant aktif yang dapat membuka matriks permission.');
+        }
 
         $roles = DB::table('roles')->orderBy('id')->get(['name', 'label']);
         $matrix = $roles->mapWithKeys(function ($role) use ($request) {
@@ -612,10 +657,11 @@ class CrudController extends Controller
                 'label' => $role->label,
                 'read' => array_values(array_unique(array_merge($access['read'], $access['write']))),
                 'write' => array_values($access['write']),
+                'actions' => array_values($access['actions'] ?? []),
             ]];
         });
 
-        $endpoints = collect($this->allowed)->flatMap(fn ($resource) => [
+        $endpoints = collect(ResourceCatalog::ALL)->flatMap(fn ($resource) => [
             ['method' => 'GET', 'path' => "/web-api/{$resource}", 'ability' => 'read', 'resource' => $resource],
             ['method' => 'POST', 'path' => "/web-api/{$resource}", 'ability' => 'write', 'resource' => $resource],
             ['method' => 'PATCH', 'path' => "/web-api/{$resource}/{id}", 'ability' => 'write', 'resource' => $resource],
@@ -627,62 +673,81 @@ class CrudController extends Controller
 
         return response()->json([
             'roles' => $roles,
-            'resources' => $this->allowed,
+            'resources' => $this->delegableResources(),
             'matrix' => $matrix,
             'endpoints' => $endpoints,
-            'tenant_id' => $user->hasRole('super_admin') ? $this->tenantContext->activePesantrenId($request) : $this->tenantContext->activePesantrenId($request, 'owner_pesantren'),
-            'source' => $user->hasRole('super_admin') && ! $this->tenantContext->activePesantrenId($request) ? 'global' : 'tenant',
-            'editable' => true,
-            'workflow' => [
-                'permits' => ['approve' => ['musyrif', 'admin_tu', 'owner_pesantren'], 'reject' => ['musyrif', 'admin_tu', 'owner_pesantren'], 'cancel' => ['santri', 'wali_murid', 'musyrif', 'admin_tu', 'owner_pesantren']],
-                'payments' => ['verify' => ['admin_keuangan', 'owner_pesantren'], 'reject' => ['admin_keuangan', 'owner_pesantren']],
-                'medical-queues' => ['start' => ['klinik'], 'finish' => ['klinik'], 'cancel' => ['klinik']],
-            ],
+            'tenant_id' => $isSuperAdmin ? $this->tenantContext->activePesantrenId($request) : $this->tenantContext->activePesantrenId($request, 'owner_pesantren'),
+            'source' => $isSuperAdmin && ! $this->tenantContext->activePesantrenId($request) ? 'global' : 'tenant',
+            'editable' => ! $isSuperAdmin || (bool) $this->tenantContext->activePesantrenId($request),
+            'workflow' => ResourceCatalog::workflowMatrix(),
+            'workflow_abilities' => ResourceCatalog::workflowAbilities(),
         ]);
     }
 
     public function updatePermissionMatrix(Request $request)
     {
+        $this->stepUpMfa->assert($request, 'permission-matrix');
         $user = $request->user()?->loadMissing('roles');
         abort_unless($user, 401);
-        abort_unless($user->hasRole(['super_admin', 'owner_pesantren']), 403, 'Hanya super admin dan owner yang dapat mengubah matriks permission.');
+        $isSuperAdmin = $this->tenantContext->isSuperAdmin($request);
+        if (! $isSuperAdmin) {
+            $this->tenantContext->authorizeActiveRole($request, 'owner_pesantren', false, 'Hanya super admin dan owner tenant aktif yang dapat mengubah matriks permission.');
+        }
 
         $validated = $request->validate([
             'role' => ['required', 'string', Rule::exists('roles', 'name')],
             'read' => ['nullable', 'array'],
-            'read.*' => ['string', Rule::in($this->allowed)],
+            'read.*' => ['string', Rule::in($this->delegableResources())],
             'write' => ['nullable', 'array'],
-            'write.*' => ['string', Rule::in($this->allowed)],
+            'write.*' => ['string', Rule::in($this->delegableResources())],
+            'actions' => ['nullable', 'array'],
+            'actions.*' => ['string', Rule::in(ResourceCatalog::workflowAbilities())],
         ]);
 
         abort_if($validated['role'] === 'super_admin', 422, 'Permission super admin tidak dapat diubah.');
-        if ($user->hasRole('owner_pesantren')) {
+        if (! $isSuperAdmin) {
             abort_if($validated['role'] === 'owner_pesantren', 422, 'Owner tidak dapat mengubah permission owner.');
         }
 
         $read = collect($validated['read'] ?? [])->merge($validated['write'] ?? [])->unique()->values()->all();
         $write = collect($validated['write'] ?? [])->unique()->values()->all();
-        $tenantId = $user->hasRole('super_admin') ? $this->tenantContext->activePesantrenId($request) : $this->tenantContext->activePesantrenId($request, 'owner_pesantren');
-
+        $actions = collect($validated['actions'] ?? [])->unique()->values()->all();
+        $invalidActionResources = collect($actions)
+            ->map(fn (string $ability) => Str::beforeLast($ability, '.'))
+            ->diff($write)
+            ->values();
+        abort_if($invalidActionResources->isNotEmpty(), 422, 'Aksi workflow memerlukan permission kelola untuk resource terkait: '.$invalidActionResources->implode(', '));
+        $tenantId = $isSuperAdmin ? $this->tenantContext->activePesantrenId($request) : $this->tenantContext->activePesantrenId($request, 'owner_pesantren');
+        abort_unless($tenantId, 422, 'Pilih tenant sebelum mengubah matriks permission. Permission global bersifat read-only.');
         if ($tenantId) {
-            $overrides = $this->tenantPermissionOverrides($request, $tenantId);
-            $overrides[$validated['role']] = ['read' => $read, 'write' => $write];
-            $this->saveTenantPermissionOverrides($tenantId, $overrides);
-        } else {
-            $this->saveGlobalRolePermissions($validated['role'], $read, $write);
+            $unsafe = collect([...$read, ...$write])->diff($this->delegableResources())->values();
+            abort_if($unsafe->isNotEmpty(), 422, 'Permission tenant tidak boleh mencakup resource platform/kontrol: '.$unsafe->implode(', '));
         }
 
-        $this->audit($request, 'update permission matrix', 'permissions', null, null, (object) [
-            'role' => $validated['role'],
-            'read' => $read,
-            'write' => $write,
-        ]);
+        DB::transaction(function () use ($request, $tenantId, $validated, $read, $write, $actions) {
+            DB::table('pesantrens')->where('id', $tenantId)->lockForUpdate()->first();
+            $overrides = $this->tenantPermissionOverrides($request, $tenantId);
+            $overrides[$validated['role']] = ['read' => $read, 'write' => $write, 'actions' => $actions];
+            $this->saveTenantPermissionOverrides($tenantId, $overrides);
+            $this->audit($request, 'update permission matrix', 'permissions', null, null, (object) [
+                'role' => $validated['role'],
+                'read' => $read,
+                'write' => $write,
+                'actions' => $actions,
+            ]);
+            $affectedUsers = DB::table('pesantren_user')
+                ->join('roles', 'pesantren_user.role_id', '=', 'roles.id')
+                ->where('pesantren_user.pesantren_id', $tenantId)
+                ->where('roles.name', $validated['role'])
+                ->pluck('pesantren_user.user_id');
+            $this->accessRevoker->revokeMany($affectedUsers);
+        }, 3);
 
         return response()->json([
             'message' => 'Permission matrix berhasil diperbarui.',
             'role' => $validated['role'],
-            'access' => ['read' => $read, 'write' => $write],
-            'source' => $tenantId ? 'tenant' : 'global',
+            'access' => ['read' => $read, 'write' => $write, 'actions' => $actions],
+            'source' => 'tenant',
         ]);
     }
 
@@ -694,7 +759,7 @@ class CrudController extends Controller
             ->orderBy('label')
             ->get()
             ->map(function ($role) {
-                $permissions = json_decode((string) $role->permissions, true) ?: ['read' => [], 'write' => []];
+                $permissions = json_decode((string) $role->permissions, true) ?: ['read' => [], 'write' => [], 'actions' => []];
 
                 return [
                     'id' => $role->id,
@@ -702,8 +767,9 @@ class CrudController extends Controller
                     'label' => $role->label,
                     'description' => $role->description,
                     'status' => $role->status,
-                    'read' => $permissions['read'] ?? [],
-                    'write' => $permissions['write'] ?? [],
+                    'read' => array_values(array_intersect($permissions['read'] ?? [], $this->delegableResources())),
+                    'write' => array_values(array_intersect($permissions['write'] ?? [], $this->delegableResources())),
+                    'actions' => array_values(array_intersect($permissions['actions'] ?? [], ResourceCatalog::workflowAbilities())),
                 ];
             });
         $memberships = DB::table('pesantren_user')
@@ -715,1579 +781,134 @@ class CrudController extends Controller
             ->orderBy('users.name')
             ->get();
 
-        return response()->json(['tenant_id' => $tenantId, 'resources' => $this->allowed, 'roles' => $roles, 'memberships' => $memberships]);
+        return response()->json([
+            'tenant_id' => $tenantId,
+            'resources' => $this->delegableResources(),
+            'workflow_abilities' => ResourceCatalog::workflowAbilities(),
+            'roles' => $roles,
+            'memberships' => $memberships,
+        ]);
     }
 
     public function storeCustomRole(Request $request)
     {
+        $this->stepUpMfa->assert($request, 'custom-role-create');
         $tenantId = $this->permissionTenantId($request);
         $data = $this->validateCustomRole($request, $tenantId);
-        $id = DB::table('tenant_roles')->insertGetId([
-            'pesantren_id' => $tenantId,
-            'name' => $data['name'],
-            'label' => $data['label'],
-            'description' => $data['description'] ?? null,
-            'permissions' => json_encode(['read' => $data['read'], 'write' => $data['write']], JSON_UNESCAPED_UNICODE),
-            'status' => $data['status'],
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-        $after = DB::table('tenant_roles')->find($id);
-        $this->audit($request, 'create custom role', 'tenant_roles', $id, null, $after);
+        $id = DB::transaction(function () use ($request, $tenantId, $data) {
+            DB::table('pesantrens')->where('id', $tenantId)->lockForUpdate()->first();
+            $id = DB::table('tenant_roles')->insertGetId([
+                'pesantren_id' => $tenantId,
+                'name' => $data['name'],
+                'label' => $data['label'],
+                'description' => $data['description'] ?? null,
+                'permissions' => json_encode(['read' => $data['read'], 'write' => $data['write'], 'actions' => $data['actions']], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'status' => $data['status'],
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+            $after = DB::table('tenant_roles')->find($id);
+            $this->audit($request, 'create custom role', 'tenant_roles', $id, null, $after);
+
+            return $id;
+        }, 3);
 
         return response()->json(['message' => 'Custom role berhasil dibuat.', 'id' => $id], 201);
     }
 
     public function updateCustomRole(Request $request, int $id)
     {
+        $this->stepUpMfa->assert($request, 'custom-role-update');
         $tenantId = $this->permissionTenantId($request);
-        $before = DB::table('tenant_roles')->where('pesantren_id', $tenantId)->where('id', $id)->first();
-        abort_unless($before, 404);
         $data = $this->validateCustomRole($request, $tenantId, $id);
-        DB::table('tenant_roles')->where('id', $id)->update([
-            'name' => $data['name'],
-            'label' => $data['label'],
-            'description' => $data['description'] ?? null,
-            'permissions' => json_encode(['read' => $data['read'], 'write' => $data['write']], JSON_UNESCAPED_UNICODE),
-            'status' => $data['status'],
-            'updated_at' => now(),
-        ]);
-        $after = DB::table('tenant_roles')->find($id);
-        $this->audit($request, 'update custom role', 'tenant_roles', $id, $before, $after);
+        DB::transaction(function () use ($request, $tenantId, $id, $data) {
+            DB::table('pesantrens')->where('id', $tenantId)->lockForUpdate()->first();
+            $before = DB::table('tenant_roles')->where('pesantren_id', $tenantId)->where('id', $id)->lockForUpdate()->first();
+            abort_unless($before, 404);
+            $users = DB::table('pesantren_user')->where('pesantren_id', $tenantId)->where('tenant_role_id', $id)->pluck('user_id');
+            if (($data['status'] ?? 'active') === 'active' && (! empty($data['write']) || ! empty($data['actions']))) {
+                $this->assertUsersMfaReady($users);
+            }
+            DB::table('tenant_roles')->where('id', $id)->update([
+                'name' => $data['name'],
+                'label' => $data['label'],
+                'description' => $data['description'] ?? null,
+                'permissions' => json_encode(['read' => $data['read'], 'write' => $data['write'], 'actions' => $data['actions']], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR),
+                'status' => $data['status'],
+                'updated_at' => now(),
+            ]);
+            $after = DB::table('tenant_roles')->find($id);
+            $this->audit($request, 'update custom role', 'tenant_roles', $id, $before, $after);
+            $this->accessRevoker->revokeMany($users);
+        }, 3);
 
         return response()->json(['message' => 'Custom role berhasil diperbarui.']);
     }
 
     public function deleteCustomRole(Request $request, int $id)
     {
+        $this->stepUpMfa->assert($request, 'custom-role-delete');
         $tenantId = $this->permissionTenantId($request);
-        $role = DB::table('tenant_roles')->where('pesantren_id', $tenantId)->where('id', $id)->first();
-        abort_unless($role, 404);
-
-        DB::transaction(function () use ($id, $role, $request) {
-            DB::table('pesantren_user')->where('tenant_role_id', $id)->update(['tenant_role_id' => null, 'updated_at' => now()]);
+        DB::transaction(function () use ($tenantId, $id, $request) {
+            DB::table('pesantrens')->where('id', $tenantId)->lockForUpdate()->first();
+            $role = DB::table('tenant_roles')->where('pesantren_id', $tenantId)->where('id', $id)->lockForUpdate()->first();
+            abort_unless($role, 404);
+            $users = DB::table('pesantren_user')->where('pesantren_id', $tenantId)->where('tenant_role_id', $id)->pluck('user_id');
+            DB::table('pesantren_user')->where('pesantren_id', $tenantId)->where('tenant_role_id', $id)->update(['tenant_role_id' => null, 'updated_at' => now()]);
             DB::table('tenant_roles')->where('id', $id)->delete();
             $this->audit($request, 'delete custom role', 'tenant_roles', $id, $role, null);
-        });
+            $this->accessRevoker->revokeMany($users);
+        }, 3);
 
         return response()->json(['message' => 'Custom role berhasil dihapus.']);
     }
 
     public function assignCustomRole(Request $request, int $id)
     {
+        $this->stepUpMfa->assert($request, 'custom-role-assignment');
         $tenantId = $this->permissionTenantId($request);
-        abort_unless(DB::table('tenant_roles')->where('pesantren_id', $tenantId)->where('id', $id)->exists(), 404);
-        $validated = $request->validate(['membership_ids' => ['required', 'array'], 'membership_ids.*' => ['integer']]);
+        $validated = $request->validate([
+            'membership_ids' => ['required', 'array'],
+            'membership_ids.*' => ['integer', 'distinct'],
+            'mfa_code' => ['nullable', 'string', 'max:64'],
+        ]);
         $membershipIds = collect($validated['membership_ids'])->map(fn ($value) => (int) $value)->unique()->values();
 
         DB::transaction(function () use ($tenantId, $id, $membershipIds, $request) {
+            DB::table('pesantrens')->where('id', $tenantId)->lockForUpdate()->first();
+            $role = DB::table('tenant_roles')
+                ->where('pesantren_id', $tenantId)
+                ->where('id', $id)
+                ->lockForUpdate()
+                ->first();
+            abort_unless($role, 404);
+
+            $memberships = DB::table('pesantren_user')
+                ->where('pesantren_id', $tenantId)
+                ->whereIn('id', $membershipIds)
+                ->lockForUpdate()
+                ->get(['id', 'user_id']);
+            abort_unless($memberships->count() === $membershipIds->count(), 422, 'Semua membership harus berasal dari tenant aktif.');
+
+            $permissions = json_decode((string) $role->permissions, true) ?: [];
+            if ($role->status === 'active' && (! empty($permissions['write']) || ! empty($permissions['actions']))) {
+                $this->assertUsersMfaReady($memberships->pluck('user_id'));
+            }
+
+            $beforeUsers = DB::table('pesantren_user')
+                ->where('pesantren_id', $tenantId)
+                ->where('tenant_role_id', $id)
+                ->lockForUpdate()
+                ->pluck('user_id');
             DB::table('pesantren_user')->where('pesantren_id', $tenantId)->where('tenant_role_id', $id)->update(['tenant_role_id' => null, 'updated_at' => now()]);
             if ($membershipIds->isNotEmpty()) {
                 DB::table('pesantren_user')->where('pesantren_id', $tenantId)->whereIn('id', $membershipIds)->update(['tenant_role_id' => $id, 'updated_at' => now()]);
             }
+            $afterUsers = $memberships->pluck('user_id');
             $this->audit($request, 'assign custom role', 'tenant_roles', $id, null, (object) ['membership_ids' => $membershipIds->all(), 'pesantren_id' => $tenantId]);
-        });
+            $this->accessRevoker->revokeMany($beforeUsers->merge($afterUsers)->unique()->values());
+        }, 3);
 
         return response()->json(['message' => 'Assignment custom role berhasil diperbarui.', 'assigned' => $membershipIds->count()]);
-    }
-
-    private function applyRequestFilters(Request $request, $query, string $table): void
-    {
-        if ($request->filled('status') && $this->hasColumn($table, 'status')) {
-            $query->where("{$table}.status", $request->query('status'));
-        }
-
-        if ($request->filled('student_id') && $this->hasColumn($table, 'student_id')) {
-            $query->where("{$table}.student_id", (int) $request->query('student_id'));
-        }
-
-        if ($request->filled('class_id')) {
-            if ($this->hasColumn($table, 'class_id')) {
-                $query->where("{$table}.class_id", (int) $request->query('class_id'));
-            } elseif ($this->hasColumn($table, 'student_id')) {
-                $query->whereExists(function ($subQuery) use ($table, $request) {
-                    $subQuery->selectRaw('1')
-                        ->from('students')
-                        ->whereColumn('students.id', "{$table}.student_id")
-                        ->where('students.class_id', (int) $request->query('class_id'));
-                });
-            }
-        }
-
-        $dateColumn = collect(['date', 'paid_at', 'due_date', 'start_at', 'noted_at', 'published_at', 'completed_at', 'created_at'])
-            ->first(fn ($column) => $this->hasColumn($table, $column));
-
-        if ($dateColumn && $request->filled('date_from')) {
-            $query->whereDate("{$table}.{$dateColumn}", '>=', $request->query('date_from'));
-        }
-
-        if ($dateColumn && $request->filled('date_to')) {
-            $query->whereDate("{$table}.{$dateColumn}", '<=', $request->query('date_to'));
-        }
-    }
-
-    private function applySearchFilter(Request $request, $query, string $table): void
-    {
-        if (! ($search = $request->query('search'))) {
-            return;
-        }
-
-        $columns = collect($this->columns($table))->filter(fn ($column) => in_array($column, ['name', 'title', 'nis', 'email', 'invoice_number', 'number', 'status', 'reference']));
-        $query->where(function ($q) use ($columns, $search) {
-            foreach ($columns as $column) {
-                $q->orWhere($column, 'like', "%{$search}%");
-            }
-        });
-    }
-
-    private function importableColumns(string $table): array
-    {
-        return $this->importableColumnsFromSchema($this->columns($table), $table);
-    }
-
-    private function storeImportRows(string $uuid, array $rows): string
-    {
-        $path = "imports/tmp/{$uuid}.jsonl";
-        $handle = tmpfile();
-        abort_unless($handle, 500, 'File temporary import tidak dapat dibuat.');
-
-        foreach ($rows as $row) {
-            fwrite($handle, json_encode($row, JSON_UNESCAPED_UNICODE)."\n");
-        }
-        rewind($handle);
-        $stored = $this->operationStorage->put($path, $handle);
-        fclose($handle);
-        abort_unless($stored, 500, 'File temporary import tidak dapat disimpan.');
-
-        return $path;
-    }
-
-    private function importMapping(mixed $mappingInput, array $schema, array $headers, ?string $table = null): array
-    {
-        if (is_string($mappingInput) && trim($mappingInput) !== '') {
-            $decoded = json_decode($mappingInput, true);
-            $mappingInput = is_array($decoded) ? $decoded : [];
-        }
-
-        $mappingInput = is_array($mappingInput) ? $mappingInput : [];
-        $allowedColumns = $this->importableColumnsFromSchema($schema, $table);
-        $mapping = [];
-
-        foreach ($headers as $header) {
-            $requested = $mappingInput[$header] ?? $mappingInput[$this->normalizeImportHeader($header)] ?? null;
-            if ($requested && in_array($requested, $allowedColumns, true)) {
-                $mapping[$header] = $requested;
-
-                continue;
-            }
-
-            $normalized = $this->normalizeImportHeader($header);
-            $mapping[$header] = in_array($normalized, $allowedColumns, true) ? $normalized : '';
-        }
-
-        return $mapping;
-    }
-
-    private function importableColumnsFromSchema(array $schema, ?string $table = null): array
-    {
-        return collect($schema)
-            ->reject(fn ($column) => in_array($column, ['id', 'pesantren_id', 'created_at', 'updated_at', 'deleted_at'], true))
-            ->reject(fn ($column) => $table === 'users' && in_array($column, ['remember_token', 'mfa_secret'], true))
-            ->values()
-            ->all();
-    }
-
-    private function mappedImportRow(array $row, array $schema, array $mapping): array
-    {
-        $raw = [];
-        foreach ($row as $header => $value) {
-            $target = $mapping[$header] ?? null;
-            if (! $target || ! in_array($target, $schema, true)) {
-                continue;
-            }
-
-            $raw[$target] = $value === '' ? null : $value;
-        }
-
-        return $raw;
-    }
-
-    private function analyzeImportRows(Request $request, string $table, array $rows, array $schema, array $mapping): array
-    {
-        $valid = 0;
-        $invalid = 0;
-        $blank = 0;
-        $errors = [];
-
-        foreach ($rows as $rowNumber => $row) {
-            $raw = $this->mappedImportRow($row, $schema, $mapping);
-            if (! $raw) {
-                $blank++;
-
-                continue;
-            }
-
-            $data = $this->tenantContext->withTenantPayload($request, $table, $this->preparePayload($request, $table, $raw));
-            $validator = Validator::make($data, $this->validationRules($request, $table, true), [], $this->validationAttributes());
-            $scopeMessages = [];
-
-            try {
-                $this->assertPersonalPayload($request, $table, $data);
-                $this->assertOperationalPayload($request, $table, $data);
-            } catch (\Throwable $exception) {
-                $scopeMessages[] = $exception->getMessage() ?: 'Data di luar scope akses role.';
-            }
-
-            if ($validator->fails() || $scopeMessages) {
-                $invalid++;
-                if (count($errors) < 10) {
-                    $errors[] = ['row' => $rowNumber, 'messages' => array_values(array_merge($validator->errors()->all(), $scopeMessages))];
-                }
-
-                continue;
-            }
-
-            $valid++;
-        }
-
-        return compact('valid', 'invalid', 'blank', 'errors');
-    }
-
-    private function rowsFromImportFile(string $path, string $extension): array
-    {
-        if ($extension === 'xlsx') {
-            return $this->rowsFromXlsx($path);
-        }
-
-        $lines = file($path, FILE_IGNORE_NEW_LINES);
-        abort_unless($lines !== false && count($lines) > 0, 422, 'File import tidak dapat dibaca.');
-
-        $firstLine = (string) ($lines[0] ?? '');
-        $delimiter = str_contains($firstLine, "\t") ? "\t" : (str_contains($firstLine, ';') ? ';' : ',');
-        $headers = array_map(fn ($header) => $this->normalizeImportHeader($header), str_getcsv($firstLine, $delimiter));
-        abort_unless(collect($headers)->filter()->isNotEmpty(), 422, 'Header import wajib tersedia.');
-
-        $rows = [];
-        foreach (array_slice($lines, 1) as $offset => $line) {
-            if (trim((string) $line) === '') {
-                continue;
-            }
-
-            $values = str_getcsv((string) $line, $delimiter);
-            $row = [];
-            foreach ($headers as $index => $header) {
-                if ($header === '') {
-                    continue;
-                }
-                $row[$header] = $values[$index] ?? null;
-            }
-            $rows[$offset + 2] = $row;
-        }
-
-        return $rows;
-    }
-
-    private function rowsFromXlsx(string $path): array
-    {
-        abort_unless(class_exists(\ZipArchive::class), 422, 'Import XLSX membutuhkan ekstensi PHP zip.');
-
-        $zip = new \ZipArchive;
-        abort_unless($zip->open($path) === true, 422, 'File XLSX tidak dapat dibuka.');
-
-        $sharedStrings = [];
-        $sharedXml = $zip->getFromName('xl/sharedStrings.xml');
-        if ($sharedXml) {
-            $shared = simplexml_load_string($sharedXml);
-            foreach ($shared?->si ?? [] as $item) {
-                $text = '';
-                if (isset($item->t)) {
-                    $text = (string) $item->t;
-                } elseif (isset($item->r)) {
-                    foreach ($item->r as $run) {
-                        $text .= (string) $run->t;
-                    }
-                }
-                $sharedStrings[] = $text;
-            }
-        }
-
-        $sheetXml = $zip->getFromName('xl/worksheets/sheet1.xml');
-        $zip->close();
-        abort_unless($sheetXml, 422, 'Sheet pertama XLSX tidak ditemukan.');
-
-        $sheet = simplexml_load_string($sheetXml);
-        $rows = [];
-        foreach ($sheet?->sheetData?->row ?? [] as $row) {
-            $values = [];
-            foreach ($row->c as $cell) {
-                $reference = (string) $cell['r'];
-                $columnLetters = preg_replace('/[^A-Z]/', '', $reference);
-                $index = $this->excelColumnIndex($columnLetters);
-                $value = (string) ($cell->v ?? '');
-                if ((string) $cell['t'] === 's') {
-                    $value = $sharedStrings[(int) $value] ?? '';
-                }
-                $values[$index] = $value;
-            }
-            ksort($values);
-            $rows[] = $values;
-        }
-
-        $headers = array_map(fn ($header) => $this->normalizeImportHeader($header), array_values($rows[0] ?? []));
-        abort_unless(collect($headers)->filter()->isNotEmpty(), 422, 'Header XLSX wajib tersedia.');
-
-        $mapped = [];
-        foreach (array_slice($rows, 1) as $offset => $values) {
-            $row = [];
-            foreach ($headers as $index => $header) {
-                if ($header === '') {
-                    continue;
-                }
-                $row[$header] = $values[$index] ?? null;
-            }
-            $mapped[$offset + 2] = $row;
-        }
-
-        return $mapped;
-    }
-
-    private function normalizeImportHeader(string $header): string
-    {
-        return trim(strtolower(str_replace([' ', '-'], '_', $header)));
-    }
-
-    private function excelColumnIndex(string $letters): int
-    {
-        $index = 0;
-        foreach (str_split($letters) as $letter) {
-            $index = $index * 26 + (ord($letter) - 64);
-        }
-
-        return max(0, $index - 1);
-    }
-
-    private function dateColumn(string $table): ?string
-    {
-        return collect(['date', 'paid_at', 'due_date', 'start_at', 'noted_at', 'published_at', 'completed_at', 'assigned_at', 'created_at'])
-            ->first(fn ($column) => $this->hasColumn($table, $column));
-    }
-
-    private function changedFields(array $before, array $after, string $table): array
-    {
-        $changes = [];
-        foreach (array_unique(array_merge(array_keys($before), array_keys($after))) as $key) {
-            if (in_array($key, ['updated_at'], true)) {
-                continue;
-            }
-
-            $old = $before[$key] ?? null;
-            $new = $after[$key] ?? null;
-            if ($old !== $new) {
-                $changes[] = [
-                    'field' => $key,
-                    'before' => $old,
-                    'after' => $new,
-                    'before_label' => $this->humanDiffValue($key, $old),
-                    'after_label' => $this->humanDiffValue($key, $new),
-                    'label' => Str::headline(str_replace('_', ' ', str_ends_with($key, '_id') ? Str::beforeLast($key, '_id') : $key)),
-                    'table' => $table,
-                ];
-            }
-        }
-
-        return $changes;
-    }
-
-    private function humanDiffValue(string $field, mixed $value): mixed
-    {
-        if ($value === null || $value === '') {
-            return $value;
-        }
-
-        $relation = match ($field) {
-            'student_id' => ['students', 'name'],
-            'class_id' => ['classes', 'name'],
-            'subject_id' => ['subjects', 'name'],
-            'teacher_id' => ['teachers', 'name'],
-            'guardian_id' => ['guardians', 'name'],
-            'room_id' => ['rooms', 'name'],
-            'user_id' => ['users', 'name'],
-            'role_id' => ['roles', 'label'],
-            'pesantren_id' => ['pesantrens', 'name'],
-            'plan_id' => ['plans', 'name'],
-            'invoice_id' => ['invoices', 'invoice_number'],
-            'payment_method_id' => ['payment_methods', 'name'],
-            'medicine_id' => ['medicines', 'name'],
-            'medical_record_id' => ['medical_records', 'complaint'],
-            default => null,
-        };
-
-        if (! $relation || ! is_numeric($value)) {
-            return $value;
-        }
-
-        return DB::table($relation[0])->where('id', (int) $value)->value($relation[1]) ?? "#{$value}";
-    }
-
-    private function table(string $resource): string
-    {
-        abort_unless(in_array($resource, $this->allowed, true), 404);
-
-        return match ($resource) {
-            'academic-years' => 'academic_years',
-            'tenant-modules' => 'tenant_modules',
-            'memberships' => 'pesantren_user',
-            'room-assignments' => 'room_assignments',
-            'dorm-attendances' => 'dorm_attendances',
-            'report-cards' => 'report_cards',
-            'memorization-records' => 'memorization_records',
-            'daily-notes' => 'daily_notes',
-            'invoice-items' => 'invoice_items',
-            'payment-methods' => 'payment_methods',
-            'bank-accounts' => 'bank_accounts',
-            'expense-categories' => 'expense_categories',
-            'cashflow-entries' => 'cashflow_entries',
-            'room-mutations' => 'room_mutations',
-            'medicine-stocks' => 'medicine_stocks',
-            'medical-queues' => 'medical_queues',
-            'medical-records' => 'medical_records',
-            'medical-examinations' => 'medical_examinations',
-            'sick-letters' => 'sick_letters',
-            'audit-logs' => 'audit_logs',
-            'system-settings' => 'system_settings',
-            'notifications' => 'notification_logs',
-            default => str_replace('-', '_', $resource),
-        };
-    }
-
-    private function scopedQuery(Request $request, string $table)
-    {
-        $query = DB::table($table)->when($this->hasColumn($table, 'deleted_at'), fn ($q) => $q->whereNull("{$table}.deleted_at"));
-
-        $query = $this->tenantContext->applyScope($request, $query, $table);
-        $this->applyProtectedSettingScope($request, $query, $table);
-
-        return $this->applyPersonalScope($request, $query, $table);
-    }
-
-    private function applyPersonalScope(Request $request, $query, string $table)
-    {
-        $role = $this->tenantContext->activeRole($request);
-        if (! $role) {
-            return $query;
-        }
-
-        if (in_array($role, ['santri', 'wali_murid'], true)) {
-            return $this->applyStudentFamilyScope($request, $query, $table);
-        }
-
-        if ($role === 'guru') {
-            return $this->applyTeacherScope($request, $query, $table);
-        }
-
-        if ($role === 'musyrif') {
-            return $this->applyDormScope($request, $query, $table);
-        }
-
-        return $query;
-    }
-
-    private function applyStudentFamilyScope(Request $request, $query, string $table)
-    {
-        $studentIds = $this->accessibleStudentIds($request);
-        $classIds = $this->requestMemo($request, 'personal-class-ids', fn () => DB::table('students')
-            ->whereIn('id', $studentIds ?: [0])
-            ->pluck('class_id')->filter()->values()->all());
-
-        if ($table === 'students') {
-            return $query->whereIn('students.id', $studentIds ?: [0]);
-        }
-
-        if ($this->hasColumn($table, 'student_id')) {
-            return $query->whereIn("{$table}.student_id", $studentIds ?: [0]);
-        }
-
-        if ($table === 'schedules') {
-            return $query->whereIn('schedules.class_id', $classIds ?: [0]);
-        }
-
-        if ($table === 'invoice_items') {
-            return $query->whereExists(function ($subQuery) use ($studentIds, $table) {
-                $subQuery->selectRaw('1')
-                    ->from('invoices')
-                    ->whereColumn('invoices.id', "{$table}.invoice_id")
-                    ->whereIn('invoices.student_id', $studentIds ?: [0]);
-            });
-        }
-
-        if (in_array($table, ['medical_examinations', 'prescriptions'], true)) {
-            return $query->whereExists(function ($subQuery) use ($studentIds, $table) {
-                $subQuery->selectRaw('1')
-                    ->from('medical_records')
-                    ->whereColumn('medical_records.id', "{$table}.medical_record_id")
-                    ->whereIn('medical_records.student_id', $studentIds ?: [0]);
-            });
-        }
-
-        return $query;
-    }
-
-    private function applyTeacherScope(Request $request, $query, string $table)
-    {
-        $scope = $this->teacherScope($request);
-
-        if ($table === 'teachers') {
-            return $query->whereIn('teachers.id', $scope['teacher_ids'] ?: [0]);
-        }
-
-        if ($table === 'students') {
-            return $query->whereIn('students.class_id', $scope['class_ids'] ?: [0]);
-        }
-
-        if ($table === 'classes') {
-            return $query->whereIn('classes.id', $scope['class_ids'] ?: [0]);
-        }
-
-        if ($table === 'subjects') {
-            return $query->whereIn('subjects.id', $scope['subject_ids'] ?: [0]);
-        }
-
-        if ($this->hasColumn($table, 'student_id')) {
-            return $query->whereIn("{$table}.student_id", $scope['student_ids'] ?: [0]);
-        }
-
-        if ($this->hasColumn($table, 'class_id')) {
-            $query->whereIn("{$table}.class_id", $scope['class_ids'] ?: [0]);
-        }
-
-        if ($this->hasColumn($table, 'subject_id')) {
-            $query->whereIn("{$table}.subject_id", $scope['subject_ids'] ?: [0]);
-        }
-
-        if ($table === 'schedules') {
-            return $query->whereIn('schedules.teacher_name', $scope['teacher_names'] ?: ['__none__']);
-        }
-
-        return $query;
-    }
-
-    private function applyDormScope(Request $request, $query, string $table)
-    {
-        $scope = $this->dormScope($request);
-
-        if ($table === 'rooms') {
-            return $query->whereIn('rooms.id', $scope['room_ids'] ?: [0]);
-        }
-
-        if ($table === 'students') {
-            return $query->whereIn('students.id', $scope['student_ids'] ?: [0]);
-        }
-
-        if ($this->hasColumn($table, 'room_id')) {
-            $query->whereIn("{$table}.room_id", $scope['room_ids'] ?: [0]);
-        }
-
-        if ($this->hasColumn($table, 'student_id')) {
-            $query->whereIn("{$table}.student_id", $scope['student_ids'] ?: [0]);
-        }
-
-        return $query;
-    }
-
-    private function accessibleStudentIds(Request $request): array
-    {
-        return $this->requestMemo($request, 'accessible-student-ids', function () use ($request) {
-            $user = $request->user();
-            $role = $this->tenantContext->activeRole($request);
-            if (! $user || ! $role) {
-                return [];
-            }
-
-            $tenantId = $this->tenantContext->activePesantrenId($request);
-
-            if ($role === 'santri') {
-                return DB::table('students')
-                    ->where('pesantren_id', $tenantId)
-                    ->where('user_id', $user->id)
-                    ->pluck('id')
-                    ->all();
-            }
-
-            if ($role === 'wali_murid') {
-                return DB::table('students')
-                    ->join('guardians', 'students.guardian_id', '=', 'guardians.id')
-                    ->where('students.pesantren_id', $tenantId)
-                    ->where('guardians.user_id', $user->id)
-                    ->pluck('students.id')
-                    ->all();
-            }
-
-            return [];
-        });
-    }
-
-    private function assertPersonalPayload(Request $request, string $table, array $data): void
-    {
-        $role = $this->tenantContext->activeRole($request);
-        if (! in_array($role, ['santri', 'wali_murid'], true)) {
-            return;
-        }
-
-        $studentIds = $this->accessibleStudentIds($request);
-
-        if (isset($data['student_id'])) {
-            abort_unless(in_array((int) $data['student_id'], $studentIds, true), 403, 'Data santri tidak sesuai akses akun.');
-        }
-
-        if (isset($data['invoice_id'])) {
-            abort_unless(
-                DB::table('invoices')->where('id', (int) $data['invoice_id'])->whereIn('student_id', $studentIds ?: [0])->exists(),
-                403,
-                'Tagihan tidak sesuai akses akun.'
-            );
-        }
-
-        if (isset($data['medical_record_id'])) {
-            abort_unless(
-                DB::table('medical_records')->where('id', (int) $data['medical_record_id'])->whereIn('student_id', $studentIds ?: [0])->exists(),
-                403,
-                'Rekam medis tidak sesuai akses akun.'
-            );
-        }
-    }
-
-    private function assertOperationalPayload(Request $request, string $table, array $data): void
-    {
-        $role = $this->tenantContext->activeRole($request);
-        if (! $role) {
-            return;
-        }
-
-        $this->assertMembershipMutationAllowed($request, $table);
-        $this->assertTenantRelations($request, $table, $data);
-
-        if ($role === 'guru') {
-            $scope = $this->teacherScope($request);
-            if (isset($data['student_id'])) {
-                abort_unless(in_array((int) $data['student_id'], $scope['student_ids'], true), 403, 'Santri tidak berada dalam kelas guru.');
-            }
-            if (isset($data['class_id'])) {
-                abort_unless(in_array((int) $data['class_id'], $scope['class_ids'], true), 403, 'Kelas tidak sesuai akses guru.');
-            }
-            if (isset($data['subject_id'])) {
-                abort_unless(in_array((int) $data['subject_id'], $scope['subject_ids'], true), 403, 'Mata pelajaran tidak sesuai akses guru.');
-            }
-        }
-
-        if ($role === 'musyrif') {
-            $scope = $this->dormScope($request);
-            if (isset($data['student_id'])) {
-                abort_unless(in_array((int) $data['student_id'], $scope['student_ids'], true), 403, 'Santri tidak berada dalam binaan musyrif.');
-            }
-            if (isset($data['room_id'])) {
-                abort_unless(in_array((int) $data['room_id'], $scope['room_ids'], true), 403, 'Kamar tidak berada dalam binaan musyrif.');
-            }
-        }
-    }
-
-    private function assertTenantRelations(Request $request, string $table, array $data): void
-    {
-        $tenantId = (int) ($data['pesantren_id'] ?? $this->tenantContext->activePesantrenId($request));
-        if (! $tenantId) {
-            return;
-        }
-
-        foreach ($this->relationTables() as $column => [$relationTable]) {
-            if ($column === 'pesantren_id' || ! isset($data[$column]) || $data[$column] === '') {
-                continue;
-            }
-
-            $relationId = (int) $data[$column];
-            if ($relationTable === 'users') {
-                $exists = $table === 'pesantren_user'
-                    ? DB::table('users')->where('id', $relationId)->whereNull('deleted_at')->exists()
-                    : DB::table('pesantren_user')
-                        ->where('pesantren_id', $tenantId)
-                        ->where('user_id', $relationId)
-                        ->where('status', 'active')
-                        ->exists();
-                abort_unless($exists, 422, 'Relasi user tidak berada pada tenant aktif.');
-
-                continue;
-            }
-
-            if (! $this->hasColumn($relationTable, 'pesantren_id')) {
-                continue;
-            }
-
-            $relation = DB::table($relationTable)
-                ->where('id', $relationId)
-                ->where('pesantren_id', $tenantId)
-                ->when($this->hasColumn($relationTable, 'deleted_at'), fn ($query) => $query->whereNull('deleted_at'));
-            abort_unless($relation->exists(), 422, 'Relasi data tidak berada pada tenant aktif.');
-        }
-    }
-
-    private function assertMembershipMutationAllowed(Request $request, string $table): void
-    {
-        if ($table !== 'pesantren_user') {
-            return;
-        }
-
-        abort_unless(
-            in_array($this->tenantContext->activeRole($request), ['super_admin', 'owner_pesantren'], true),
-            403,
-            'Hanya owner atau super admin yang dapat mengelola membership.'
-        );
-    }
-
-    private function teacherScope(Request $request): array
-    {
-        return $this->requestMemo($request, 'teacher-scope', function () use ($request) {
-            $tenantId = $this->tenantContext->activePesantrenId($request);
-            $userId = $request->user()?->id;
-            $teachers = DB::table('teachers')->where('pesantren_id', $tenantId)->where('user_id', $userId)->get();
-            $teacherIds = $teachers->pluck('id')->all();
-            $teacherNames = $teachers->pluck('name')->filter()->values()->all();
-            $teacherSubjects = $teachers->pluck('subject')->filter()->values()->all();
-
-            $assignments = $this->hasTable('teacher_assignments')
-                ? DB::table('teacher_assignments')
-                    ->where('pesantren_id', $tenantId)
-                    ->where('status', 'active')
-                    ->whereIn('teacher_id', $teacherIds ?: [0])
-                    ->get()
-                : collect();
-
-            if ($assignments->isNotEmpty()) {
-                $subjectIds = $assignments->pluck('subject_id')->filter()->unique()->values()->all();
-                $classIds = $assignments->pluck('class_id')->filter()->unique()->values()->all();
-            } else {
-                $subjectIds = DB::table('subjects')
-                    ->where('pesantren_id', $tenantId)
-                    ->where(function ($query) use ($teacherNames, $teacherSubjects) {
-                        $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
-                            ->orWhereIn('name', $teacherSubjects ?: ['__none__']);
-                    })
-                    ->pluck('id')
-                    ->all();
-
-                $classIds = DB::table('schedules')
-                    ->where('pesantren_id', $tenantId)
-                    ->where(function ($query) use ($teacherNames, $subjectIds) {
-                        $query->whereIn('teacher_name', $teacherNames ?: ['__none__'])
-                            ->orWhereIn('subject_id', $subjectIds ?: [0]);
-                    })
-                    ->pluck('class_id')
-                    ->filter()
-                    ->unique()
-                    ->values()
-                    ->all();
-            }
-
-            $studentIds = DB::table('students')
-                ->where('pesantren_id', $tenantId)
-                ->whereIn('class_id', $classIds ?: [0])
-                ->pluck('id')
-                ->all();
-
-            return [
-                'teacher_ids' => $teacherIds,
-                'teacher_names' => $teacherNames,
-                'subject_ids' => $subjectIds,
-                'class_ids' => $classIds,
-                'student_ids' => $studentIds,
-            ];
-        });
-    }
-
-    private function dormScope(Request $request): array
-    {
-        return $this->requestMemo($request, 'dorm-scope', function () use ($request) {
-            $tenantId = $this->tenantContext->activePesantrenId($request);
-            $userId = $request->user()?->id;
-            $assignedRoomIds = $this->hasTable('musyrif_room_assignments')
-                ? DB::table('musyrif_room_assignments')
-                    ->where('pesantren_id', $tenantId)
-                    ->where('user_id', $userId)
-                    ->where('status', 'active')
-                    ->pluck('room_id')
-                    ->filter()
-                    ->values()
-                    ->all()
-                : [];
-
-            $rooms = DB::table('rooms')
-                ->where('pesantren_id', $tenantId)
-                ->when($assignedRoomIds, fn ($query) => $query->whereIn('id', $assignedRoomIds), function ($query) {
-                    $query->where(function ($query) {
-                        $query->where('block', 'like', '%Putri%')
-                            ->orWhere('name', 'like', 'C-%');
-                    });
-                })
-                ->get();
-
-            $roomNames = $rooms->pluck('name')->all();
-            $studentIds = DB::table('students')
-                ->where('pesantren_id', $tenantId)
-                ->whereIn('room', $roomNames ?: ['__none__'])
-                ->pluck('id')
-                ->all();
-
-            return [
-                'room_ids' => $rooms->pluck('id')->all(),
-                'room_names' => $roomNames,
-                'student_ids' => $studentIds,
-            ];
-        });
-    }
-
-    private function formatRowsForExport($rows, array $columns): array
-    {
-        $maps = $this->relationMaps($rows, $columns);
-
-        return $rows->map(function ($row) use ($columns, $maps) {
-            $item = [];
-            foreach ($columns as $column) {
-                $value = $row->{$column} ?? null;
-                $item[$column] = isset($maps[$column]) && $value
-                    ? ($maps[$column]->get($value) ?? "#{$value}")
-                    : $value;
-            }
-
-            return $item;
-        })->all();
-    }
-
-    private function enrichRow(string $table, ?object $row): ?object
-    {
-        if (! $row) {
-            return $row;
-        }
-
-        $columns = array_keys((array) $row);
-        $maps = $this->relationMaps(collect([$row]), $columns);
-        $data = (array) $this->redactRow($table, $row);
-
-        foreach ($maps as $column => $map) {
-            $value = $row->{$column} ?? null;
-            if (! $value) {
-                continue;
-            }
-
-            $label = $map->get($value);
-            if ($label) {
-                $data[preg_replace('/_id$/', '', $column).'_name'] = $label;
-            }
-        }
-
-        return (object) $data;
-    }
-
-    private function relationMaps($rows, array $columns): array
-    {
-        $maps = [];
-        foreach ($this->relationTables() as $column => [$table, $labelColumn]) {
-            if (! in_array($column, $columns, true) || ! $this->hasTable($table)) {
-                continue;
-            }
-
-            $ids = $rows->pluck($column)->filter()->unique()->values();
-            if ($ids->isEmpty()) {
-                continue;
-            }
-
-            $maps[$column] = DB::table($table)->whereIn('id', $ids)->pluck($labelColumn, 'id');
-        }
-
-        return $maps;
-    }
-
-    private function relationTables(): array
-    {
-        return [
-            'academic_year_id' => ['academic_years', 'name'],
-            'class_id' => ['classes', 'name'],
-            'clinic_id' => ['clinics', 'name'],
-            'doctor_id' => ['doctors', 'name'],
-            'expense_category_id' => ['expense_categories', 'name'],
-            'guardian_id' => ['guardians', 'name'],
-            'invoice_id' => ['invoices', 'invoice_number'],
-            'medical_record_id' => ['medical_records', 'complaint'],
-            'medicine_id' => ['medicines', 'name'],
-            'payment_method_id' => ['payment_methods', 'name'],
-            'pesantren_id' => ['pesantrens', 'name'],
-            'plan_id' => ['plans', 'name'],
-            'program_id' => ['programs', 'name'],
-            'role_id' => ['roles', 'label'],
-            'room_id' => ['rooms', 'name'],
-            'student_id' => ['students', 'name'],
-            'subject_id' => ['subjects', 'name'],
-            'teacher_id' => ['teachers', 'name'],
-            'tenant_role_id' => ['tenant_roles', 'label'],
-            'user_id' => ['users', 'name'],
-        ];
-    }
-
-    private function pdfTemplate(Request $request, string $table): array
-    {
-        $key = match ($table) {
-            'payments' => 'pdf.receipt_template',
-            'letters', 'sick_letters' => 'pdf.letter_template',
-            default => 'pdf.report_template',
-        };
-
-        $tenantId = $request->user()?->hasRole('super_admin') ? null : $this->tenantContext->activePesantrenId($request);
-        $setting = DB::table('system_settings')
-            ->where('key', $key)
-            ->when($tenantId, fn ($query) => $query->where('pesantren_id', $tenantId), fn ($query) => $query->whereNull('pesantren_id'))
-            ->value('value');
-
-        $decoded = json_decode((string) $setting, true);
-        if (is_array($decoded)) {
-            return $decoded + ['title' => 'Pesantenku', 'header' => 'Laporan Pesantenku', 'footer' => 'Dokumen dibuat otomatis oleh Pesantenku.'];
-        }
-
-        return [
-            'title' => 'Pesantenku',
-            'header' => $table === 'payments' ? 'Kwitansi Pembayaran Pesantenku' : 'Laporan Pesantenku',
-            'footer' => 'Dokumen dibuat otomatis oleh Pesantenku.',
-        ];
-    }
-
-    private function pdfResponse(string $title, array $lines, string $filename)
-    {
-        $escapedLines = collect($lines)->map(fn ($line) => str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], substr((string) $line, 0, 120)))->values();
-        $content = "BT\n/F1 12 Tf\n50 800 Td\n({$this->pdfEscape($title)}) Tj\n0 -22 Td\n/F1 9 Tf\n";
-        foreach ($escapedLines as $line) {
-            $content .= "({$line}) Tj\n0 -14 Td\n";
-        }
-        $content .= 'ET';
-
-        $objects = [
-            "1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n",
-            "2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n",
-            "3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>\nendobj\n",
-            "4 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>\nendobj\n",
-            "5 0 obj\n<< /Length ".strlen($content)." >>\nstream\n{$content}\nendstream\nendobj\n",
-        ];
-
-        $pdf = "%PDF-1.4\n";
-        $offsets = [0];
-        foreach ($objects as $object) {
-            $offsets[] = strlen($pdf);
-            $pdf .= $object;
-        }
-
-        $xref = strlen($pdf);
-        $pdf .= "xref\n0 ".(count($objects) + 1)."\n0000000000 65535 f \n";
-        for ($i = 1; $i <= count($objects); $i++) {
-            $pdf .= str_pad((string) $offsets[$i], 10, '0', STR_PAD_LEFT)." 00000 n \n";
-        }
-        $pdf .= "trailer\n<< /Size ".(count($objects) + 1)." /Root 1 0 R >>\nstartxref\n{$xref}\n%%EOF";
-
-        return response($pdf, 200, [
-            'Content-Type' => 'application/pdf',
-            'Content-Disposition' => "attachment; filename={$filename}",
-        ]);
-    }
-
-    private function pdfEscape(string $value): string
-    {
-        return str_replace(['\\', '(', ')'], ['\\\\', '\\(', '\\)'], $value);
-    }
-
-    private function applyProtectedSettingScope(Request $request, $query, string $table): void
-    {
-        if ($table !== 'system_settings' || $request->user()?->hasRole('super_admin')) {
-            return;
-        }
-
-        foreach (self::PROTECTED_SETTING_PREFIXES as $prefix) {
-            $query->where('system_settings.key', 'not like', $prefix.'%');
-        }
-    }
-
-    private function assertSystemSettingPayloadAllowed(Request $request, string $table, array $data, ?object $current = null): void
-    {
-        if ($table !== 'system_settings' || $request->user()?->hasRole('super_admin')) {
-            return;
-        }
-
-        $key = (string) ($data['key'] ?? $current?->key ?? '');
-        abort_if($this->isProtectedSettingKey($key), 403, 'Pengaturan internal hanya dapat dikelola super admin.');
-    }
-
-    private function assertImportRowsAllowed(Request $request, string $table, array $rows, array $schema, array $mapping): void
-    {
-        if ($table !== 'system_settings' || $request->user()?->hasRole('super_admin')) {
-            return;
-        }
-
-        foreach ($rows as $row) {
-            $data = $this->mappedImportRow($row, $schema, $mapping);
-            if ($this->isProtectedSettingKey((string) ($data['key'] ?? ''))) {
-                abort(403, 'Import pengaturan internal hanya dapat dilakukan super admin.');
-            }
-        }
-    }
-
-    private function isProtectedSettingKey(string $key): bool
-    {
-        return collect(self::PROTECTED_SETTING_PREFIXES)->contains(
-            fn (string $prefix) => str_starts_with($key, $prefix)
-        );
-    }
-
-    private function redactRow(string $table, ?object $row): ?object
-    {
-        if (! $row || $table !== 'users') {
-            return $row;
-        }
-
-        return (object) collect((array) $row)->except(self::USER_SENSITIVE_COLUMNS)->all();
-    }
-
-    private function visibleColumns(string $table): array
-    {
-        return collect($this->columns($table))
-            ->reject(fn (string $column) => $table === 'users' && in_array($column, self::USER_SENSITIVE_COLUMNS, true))
-            ->values()
-            ->all();
-    }
-
-    private function audit(Request $request, string $action, string $table, ?int $rowId = null, ?object $before = null, ?object $after = null): void
-    {
-        $user = $request->user();
-        if (! $user || $table === 'audit_logs') {
-            return;
-        }
-
-        DB::table('audit_logs')->insert([
-            'pesantren_id' => $this->hasColumn($table, 'pesantren_id')
-                ? (int) ($after?->pesantren_id ?? $before?->pesantren_id ?? $this->tenantContext->activePesantrenId($request))
-                : null,
-            'user_id' => $user->id,
-            'action' => strtoupper($action).' '.$table,
-            'module' => $table,
-            'ip_address' => $request->ip(),
-            'metadata' => json_encode([
-                'row_id' => $rowId,
-                'before' => $this->redactRow($table, $before),
-                'after' => $this->redactRow($table, $after),
-            ]),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-    }
-
-    private function effectiveRoleAccess(Request $request, string $role): array
-    {
-        if ($role === 'super_admin') {
-            return ['read' => $this->allowed, 'write' => $this->allowed];
-        }
-
-        $tenantId = $request->user()?->hasRole('super_admin')
-            ? $this->tenantContext->activePesantrenId($request)
-            : $this->tenantContext->activePesantrenId($request);
-        if ($tenantId) {
-            $overrides = $this->tenantPermissionOverrides($request, $tenantId);
-            if (isset($overrides[$role])) {
-                return [
-                    'read' => array_values(array_intersect($overrides[$role]['read'] ?? [], $this->allowed)),
-                    'write' => array_values(array_intersect($overrides[$role]['write'] ?? [], $this->allowed)),
-                ];
-            }
-        }
-
-        $dbAccess = $this->globalRolePermissions($role);
-        if ($dbAccess !== null) {
-            return $dbAccess;
-        }
-
-        return $this->roleResources[$role] ?? ['read' => [], 'write' => []];
-    }
-
-    private function customRoleAccessForUser(Request $request): ?array
-    {
-        $user = $request->user();
-        if (! $user || in_array($this->tenantContext->activeRole($request), ['super_admin', 'owner_pesantren'], true)) {
-            return null;
-        }
-
-        $tenantId = $this->tenantContext->activePesantrenId($request);
-        $value = DB::table('pesantren_user')
-            ->join('tenant_roles', 'pesantren_user.tenant_role_id', '=', 'tenant_roles.id')
-            ->where('pesantren_user.pesantren_id', $tenantId)
-            ->where('pesantren_user.user_id', $user->id)
-            ->where('pesantren_user.status', 'active')
-            ->where('tenant_roles.pesantren_id', $tenantId)
-            ->where('tenant_roles.status', 'active')
-            ->value('tenant_roles.permissions');
-
-        $decoded = json_decode((string) $value, true);
-        if (! is_array($decoded)) {
-            return null;
-        }
-
-        return [
-            'read' => array_values(array_intersect($decoded['read'] ?? [], $this->allowed)),
-            'write' => array_values(array_intersect($decoded['write'] ?? [], $this->allowed)),
-        ];
-    }
-
-    private function permissionTenantId(Request $request): int
-    {
-        $user = $request->user()?->loadMissing('roles');
-        abort_unless($user && $user->hasRole(['super_admin', 'owner_pesantren']), 403, 'Hanya super admin dan owner yang dapat mengelola custom role.');
-
-        if ($user->hasRole('owner_pesantren')) {
-            return (int) $this->tenantContext->activePesantrenId($request, 'owner_pesantren');
-        }
-
-        $tenantId = $this->tenantContext->activePesantrenId($request)
-            ?? (int) ($request->input('pesantren_id') ?: $request->query('pesantren_id') ?: DB::table('pesantrens')->whereNull('deleted_at')->value('id'));
-        abort_unless($tenantId && DB::table('pesantrens')->where('id', $tenantId)->whereNull('deleted_at')->exists(), 422, 'Pilih tenant untuk mengelola custom role.');
-
-        return (int) $tenantId;
-    }
-
-    private function validateCustomRole(Request $request, int $tenantId, ?int $ignoreId = null): array
-    {
-        $validated = $request->validate([
-            'name' => ['required', 'string', 'max:80', 'regex:/^[a-z0-9_\-]+$/', Rule::unique('tenant_roles', 'name')->where('pesantren_id', $tenantId)->ignore($ignoreId)],
-            'label' => ['required', 'string', 'max:120'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'read' => ['nullable', 'array'],
-            'read.*' => ['string', Rule::in($this->allowed)],
-            'write' => ['nullable', 'array'],
-            'write.*' => ['string', Rule::in($this->allowed)],
-            'status' => ['nullable', Rule::in(['active', 'inactive'])],
-        ]);
-
-        $validated['write'] = collect($validated['write'] ?? [])->unique()->values()->all();
-        $validated['read'] = collect($validated['read'] ?? [])->merge($validated['write'])->unique()->values()->all();
-        $validated['status'] = $validated['status'] ?? 'active';
-
-        return $validated;
-    }
-
-    private function globalRolePermissions(string $role): ?array
-    {
-        $permissions = DB::table('roles')
-            ->join('permission_role', 'roles.id', '=', 'permission_role.role_id')
-            ->join('permissions', 'permission_role.permission_id', '=', 'permissions.id')
-            ->where('roles.name', $role)
-            ->pluck('permissions.name')
-            ->all();
-
-        if (! $permissions) {
-            return null;
-        }
-
-        return [
-            'read' => collect($permissions)->filter(fn ($name) => str_ends_with($name, '.read'))->map(fn ($name) => Str::beforeLast($name, '.read'))->intersect($this->allowed)->values()->all(),
-            'write' => collect($permissions)->filter(fn ($name) => str_ends_with($name, '.write'))->map(fn ($name) => Str::beforeLast($name, '.write'))->intersect($this->allowed)->values()->all(),
-        ];
-    }
-
-    private function saveGlobalRolePermissions(string $role, array $read, array $write): void
-    {
-        $roleId = DB::table('roles')->where('name', $role)->value('id');
-        abort_unless($roleId, 404);
-
-        $permissionIds = collect($read)->map(fn ($resource) => "{$resource}.read")
-            ->merge(collect($write)->map(fn ($resource) => "{$resource}.write"))
-            ->unique()
-            ->map(function ($permissionName) {
-                return DB::table('permissions')->where('name', $permissionName)->value('id')
-                    ?: DB::table('permissions')->insertGetId([
-                        'name' => $permissionName,
-                        'label' => Str::headline(str_replace(['.', '-'], ' ', $permissionName)),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-            })
-            ->values()
-            ->all();
-
-        DB::table('permission_role')->where('role_id', $roleId)->delete();
-        foreach ($permissionIds as $permissionId) {
-            DB::table('permission_role')->insert([
-                'permission_id' => $permissionId,
-                'role_id' => $roleId,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ]);
-        }
-    }
-
-    private function tenantPermissionOverrides(Request $request, ?int $tenantId = null): array
-    {
-        $tenantId ??= $this->tenantContext->activePesantrenId($request);
-        if (! $tenantId) {
-            return [];
-        }
-
-        $value = DB::table('system_settings')
-            ->where('pesantren_id', $tenantId)
-            ->where('key', 'permissions.matrix_override')
-            ->value('value');
-
-        $decoded = json_decode((string) $value, true);
-
-        return is_array($decoded) ? $decoded : [];
-    }
-
-    private function saveTenantPermissionOverrides(int $tenantId, array $overrides): void
-    {
-        DB::table('system_settings')->updateOrInsert(
-            ['pesantren_id' => $tenantId, 'key' => 'permissions.matrix_override'],
-            [
-                'value' => json_encode($overrides, JSON_UNESCAPED_UNICODE),
-                'updated_at' => now(),
-                'created_at' => now(),
-            ]
-        );
-    }
-
-    private function authorizeResourceAccess(Request $request, string $resource, string $ability): void
-    {
-        abort_unless(in_array($resource, $this->allowed, true), 404);
-
-        $user = $request->user()?->loadMissing('roles');
-        abort_unless($user, 401);
-
-        if ($user->hasRole('super_admin')) {
-            return;
-        }
-
-        $customAccess = $this->customRoleAccessForUser($request);
-        if ($customAccess !== null) {
-            $resources = $ability === 'read'
-                ? array_unique(array_merge($customAccess['read'], $customAccess['write']))
-                : $customAccess['write'];
-            abort_unless(in_array($resource, $resources, true), 403, 'Custom role tenant tidak memiliki akses ke resource ini.');
-
-            return;
-        }
-
-        $role = $this->tenantContext->activeRole($request);
-        abort_unless($role, 403, 'Membership tenant aktif tidak ditemukan.');
-        $roles = [$role];
-        foreach ($roles as $role) {
-            $access = $this->effectiveRoleAccess($request, $role);
-
-            $resources = $ability === 'read'
-                ? array_unique(array_merge($access['read'], $access['write']))
-                : $access['write'];
-
-            if (in_array($resource, $resources, true)) {
-                return;
-            }
-        }
-
-        abort(403, 'Role tidak memiliki akses ke resource ini.');
-    }
-
-    private function payload(Request $request, string $table, bool $includeCreatedAt = true): array
-    {
-        $validator = Validator::make(
-            $request->all(),
-            $this->validationRules($request, $table, $request->isMethod('post')),
-            [],
-            $this->validationAttributes()
-        );
-
-        if ($validator->fails()) {
-            throw new HttpResponseException(response()->json([
-                'message' => 'Data tidak valid. Periksa kembali field yang ditandai.',
-                'errors' => $validator->errors(),
-            ], 422));
-        }
-
-        return $this->preparePayload($request, $table, $request->except(['id', 'created_at', 'updated_at', 'deleted_at']), $includeCreatedAt);
-    }
-
-    private function preparePayload(Request $request, string $table, array $raw, bool $includeCreatedAt = true): array
-    {
-        $data = collect($raw)
-            ->only($this->columns($table))
-            ->merge(['updated_at' => now()])
-            ->when($includeCreatedAt && $this->hasColumn($table, 'created_at'), fn ($data) => $data->merge(['created_at' => $data->get('created_at', now())]));
-
-        if ($table === 'users') {
-            $data->forget(['remember_token', 'mfa_secret']);
-            if ($data->has('password') && filled($data->get('password'))) {
-                $data->put('password', Hash::make((string) $data->get('password')));
-            } else {
-                $data->forget('password');
-            }
-        }
-
-        if ($table === 'system_settings' && $data->has('value') && filled($data->get('value')) && json_decode((string) $data->get('value'), true) === null) {
-            $data->put('value', json_encode(['body' => (string) $data->get('value')], JSON_UNESCAPED_UNICODE));
-        }
-
-        return $data->all();
-    }
-
-    private function validationRules(Request $request, string $table, bool $creating): array
-    {
-        $required = fn (string $rule = 'string') => [$creating ? 'required' : 'sometimes', $rule];
-        $nullableString = ['nullable', 'string', 'max:255'];
-        $nullableText = ['nullable', 'string', 'max:5000'];
-        $nullableDate = ['nullable', 'date'];
-        $nullableInteger = ['nullable', 'integer'];
-        $nullableNumber = ['nullable', 'numeric'];
-        $status = ['nullable', 'string', 'max:60'];
-
-        $rules = match ($table) {
-            'users' => [
-                'name' => $required('string'),
-                'email' => [$creating ? 'required' : 'sometimes', 'email', 'max:255'],
-                'username' => $nullableString,
-                'phone' => $nullableString,
-                'password' => [$creating ? 'required' : 'nullable', 'string', 'min:6'],
-                'status' => $status,
-            ],
-            'students' => [
-                'nis' => $required('string'),
-                'name' => $required('string'),
-                'class_id' => $nullableInteger,
-                'guardian_id' => $nullableInteger,
-                'gender' => $nullableString,
-                'birth_date' => $nullableDate,
-                'room' => $nullableString,
-                'status' => $status,
-            ],
-            'teachers', 'guardians', 'staff', 'rooms', 'payment_methods', 'expense_categories', 'doctors', 'clinics', 'medicines', 'plans' => [
-                'name' => $required('string'),
-                'status' => $status,
-            ],
-            'programs', 'subjects' => [
-                'name' => $required('string'),
-                'code' => $required('string'),
-                'status' => $status,
-            ],
-            'classes' => [
-                'name' => $required('string'),
-                'program_id' => $nullableInteger,
-                'academic_year_id' => $nullableInteger,
-                'student_count' => $nullableInteger,
-                'status' => $status,
-            ],
-            'teacher_assignments' => [
-                'teacher_id' => $required('integer'),
-                'class_id' => $required('integer'),
-                'subject_id' => $required('integer'),
-                'assigned_at' => $nullableDate,
-                'ended_at' => $nullableDate,
-                'status' => $status,
-                'note' => $nullableText,
-            ],
-            'musyrif_room_assignments' => [
-                'user_id' => $required('integer'),
-                'room_id' => $required('integer'),
-                'assigned_at' => $nullableDate,
-                'ended_at' => $nullableDate,
-                'status' => $status,
-                'note' => $nullableText,
-            ],
-            'room_assignments' => [
-                'student_id' => $required('integer'),
-                'room_id' => $required('integer'),
-                'assigned_at' => $nullableDate,
-                'ended_at' => $nullableDate,
-                'status' => $status,
-            ],
-            'permits' => [
-                'student_id' => $required('integer'),
-                'type' => $required('string'),
-                'start_at' => $nullableDate,
-                'end_at' => $nullableDate,
-                'reason' => $nullableText,
-                'status' => $status,
-            ],
-            'payments' => [
-                'invoice_id' => $nullableInteger,
-                'student_id' => $required('integer'),
-                'payment_method_id' => $nullableInteger,
-                'amount' => [$creating ? 'required' : 'sometimes', 'numeric', 'min:0'],
-                'paid_at' => $nullableDate,
-                'status' => $status,
-                'reference' => $nullableString,
-            ],
-            'invoices' => [
-                'student_id' => $required('integer'),
-                'invoice_number' => $required('string'),
-                'period' => $required('string'),
-                'amount' => [$creating ? 'required' : 'sometimes', 'numeric', 'min:0'],
-                'due_date' => $nullableDate,
-                'status' => $status,
-            ],
-            'attendances', 'dorm_attendances' => [
-                'student_id' => $required('integer'),
-                'class_id' => $nullableInteger,
-                'room_id' => $nullableInteger,
-                'date' => [$creating ? 'required' : 'sometimes', 'date'],
-                'session' => $nullableString,
-                'activity' => $nullableString,
-                'status' => $required('string'),
-                'note' => $nullableText,
-            ],
-            'grades' => [
-                'student_id' => $required('integer'),
-                'class_id' => $required('integer'),
-                'subject_id' => $required('integer'),
-                'semester' => $required('string'),
-                'assignment_score' => ['nullable', 'numeric', 'between:0,100'],
-                'midterm_score' => ['nullable', 'numeric', 'between:0,100'],
-                'final_score' => ['nullable', 'numeric', 'between:0,100'],
-                'attitude_score' => ['nullable', 'numeric', 'between:0,100'],
-                'average_score' => ['nullable', 'numeric', 'between:0,100'],
-                'grade' => $nullableString,
-            ],
-            'assignments', 'materials' => [
-                'class_id' => $required('integer'),
-                'subject_id' => $required('integer'),
-                'title' => $required('string'),
-                'due_date' => $nullableDate,
-                'status' => $status,
-            ],
-            'daily_notes' => [
-                'student_id' => $required('integer'),
-                'noted_at' => $nullableDate,
-                'note' => [$creating ? 'required' : 'sometimes', 'string', 'max:5000'],
-            ],
-            'medical_queues' => [
-                'student_id' => $required('integer'),
-                'queue_number' => $required('string'),
-                'status' => $status,
-                'estimated_time' => ['nullable'],
-            ],
-            'medical_records' => [
-                'student_id' => $required('integer'),
-                'complaint' => $required('string'),
-                'diagnosis' => $nullableString,
-                'date' => $nullableDate,
-                'doctor_name' => $nullableString,
-            ],
-            'medical_examinations' => [
-                'medical_record_id' => $required('integer'),
-                'temperature' => $nullableNumber,
-                'blood_pressure' => $nullableString,
-                'pulse' => $nullableInteger,
-                'doctor_note' => $nullableText,
-            ],
-            'medicine_stocks' => [
-                'medicine_id' => $required('integer'),
-                'quantity' => [$creating ? 'required' : 'sometimes', 'integer'],
-                'type' => $required('string'),
-                'date' => $nullableDate,
-            ],
-            'letters' => [
-                'number' => $required('string'),
-                'subject' => $required('string'),
-                'type' => $required('string'),
-                'destination' => $nullableString,
-                'date' => $nullableDate,
-                'status' => $status,
-            ],
-            'room_mutations' => [
-                'student_id' => $required('integer'),
-                'from_room' => $nullableString,
-                'to_room' => $required('string'),
-                'date' => $nullableDate,
-                'status' => $status,
-            ],
-            'system_settings' => [
-                'key' => $required('string'),
-                'value' => ['nullable'],
-            ],
-            default => [],
-        };
-
-        if (! $rules && $creating) {
-            foreach ($this->columnDefinitions($table) as $column) {
-                $name = (string) ($column['name'] ?? '');
-                if ($name === ''
-                    || in_array($name, ['id', 'pesantren_id', 'created_at', 'updated_at', 'deleted_at'], true)
-                    || ($column['nullable'] ?? false)
-                    || ($column['default'] ?? null) !== null
-                    || ($column['auto_increment'] ?? false)) {
-                    continue;
-                }
-
-                $type = strtolower((string) ($column['type_name'] ?? $column['type'] ?? 'string'));
-                $rule = str_contains($type, 'int')
-                    ? 'integer'
-                    : (preg_match('/decimal|numeric|float|double|real/', $type) ? 'numeric' : (str_contains($type, 'date') || str_contains($type, 'time') ? 'date' : 'string'));
-                $rules[$name] = ['required', $rule];
-            }
-        }
-
-        return $rules;
-    }
-
-    private function validationAttributes(): array
-    {
-        return [
-            'student_id' => 'santri',
-            'class_id' => 'kelas',
-            'subject_id' => 'mata pelajaran',
-            'teacher_id' => 'guru',
-            'room_id' => 'kamar',
-            'invoice_id' => 'tagihan',
-            'payment_method_id' => 'metode pembayaran',
-            'medical_record_id' => 'rekam medis',
-            'queue_number' => 'nomor antrian',
-            'invoice_number' => 'nomor tagihan',
-        ];
-    }
-
-    private function invalidateContextCache(string $table, ?object $before, ?object $after): void
-    {
-        if ($table === 'pesantren_user') {
-            $this->tenantContext->invalidateMemberships(
-                (int) ($after?->user_id ?? $before?->user_id ?? 0)
-            );
-        }
-
-        if ($table === 'pesantrens') {
-            $this->tenantContext->invalidatePesantren(
-                (int) ($after?->id ?? $before?->id ?? 0)
-            );
-        }
-    }
-
-    private function columns(string $table): array
-    {
-        return $this->schemaColumns[$table] ??= Schema::getColumnListing($table);
-    }
-
-    private function hasColumn(string $table, string $column): bool
-    {
-        return in_array($column, $this->columns($table), true);
-    }
-
-    private function hasTable(string $table): bool
-    {
-        return $this->schemaTables[$table] ??= Schema::hasTable($table);
-    }
-
-    private function columnDefinitions(string $table): array
-    {
-        return $this->schemaDefinitions[$table] ??= Schema::getColumns($table);
-    }
-
-    private function requestMemo(Request $request, string $key, callable $resolver): mixed
-    {
-        $attribute = "pesantenku.crud.{$key}";
-        if (! $request->attributes->has($attribute)) {
-            $request->attributes->set($attribute, $resolver());
-        }
-
-        return $request->attributes->get($attribute);
     }
 }

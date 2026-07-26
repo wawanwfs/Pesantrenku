@@ -68,7 +68,18 @@ return [
             'driver' => 'redis',
             'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
             'queue' => env('REDIS_QUEUE', 'default'),
-            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 90),
+            // Must remain greater than the default worker timeout (120s).
+            'retry_after' => (int) env('REDIS_QUEUE_RETRY_AFTER', 180),
+            'block_for' => null,
+            'after_commit' => false,
+        ],
+
+        'redis-long' => [
+            'driver' => 'redis',
+            'connection' => env('REDIS_QUEUE_CONNECTION', 'default'),
+            'queue' => env('REDIS_QUEUE', 'default'),
+            // Backup/import/export workers use --timeout=900.
+            'retry_after' => (int) env('REDIS_LONG_QUEUE_RETRY_AFTER', 960),
             'block_for' => null,
             'after_commit' => false,
         ],

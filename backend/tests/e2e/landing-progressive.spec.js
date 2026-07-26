@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { installCspGuard } from './csp-guard.js';
 
+installCspGuard(test);
 test('landing remains usable while the Three.js runtime loads progressively', async ({ page }) => {
   let releaseRuntime;
   await page.route(/LandingThreeRuntime[^/]*\.js/, async (route) => {
@@ -40,4 +42,35 @@ test('landing uses its static fallback without downloading Three.js when WebGL i
   await expect(page.locator('.landing-three-scene')).toHaveClass(/is-fallback/);
   await expect(page.locator('.landing-three-fallback')).toBeVisible();
   expect(runtimeRequested).toBe(false);
+});
+
+test('landing exposes module, role, and workflow sections without unverified audit content', async ({ page }) => {
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+
+  await expect(page.getByRole('heading', { name: /Modul yang saling terhubung/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Satu sistem, banyak peran/ })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /Kerja yang semestinya mengalir/ })).toBeVisible();
+  await expect(page.locator('#peran article')).toHaveCount(10);
+  await expect(page.getByText('Admin Keuangan', { exact: true })).toBeVisible();
+  await expect(page.getByText('Wali Murid', { exact: true })).toBeVisible();
+  await expect(page.getByText(/production-ready/i)).toHaveCount(0);
+  await expect(page.getByText(/status sinkronisasi/i)).toHaveCount(0);
+});
+
+test('mobile landing navigation closes with Escape and restores focus', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'Regresi ini khusus navigasi landing seluler.');
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  const menuButton = page.getByRole('button', { name: 'Buka menu', exact: true });
+  const mobileMenu = page.getByRole('navigation', { name: 'Navigasi seluler' });
+
+  await expect(menuButton).toHaveAttribute('aria-expanded', 'false');
+  await menuButton.click();
+  await expect(menuButton).toHaveAttribute('aria-expanded', 'true');
+  await expect(mobileMenu).toBeVisible();
+  await expect(mobileMenu.getByRole('link', { name: 'Modul', exact: true })).toBeFocused();
+
+  await page.keyboard.press('Escape');
+  await expect(mobileMenu).toBeHidden();
+  await expect(menuButton).toBeFocused();
 });

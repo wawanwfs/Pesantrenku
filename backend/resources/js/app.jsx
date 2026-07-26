@@ -11,6 +11,7 @@ const pages = {
 
 createInertiaApp({
   resolve: async (name) => (await pages[name]()).default,
+  progress: false,
   setup({ el, App, props }) {
     createRoot(el).render(<App {...props} />);
   },

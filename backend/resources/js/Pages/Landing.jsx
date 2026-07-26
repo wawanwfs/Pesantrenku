@@ -1,17 +1,24 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
+  Baby,
   BarChart3,
+  BookOpen,
   BookOpenCheck,
   ChevronRight,
-  Clock3,
+  FileText,
+  GraduationCap,
   HeartPulse,
+  Home,
   Menu,
-  Quote,
-  ShieldCheck,
   MoveDown,
+  Shield,
   Sparkles,
+  Stethoscope,
+  User,
+  Users,
   UsersRound,
+  Wallet,
   WalletCards,
   X,
 } from 'lucide-react';
@@ -47,6 +54,69 @@ const steps = [
   ['01', 'Satukan fondasi', 'Data santri, unit, kelas, dan pengguna disusun dalam satu rumah yang aman.'],
   ['02', 'Jalankan keseharian', 'Tim bekerja dari ruang yang sesuai perannya, dengan notifikasi di saat yang tepat.'],
   ['03', 'Lihat arah tumbuh', 'Pimpinan membaca pola, bukan sekadar tumpukan laporan, untuk mengambil langkah berikutnya.'],
+];
+
+const roleCards = [
+  {
+    icon: Shield,
+    title: 'Super Admin',
+    scope: 'Platform',
+    text: 'Menjaga tenant, paket layanan, kebijakan akses, dan kesehatan operasional platform.',
+  },
+  {
+    icon: User,
+    title: 'Owner Pesantren',
+    scope: 'Manajemen',
+    text: 'Membaca arah pesantren dan mengelola anggota, modul, serta kebutuhan lintas unit.',
+  },
+  {
+    icon: Wallet,
+    title: 'Admin Keuangan',
+    scope: 'Keuangan',
+    text: 'Mengelola tagihan, pembayaran, pengeluaran, dan laporan sesuai kewenangan.',
+  },
+  {
+    icon: GraduationCap,
+    title: 'Admin Akademik',
+    scope: 'Akademik',
+    text: 'Menyusun kelas, jadwal, mata pelajaran, nilai, presensi, dan perkembangan belajar.',
+  },
+  {
+    icon: FileText,
+    title: 'Tata Usaha',
+    scope: 'Administrasi',
+    text: 'Merawat data induk, surat, mutasi, alumni, pengumuman, dan kebutuhan administrasi.',
+  },
+  {
+    icon: Baby,
+    title: 'Santri',
+    scope: 'Pembelajaran',
+    text: 'Mengakses jadwal, akademik, perizinan, kesehatan, tagihan, dan informasi pribadi.',
+  },
+  {
+    icon: Users,
+    title: 'Wali Murid',
+    scope: 'Pendampingan',
+    text: 'Mengikuti informasi akademik, administrasi, perizinan, dan kebutuhan santri terkait.',
+  },
+  {
+    icon: BookOpen,
+    title: 'Guru',
+    scope: 'Pengajaran',
+    text: 'Mengelola kelas, presensi, nilai, tugas, materi, dan catatan perkembangan siswa.',
+  },
+  {
+    icon: Home,
+    title: 'Musyrif',
+    scope: 'Asrama',
+    text: 'Mendampingi santri binaan, kamar, perizinan, pelanggaran, dan catatan harian.',
+  },
+  {
+    icon: Stethoscope,
+    title: 'Klinik',
+    scope: 'Kesehatan',
+    text: 'Mengelola antrean, pemeriksaan, obat, rekam medis, surat sakit, dan rujukan.',
+  },
 ];
 
 export default function Landing({ auth }) {
@@ -90,9 +160,9 @@ export default function Landing({ auth }) {
           </span>
         </a>
         <nav className="landing-nav" aria-label="Navigasi utama">
-          <a href="#keunggulan">Keunggulan</a>
-          <a href="#alur">Cara kerja</a>
-          <a href="#cerita">Cerita kami</a>
+          <a href="#modul">Modul</a>
+          <a href="#peran">Peran</a>
+          <a href="#alur">Alur kerja</a>
         </nav>
         <a className="landing-header-cta" href={destination}>
           {isSignedIn ? 'Buka dashboard' : 'Masuk'} <ArrowRight size={16} aria-hidden="true" />
@@ -111,9 +181,9 @@ export default function Landing({ auth }) {
       </header>
 
       <nav ref={mobileMenuRef} id="landing-mobile-menu" className={`landing-mobile-menu ${menuOpen ? 'is-open' : ''}`} aria-label="Navigasi seluler">
-        <a href="#keunggulan" onClick={() => setMenuOpen(false)}>Keunggulan</a>
-        <a href="#alur" onClick={() => setMenuOpen(false)}>Cara kerja</a>
-        <a href="#cerita" onClick={() => setMenuOpen(false)}>Cerita kami</a>
+        <a href="#modul" onClick={() => setMenuOpen(false)}>Modul</a>
+        <a href="#peran" onClick={() => setMenuOpen(false)}>Peran</a>
+        <a href="#alur" onClick={() => setMenuOpen(false)}>Alur kerja</a>
         <a href={destination} onClick={() => setMenuOpen(false)}>{isSignedIn ? 'Buka dashboard' : 'Masuk ke Pesantrenku'}</a>
       </nav>
 
@@ -128,7 +198,7 @@ export default function Landing({ auth }) {
             <a className="landing-button landing-button-primary" href={destination}>
               {isSignedIn ? 'Masuk ke dashboard' : 'Mulai dari sini'} <ArrowRight size={18} aria-hidden="true" />
             </a>
-            <a className="landing-button landing-button-quiet" href="#keunggulan">Lihat ekosistem <ChevronRight size={18} aria-hidden="true" /></a>
+            <a className="landing-button landing-button-quiet" href="#modul">Lihat ekosistem <ChevronRight size={18} aria-hidden="true" /></a>
           </div>
           <div className="landing-proof" aria-label="Keunggulan platform">
             <div className="landing-avatar-stack" aria-hidden="true"><i>AK</i><i>NA</i><i>RH</i><b>+</b></div>
@@ -137,23 +207,23 @@ export default function Landing({ auth }) {
         </div>
 
         <div className="landing-hero-status landing-reveal landing-reveal-delay" aria-hidden="true">
-          <span><i /> Kampus digital aktif</span>
-          <b>06°58' / 110°25'</b>
+          <span><i /> Ilustrasi kampus digital</span>
+          <b>Pesantrenku / Terpadu</b>
         </div>
-        <a className="landing-next-hint" href="#keunggulan">
+        <a className="landing-next-hint" href="#modul">
           <span>Jelajahi ekosistem</span>
           <MoveDown size={17} aria-hidden="true" />
         </a>
       </section>
 
-      <section className="landing-marquee" aria-label="Area layanan Pesantenku">
+      <section className="landing-marquee" aria-label="Area layanan Pesantrenku">
         <div><span>Akademik</span><i>*</i><span>Keuangan</span><i>*</i><span>Asrama</span><i>*</i><span>Kesehatan</span><i>*</i><span>Wali Santri</span><i>*</i><span>Akademik</span><i>*</i><span>Keuangan</span><i>*</i></div>
       </section>
 
-      <section id="keunggulan" className="landing-features landing-section">
+      <section id="modul" className="landing-features landing-section" aria-labelledby="landing-modul-title">
         <div className="landing-section-heading">
           <p className="landing-kicker"><span /> Satu fondasi, banyak ketenangan</p>
-          <h2>Rapi di layar.<br /><em>Hangat</em> dalam keseharian.</h2>
+          <h2 id="landing-modul-title">Modul yang saling <em>terhubung.</em></h2>
           <p>Setiap modul berbicara dalam bahasa yang sama, sehingga seluruh tim bisa bekerja lebih dekat tanpa kerja ulang.</p>
         </div>
         <div className="landing-feature-grid">
@@ -170,46 +240,51 @@ export default function Landing({ auth }) {
         </div>
       </section>
 
-      <section id="alur" className="landing-workflow landing-section">
-        <div className="landing-workflow-visual">
+      <section id="peran" className="landing-roles landing-section" aria-labelledby="landing-peran-title">
+        <div className="landing-section-heading landing-section-heading-wide">
+          <p className="landing-kicker"><span /> Ruang kerja sesuai tanggung jawab</p>
+          <h2 id="landing-peran-title">Satu sistem, <em>banyak peran.</em></h2>
+          <p>Setiap pengguna melihat konteks dan tindakan yang relevan dengan kewenangannya, tanpa kehilangan hubungan dengan proses lain.</p>
+        </div>
+        <div className="landing-role-grid">
+          {roleCards.map(({ icon: Icon, title, scope, text }) => (
+            <article className="landing-role-card" key={title}>
+              <div className="landing-role-card-top">
+                <span className="landing-role-icon"><Icon size={19} strokeWidth={1.8} aria-hidden="true" /></span>
+                <span className="landing-role-scope">{scope}</span>
+              </div>
+              <h3>{title}</h3>
+              <p>{text}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section id="alur" className="landing-workflow landing-section" aria-labelledby="landing-alur-title">
+        <div className="landing-workflow-visual" aria-hidden="true">
           <div className="landing-workflow-glow" aria-hidden="true" />
           <div className="landing-workflow-console">
-            <div className="landing-console-head"><span /><span /><span /><b>Pesantenku</b><i>live</i></div>
+            <div className="landing-console-head"><span /><span /><span /><b>Pesantrenku</b><i>terhubung</i></div>
             <div className="landing-console-body">
               <aside><b /><b /><b /><b /></aside>
               <div className="landing-console-main">
-                <p>Ringkasan hari ini</p>
+                <p>Ringkasan operasional</p>
                 <div className="landing-console-chart"><i /><i /><i /><i /><i /><i /><i /></div>
                 <div className="landing-console-rows"><span /><span /><span /></div>
               </div>
             </div>
           </div>
           <div className="landing-scan-line" aria-hidden="true" />
-          <div className="landing-workflow-chip chip-one"><UsersRound size={15} /><span>1.284 <small>santri</small></span></div>
-          <div className="landing-workflow-chip chip-two"><BarChart3 size={15} /><span>Semua <small>terbaca</small></span></div>
+          <div className="landing-workflow-chip chip-one"><UsersRound size={15} /><span>Data <small>santri</small></span></div>
+          <div className="landing-workflow-chip chip-two"><BarChart3 size={15} /><span>Lintas <small>modul</small></span></div>
         </div>
         <div className="landing-workflow-copy">
           <p className="landing-kicker"><span /> Dari data, menjadi arah</p>
-          <h2>Kerja yang semestinya mengalir.</h2>
-          <p>Pesantenku tidak hanya mengumpulkan data. Ia menghubungkan peran, memberi konteks, dan menjaga setiap keputusan tetap dekat dengan kebutuhan santri.</p>
+          <h2 id="landing-alur-title">Kerja yang semestinya mengalir.</h2>
+          <p>Pesantrenku tidak hanya mengumpulkan data. Sistem menghubungkan peran, memberi konteks, dan menjaga setiap keputusan tetap dekat dengan kebutuhan santri.</p>
           <ol>
             {steps.map(([number, title, text]) => <li key={number}><b>{number}</b><div><h3>{title}</h3><p>{text}</p></div></li>)}
           </ol>
-        </div>
-      </section>
-
-      <section id="cerita" className="landing-story landing-section">
-        <div className="landing-story-card">
-          <div className="landing-story-quote"><Quote aria-hidden="true" size={38} fill="currentColor" /></div>
-          <blockquote>"Administrasi adalah cara kita menjaga amanah. Ketika sistemnya tenang, kami punya lebih banyak ruang untuk mendidik."</blockquote>
-          <div className="landing-story-person"><span>UH</span><p><strong>Ustadz Hadi</strong><small>Pengasuh & kepala madrasah</small></p></div>
-          <div className="landing-story-lines" aria-hidden="true"><i /><i /><i /></div>
-        </div>
-        <div className="landing-story-side">
-          <p className="landing-kicker"><span /> Dibangun dari lapangan</p>
-          <h2>Teknologi yang tahu kapan harus <em>hening.</em></h2>
-          <p>Kami merancang Pesantenku supaya tidak menambah kebisingan kerja. Yang hadir hanya informasi yang relevan, pada orang yang tepat, pada waktunya.</p>
-          <div className="landing-values"><span><ShieldCheck aria-hidden="true" /> Data terjaga</span><span><Clock3 aria-hidden="true" /> Ritme teratur</span></div>
         </div>
       </section>
 
@@ -218,13 +293,13 @@ export default function Landing({ auth }) {
         <p className="landing-kicker"><Sparkles size={15} aria-hidden="true" /> Mulai ruang kerja yang lebih baik</p>
         <h2>Untuk pesantren yang<br /><em>terus bertumbuh.</em></h2>
         <p>Buka ruang yang menyatukan seluruh ikhtiar baik di pesantren Anda.</p>
-        <a className="landing-button landing-button-light" href={destination}>{isSignedIn ? 'Buka dashboard' : 'Masuk ke Pesantenku'} <ArrowRight size={18} aria-hidden="true" /></a>
+        <a className="landing-button landing-button-light" href={destination}>{isSignedIn ? 'Buka dashboard' : 'Masuk ke Pesantrenku'} <ArrowRight size={18} aria-hidden="true" /></a>
       </section>
 
       <footer className="landing-footer">
         <a href="#beranda" className="landing-brand"><BrandMark /><span><strong>Pesantrenku</strong><small>Ruang tumbuh pesantren</small></span></a>
-        <p>(c) {new Date().getFullYear()} Pesantrenku. Dibuat dengan penuh amanah.</p>
-        <div><a href="#keunggulan">Platform</a><a href={destination}>Masuk</a></div>
+        <p>© {new Date().getFullYear()} Pesantrenku. Dibuat dengan penuh amanah.</p>
+        <div><a href="#modul">Modul</a><a href="#peran">Peran</a><a href={destination}>Masuk</a></div>
       </footer>
     </main>
   );
@@ -276,6 +351,7 @@ function ThreeCampus() {
 
 function ThreeCampusScene() {
   const mountRef = useRef(null);
+  const canvasRef = useRef(null);
   const [sceneState, setSceneState] = useState('loading');
 
   useEffect(() => {
@@ -298,15 +374,20 @@ function ThreeCampusScene() {
     try {
       const probe = document.createElement('canvas');
       if (!probe.getContext('webgl2') && !probe.getContext('webgl')) throw new Error('WebGL unavailable');
+      if (!canvasRef.current) throw new Error('Canvas unavailable');
 
-      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: 'high-performance' });
+      renderer = new THREE.WebGLRenderer({
+        canvas: canvasRef.current,
+        antialias: true,
+        alpha: false,
+        powerPreference: 'high-performance',
+      });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.35));
       renderer.outputColorSpace = THREE.SRGBColorSpace;
       renderer.toneMapping = THREE.ACESFilmicToneMapping;
       renderer.toneMappingExposure = 1.08;
       renderer.shadowMap.enabled = true;
       renderer.shadowMap.type = THREE.PCFShadowMap;
-      mount.prepend(renderer.domElement);
     } catch {
       setSceneState('fallback');
       return undefined;
@@ -474,7 +555,6 @@ function ThreeCampusScene() {
         else object.material?.dispose();
       });
       renderer.dispose();
-      renderer.domElement.remove();
     };
   }, []);
 
@@ -485,6 +565,7 @@ function ThreeCampusScene() {
       role="img"
       aria-label="Kampus Pesantrenku tiga dimensi dengan masjid, asrama, taman, dan santri yang bergerak"
     >
+      <canvas ref={canvasRef} aria-hidden="true" />
       {sceneState === 'loading' && (
         <div className="landing-three-loading" aria-live="polite">
           <i aria-hidden="true" />

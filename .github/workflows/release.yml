@@ -5,30 +5,219 @@ on:
     tags: ['v*']
   workflow_dispatch:
 
+concurrency:
+  group: pesantenku-production-release
+  cancel-in-progress: false
+
 permissions:
   contents: read
-  packages: write
-  id-token: write
-  security-events: write
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}/pesantenku
 
 jobs:
-  image:
+  release-source:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+      - name: Require a semantic release tag
+        if: github.event_name == 'push'
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! printf '%s\n' "$RELEASE_TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$'; then
+            echo "Release tag must be semantic (for example v1.2.3): $RELEASE_TAG" >&2
+            exit 1
+          fi
+      - name: Require release commit on main
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/main; then
+            echo "Release commit $GITHUB_SHA is not reachable from origin/main." >&2
+            exit 1
+          fi
+
+  backend-quality:
+    needs: release-source
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: ${{ vars.MYSQL_TEST_IMAGE }}
+        env:
+          MYSQL_DATABASE: pesantenku_release_test
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -proot"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, sqlite3, pdo_sqlite, pdo_mysql, bcmath, simplexml, zip
+          coverage: none
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: composer validate --strict
+      - run: composer install --no-interaction --prefer-dist
+      - run: vendor/bin/pint --test
+      - run: npm ci
+      - name: Validate OpenAPI contract
+        run: npm run lint:openapi -- --format=github-actions
+      - name: Enforce production CSP compatibility
+        run: npm run lint:csp
+      - name: Enforce RC6 hardening contracts
+        run: npm run lint:hardening
+      - run: cp .env.example .env && php artisan key:generate
+      - run: npm run build
+      - run: npm run check:performance-budget
+      - run: php artisan test
+      - name: Verify MySQL schema and hardening suites
+        env:
+          APP_ENV: testing
+          DB_CONNECTION: mysql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 3306
+          DB_DATABASE: pesantenku_release_test
+          DB_USERNAME: root
+          DB_PASSWORD: root
+          CACHE_STORE: array
+          SESSION_DRIVER: array
+          QUEUE_CONNECTION: sync
+          MAIL_MAILER: array
+          BROADCAST_CONNECTION: 'null'
+          PESANTRENKU_OTEL_ENABLED: 'false'
+          OTEL_SDK_DISABLED: 'true'
+        run: |
+          php artisan migrate:fresh --seed --force
+          php artisan pesantenku:domain-preflight
+          php artisan test tests/Feature/ProductionHardeningTest.php tests/Feature/BackupIntegrityTest.php
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - run: composer audit --locked
+      - run: npm audit --audit-level=high
+
+  mobile-quality:
+    needs: release-source
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: mobile
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          flutter-version: '3.44.7'
+          channel: stable
+          cache: true
+      - run: flutter pub get --enforce-lockfile
+      - run: git diff --exit-code -- pubspec.lock
+      - run: flutter analyze
+      - run: flutter test
+      - name: Validate Android release inputs
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64"
+          test -n "$ANDROID_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_KEY_ALIAS"
+          test -n "$ANDROID_KEY_PASSWORD"
+          case "$MOBILE_API_BASE_URL" in
+            https://*) ;;
+            *) echo "MOBILE_API_BASE_URL must use HTTPS" >&2; exit 1 ;;
+          esac
+      - name: Configure Android release signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          KEYSTORE_PATH="$RUNNER_TEMP/pesantenku-upload.jks"
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+          chmod 600 "$KEYSTORE_PATH"
+          cat > android/key.properties <<EOF
+          storePassword=$ANDROID_KEYSTORE_PASSWORD
+          keyPassword=$ANDROID_KEY_PASSWORD
+          keyAlias=$ANDROID_KEY_ALIAS
+          storeFile=$KEYSTORE_PATH
+          EOF
+          chmod 600 android/key.properties
+      - name: Build signed Android App Bundle
+        env:
+          MOBILE_API_BASE_URL: ${{ vars.MOBILE_API_BASE_URL }}
+        run: flutter build appbundle --release --dart-define=API_BASE_URL="$MOBILE_API_BASE_URL"
+      - name: Verify Android bundle signature and checksum
+        run: |
+          jarsigner -verify -strict -verbose build/app/outputs/bundle/release/app-release.aab \
+            > build/app/outputs/bundle/release/app-release.aab.signature.txt
+          sha256sum build/app/outputs/bundle/release/app-release.aab \
+            > build/app/outputs/bundle/release/app-release.aab.sha256
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pesantenku-android-${{ github.ref_name }}
+          path: |
+            mobile/build/app/outputs/bundle/release/app-release.aab
+            mobile/build/app/outputs/bundle/release/app-release.aab.sha256
+            mobile/build/app/outputs/bundle/release/app-release.aab.signature.txt
+          if-no-files-found: error
+          retention-days: 30
+
+  image:
+    needs: [backend-quality, mobile-quality]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      security-events: write
     outputs:
       digest: ${{ steps.build.outputs.digest }}
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Validate immutable build base images
+        env:
+          NODE_BASE_IMAGE: ${{ vars.NODE_BASE_IMAGE }}
+          COMPOSER_BASE_IMAGE: ${{ vars.COMPOSER_BASE_IMAGE }}
+          RUNTIME_BASE_IMAGE: ${{ vars.RUNTIME_BASE_IMAGE }}
+        run: |
+          for key in NODE_BASE_IMAGE COMPOSER_BASE_IMAGE RUNTIME_BASE_IMAGE; do
+            value=$(eval "printf '%s' "\${$key}"")
+            case "$value" in
+              *@sha256:????????????????????????????????????????????????????????????????) ;;
+              *) echo "$key must be pinned by sha256 digest" >&2; exit 1 ;;
+            esac
+          done
       - id: build
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: backend
           file: backend/Dockerfile
@@ -36,41 +225,114 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ github.sha }}
           provenance: mode=max
           sbom: true
-      - uses: aquasecurity/trivy-action@v0.28.0
+          build-args: |
+            NODE_BASE_IMAGE=${{ vars.NODE_BASE_IMAGE }}
+            COMPOSER_BASE_IMAGE=${{ vars.COMPOSER_BASE_IMAGE }}
+            RUNTIME_BASE_IMAGE=${{ vars.RUNTIME_BASE_IMAGE }}
+      - uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
           format: sarif
           output: trivy-results.sarif
           severity: HIGH,CRITICAL
           exit-code: '1'
-      - uses: github/codeql-action/upload-sarif@v3
+      - uses: github/codeql-action/upload-sarif@4187e74d05793876e9989daffde9c3e66b4acd07 # v3
         if: always()
         with:
           sarif_file: trivy-results.sarif
-      - uses: anchore/sbom-action@v0
+      - uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           image: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
-          format: cyclonedx-json
-          output-file: pesantenku-sbom.cdx.json
-      - uses: actions/upload-artifact@v7
+          format: spdx-json
+          output-file: pesantenku-sbom.spdx.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: pesantenku-sbom
-          path: pesantenku-sbom.cdx.json
-      - uses: sigstore/cosign-installer@v3.8.2
-      - run: cosign sign --yes $IMAGE@${{ steps.build.outputs.digest }}
+          path: pesantenku-sbom.spdx.json
+      - uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+      - name: Sign image and attach signed provenance and SBOM
+        env:
+          IMAGE_REF: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+        run: |
+          set -euo pipefail
+          generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          jq -n \
+            --arg repository "${GITHUB_REPOSITORY}" \
+            --arg sha "${GITHUB_SHA}" \
+            --arg ref "${GITHUB_REF}" \
+            --arg workflow "${GITHUB_WORKFLOW}" \
+            --arg run_id "${GITHUB_RUN_ID}" \
+            --arg run_attempt "${GITHUB_RUN_ATTEMPT}" \
+            --arg generated_at "$generated_at" \
+            '{
+              builder: {id: ("https://github.com/" + $repository + "/actions/runs/" + $run_id + "/attempts/" + $run_attempt)},
+              buildType: "https://github.com/Attestations/GitHubActionsWorkflow@v1",
+              invocation: {
+                configSource: {
+                  uri: ("git+https://github.com/" + $repository + "@" + $ref),
+                  digest: {sha1: $sha},
+                  entryPoint: ".github/workflows/release.yml"
+                },
+                parameters: {ref: $ref},
+                environment: {runner: "github-hosted"}
+              },
+              metadata: {
+                buildInvocationId: ($run_id + "-" + $run_attempt),
+                buildStartedOn: $generated_at,
+                buildFinishedOn: $generated_at,
+                completeness: {parameters: true, environment: false, materials: true},
+                reproducible: false
+              },
+              materials: [{uri: ("git+https://github.com/" + $repository), digest: {sha1: $sha}}]
+            }' > pesantenku-provenance.json
+
+          cosign sign --yes "$IMAGE_REF"
+          cosign attest --yes --type slsaprovenance --predicate pesantenku-provenance.json "$IMAGE_REF"
+          cosign attest --yes --type spdxjson --predicate pesantenku-sbom.spdx.json "$IMAGE_REF"
+
+          cosign verify --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com "$IMAGE_REF" >/dev/null
+          cosign verify-attestation --type slsaprovenance \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com "$IMAGE_REF" >/dev/null
+          cosign verify-attestation --type spdxjson \
+            --certificate-identity "https://github.com/${GITHUB_REPOSITORY}/.github/workflows/release.yml@${GITHUB_REF}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com "$IMAGE_REF" >/dev/null
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: pesantenku-supply-chain-attestations
+          path: |
+            pesantenku-provenance.json
+            pesantenku-sbom.spdx.json
+          if-no-files-found: error
+          retention-days: 90
 
   canary:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: image
     environment: production
     steps:
-      - uses: actions/checkout@v7
-      - uses: azure/setup-kubectl@v4
-      - run: mkdir -p ~/.kube && echo "$KUBE_CONFIG" | base64 -d > ~/.kube/config
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: azure/setup-kubectl@776406bce94f63e41d621b960d78ee25c8b76ede # v4
+      - uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Configure Kubernetes credentials
         env:
           KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}
+        run: |
+          test -n "$KUBE_CONFIG"
+          mkdir -p ~/.kube
+          umask 077
+          printf '%s' "$KUBE_CONFIG" | base64 --decode > ~/.kube/config
       - run: bash deploy/scripts/canary-deploy.sh "$IMAGE@${{ needs.image.outputs.digest }}"
         env:
           IMAGE: ${{ env.IMAGE }}
-          CANARY_HEALTH_URL: ${{ vars.CANARY_HEALTH_URL }}
+          COSIGN_CERTIFICATE_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/release.yml@${{ github.ref }}
+          COSIGN_CERTIFICATE_OIDC_ISSUER: https://token.actions.githubusercontent.com
           PROMETHEUS_URL: ${{ vars.PROMETHEUS_URL }}
+          PROMETHEUS_BEARER_TOKEN: ${{ secrets.PROMETHEUS_BEARER_TOKEN }}

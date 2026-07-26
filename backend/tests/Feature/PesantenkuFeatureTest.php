@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\CreateTenantBackupJob;
+use App\Jobs\RestoreTenantBackupJob;
 use App\Models\User;
 use App\Services\TotpService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
@@ -18,7 +22,7 @@ class PesantenkuFeatureTest extends TestCase
     public function test_reverse_proxy_https_generates_secure_asset_urls(): void
     {
         $response = $this
-            ->withServerVariables(['REMOTE_ADDR' => '172.20.0.2'])
+            ->withServerVariables(['REMOTE_ADDR' => '127.0.0.1'])
             ->withHeaders([
                 'Host' => 'pesantrenku.ai',
                 'X-Forwarded-Host' => 'pesantrenku.ai',
@@ -35,7 +39,7 @@ class PesantenkuFeatureTest extends TestCase
     {
         $this->seed();
 
-        $response = $this->postJson('/api/v1/auth/login', [
+        $response = $this->postApiLogin([
             'login' => 'superadmin@pesantenku.test',
             'password' => 'password',
         ]);
@@ -44,7 +48,7 @@ class PesantenkuFeatureTest extends TestCase
             ->assertJsonStructure(['token', 'user' => ['email'], 'roles'])
             ->assertJsonPath('roles.0', 'super_admin');
 
-        $tenantResponse = $this->postJson('/api/v1/auth/login', [
+        $tenantResponse = $this->postApiLogin([
             'login' => 'keuangan@pesantenku.test',
             'password' => 'password',
         ]);
@@ -77,7 +81,7 @@ class PesantenkuFeatureTest extends TestCase
         $tenantId = DB::table('pesantrens')->where('name', 'Pondok Pesantren Darul Hikmah')->value('id');
         $value = json_encode(['title' => 'Kwitansi Audit'], JSON_THROW_ON_ERROR);
 
-        $this->actingAs($owner)
+        $this->actingAsWithStepUp($owner)
             ->postJson('/web-api/system-settings', ['key' => 'pdf.receipt_template', 'value' => $value])
             ->assertOk()
             ->assertJsonPath('key', 'pdf.receipt_template');
@@ -89,7 +93,7 @@ class PesantenkuFeatureTest extends TestCase
     public function test_dashboard_endpoint_returns_seeded_stats(): void
     {
         $this->seed();
-        $token = $this->postJson('/api/v1/auth/login', [
+        $token = $this->postApiLogin([
             'login' => 'akademik@pesantenku.test',
             'password' => 'password',
         ])->json('token');
@@ -111,17 +115,6 @@ class PesantenkuFeatureTest extends TestCase
         $this->assertDatabaseHas('payments', ['pesantren_id' => $darulId, 'status' => 'pending']);
         $this->assertGreaterThan(0, DB::table('grades')->where('average_score', '>=', 80)->count());
 
-        DB::table('attendances')->insert([
-            'pesantren_id' => $darulId,
-            'student_id' => 1,
-            'class_id' => 1,
-            'date' => '2025-05-21',
-            'session' => 'Bahasa Arab',
-            'status' => 'hadir',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
         $this->assertDatabaseHas('attendances', ['student_id' => 1, 'status' => 'hadir']);
     }
 
@@ -131,7 +124,7 @@ class PesantenkuFeatureTest extends TestCase
 
         $darulId = DB::table('pesantrens')->where('name', 'Pondok Pesantren Darul Hikmah')->value('id');
         $falahId = DB::table('pesantrens')->where('name', 'Pesantren Al-Falah')->value('id');
-        $token = $this->postJson('/api/v1/auth/login', [
+        $token = $this->postApiLogin([
             'login' => 'keuangan@pesantenku.test',
             'password' => 'password',
         ])->json('token');
@@ -154,7 +147,7 @@ class PesantenkuFeatureTest extends TestCase
         $this->seed();
 
         $falahId = DB::table('pesantrens')->where('name', 'Pesantren Al-Falah')->value('id');
-        $token = $this->postJson('/api/v1/auth/login', [
+        $token = $this->postApiLogin([
             'login' => 'owner@pesantenku.test',
             'password' => 'password',
         ])->json('token');
@@ -175,8 +168,8 @@ class PesantenkuFeatureTest extends TestCase
         $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
         $keuangan = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
 
-        $this->actingAs($owner)->get('/dashboard/owner')->assertOk();
-        $ownerDenied = $this->actingAs($owner)->get('/dashboard/super-admin');
+        $this->actingAsWithStepUp($owner)->get('/dashboard/owner')->assertOk();
+        $ownerDenied = $this->actingAsWithStepUp($owner)->get('/dashboard/super-admin');
         $this->assertSame(403, $ownerDenied->getStatusCode(), $ownerDenied->getContent());
 
         $this->actingAs($keuangan)->get('/dashboard/keuangan')->assertOk();
@@ -289,37 +282,52 @@ class PesantenkuFeatureTest extends TestCase
         $this->assertDatabaseHas('programs', ['name' => 'Program Audit', 'code' => 'AUDIT']);
 
         $santri = User::where('email', 'santri@pesantenku.test')->firstOrFail();
-        $notificationId = DB::table('notification_logs')->whereNull('read_at')->value('id');
+        $tenantId = DB::table('pesantren_user')->where('user_id', $santri->id)->where('status', 'active')->value('pesantren_id');
+        $notificationId = DB::table('notification_logs')->insertGetId([
+            'pesantren_id' => $tenantId,
+            'user_id' => null,
+            'title' => 'Pengumuman pengujian receipt',
+            'body' => 'Broadcast tidak boleh dibaca global.',
+            'type' => 'info',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
 
         $this->actingAs($santri)
             ->postJson('/web-actions/notifications/read', ['ids' => [$notificationId]])
             ->assertOk()
             ->assertJsonPath('updated', 1);
 
-        $this->assertNotNull(DB::table('notification_logs')->where('id', $notificationId)->value('read_at'));
+        $this->assertNull(DB::table('notification_logs')->where('id', $notificationId)->value('read_at'));
+        $this->assertDatabaseHas('notification_receipts', [
+            'notification_id' => $notificationId,
+            'user_id' => $santri->id,
+        ]);
 
-        $qr = $this->actingAs($santri)->getJson('/web-actions/qr/generate')
-            ->assertOk()
-            ->assertJsonStructure(['code', 'expires_at'])
+        $qr = $this->actingAs($santri)
+            ->withHeader('X-Pesantren-Id', (string) $tenantId)
+            ->postJson('/web-actions/qr/generate', ['purpose' => 'attendance'])
+            ->assertCreated()
+            ->assertJsonStructure(['code', 'purpose', 'expires_at'])
             ->json('code');
 
-        $this->actingAs($santri)
-            ->postJson('/web-actions/qr/scan', ['code' => $qr])
+        $guru = User::where('email', 'guru@pesantenku.test')->firstOrFail();
+        $registration = $this->registerQrScanner($guru, (int) $tenantId);
+        $challenge = $this->requestQrChallenge($guru, (int) $tenantId, $qr);
+        $this->submitQrScan($guru, (int) $tenantId, $qr, $registration, $challenge)
             ->assertOk()
-            ->assertJsonPath('status', 'success');
+            ->assertJsonPath('status', 'success')
+            ->assertJsonPath('side_effect.type', 'attendance_recorded');
 
-        $this->assertDatabaseHas('qr_tokens', ['code' => $qr, 'status' => 'used']);
+        $this->assertDatabaseHas('qr_tokens', ['code' => hash('sha256', $qr), 'status' => 'used']);
+        $this->assertDatabaseHas('attendances', ['session' => 'qr', 'status' => 'hadir']);
 
         $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
         Storage::fake('local');
 
-        $backupId = $this->actingAs($owner)
-            ->postJson('/web-actions/backup/run')
-            ->assertOk()
-            ->assertJsonPath('status', 'success')
-            ->json('backup_id');
+        $backupId = $this->createAndProcessTenantBackup($owner);
 
-        $this->assertDatabaseHas('backups', ['status' => 'success']);
+        $this->assertDatabaseHas('backups', ['id' => $backupId, 'status' => 'success']);
         $filePath = DB::table('backups')->where('id', $backupId)->value('file_path');
         Storage::disk('local')->assertExists($filePath);
     }
@@ -379,7 +387,7 @@ class PesantenkuFeatureTest extends TestCase
             ->assertJsonPath('status', 'success');
 
         $this->assertDatabaseHas('payments', ['id' => $paymentId, 'status' => 'success']);
-        $this->assertDatabaseHas('invoices', ['id' => $invoiceId, 'status' => 'paid']);
+        $this->assertDatabaseHas('invoices', ['id' => $invoiceId, 'status' => 'unpaid']);
 
         $this->actingAs($keuangan)
             ->getJson('/web-api/payments?status=success&date_from=2025-01-01&date_to=2026-12-31')
@@ -462,14 +470,19 @@ class PesantenkuFeatureTest extends TestCase
             ->assertStatus(422)
             ->assertJsonValidationErrors(['amount']);
 
-        $xls = UploadedFile::fake()->createWithContent('students.xls', "nis\tname\tgender\tstatus\nIMP-001\tSantri Import Excel\tLaki-laki\tactive\n");
+        $legacyXls = UploadedFile::fake()->createWithContent('students.xls', "nis\tname\tgender\tstatus\nIMP-001\tFormat Lama\tLaki-laki\tactive\n");
         $this->actingAs($tu)
-            ->post('/web-api/students/import', ['file' => $xls])
+            ->post('/web-api/students/import', ['file' => $legacyXls])
+            ->assertStatus(422);
+
+        $csv = UploadedFile::fake()->createWithContent('students.csv', "nis,name,gender,status\nIMP-001,Santri Import Aman,Laki-laki,active\n");
+        $this->actingAs($tu)
+            ->post('/web-api/students/import', ['file' => $csv])
             ->assertOk()
             ->assertJsonPath('inserted', 1)
             ->assertJsonPath('skipped', 0);
 
-        $this->assertDatabaseHas('students', ['nis' => 'IMP-001', 'name' => 'Santri Import Excel']);
+        $this->assertDatabaseHas('students', ['nis' => 'IMP-001', 'name' => 'Santri Import Aman']);
 
         $teacherId = DB::table('teachers')->where('name', 'Ust. Ahmad Fauzi')->value('id');
         $this->actingAs($akademik)
@@ -478,17 +491,16 @@ class PesantenkuFeatureTest extends TestCase
                 'status' => 'inactive',
                 'ids' => [$teacherId],
             ])
-            ->assertOk()
-            ->assertJsonPath('updated', 1);
+            ->assertUnprocessable();
 
-        $this->assertDatabaseHas('teachers', ['id' => $teacherId, 'status' => 'inactive']);
+        $this->assertDatabaseHas('teachers', ['id' => $teacherId, 'status' => 'active']);
 
         $this->actingAs($santri)
             ->getJson('/web-actions/notifications')
             ->assertOk()
             ->assertJsonStructure(['data', 'unread', 'polled_at']);
 
-        $this->actingAs($owner)
+        $this->actingAsWithStepUp($owner)
             ->getJson('/web-api/permissions/matrix')
             ->assertOk()
             ->assertJsonPath('matrix.owner_pesantren.label', 'Owner Pesantren')
@@ -536,7 +548,7 @@ class PesantenkuFeatureTest extends TestCase
             ->assertJsonPath('mapping.nama_lengkap', 'name');
 
         $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
-        $this->actingAs($owner)
+        $this->actingAsWithStepUp($owner, 'permission-matrix')
             ->patchJson('/web-api/permissions/matrix', [
                 'role' => 'guru',
                 'read' => ['students', 'classes', 'subjects'],
@@ -596,7 +608,7 @@ class PesantenkuFeatureTest extends TestCase
         $this->actingAs($tu)->get("/web-actions/jobs/{$importUuid}/download")->assertOk();
 
         $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
-        $customRoleId = $this->actingAs($owner)->postJson('/web-api/permissions/custom-roles', [
+        $customRoleId = $this->actingAsWithStepUp($owner, 'custom-role-create')->postJson('/web-api/permissions/custom-roles', [
             'name' => 'finance_viewer',
             'label' => 'Finance Viewer',
             'description' => 'Hanya melihat data santri.',
@@ -607,7 +619,7 @@ class PesantenkuFeatureTest extends TestCase
 
         $keuangan = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
         $membershipId = DB::table('pesantren_user')->where('user_id', $keuangan->id)->value('id');
-        $this->actingAs($owner)->postJson("/web-api/permissions/custom-roles/{$customRoleId}/assign", [
+        $this->actingAsWithStepUp($owner, 'custom-role-assignment')->postJson("/web-api/permissions/custom-roles/{$customRoleId}/assign", [
             'membership_ids' => [$membershipId],
         ])->assertOk()->assertJsonPath('assigned', 1);
 
@@ -616,34 +628,68 @@ class PesantenkuFeatureTest extends TestCase
         $this->assertSame(403, $customDenied->getStatusCode(), $customDenied->getContent());
         $this->assertDatabaseHas('audit_logs', ['module' => 'tenant_roles']);
 
-        $this->actingAs($owner)->getJson('/web-actions/queue/monitor')
+        $this->actingAsWithStepUp($owner)->getJson('/web-actions/queue/monitor')
             ->assertOk()
             ->assertJsonStructure(['workers' => ['pending', 'reserved', 'failed'], 'operations', 'failed_jobs']);
 
         $program = DB::table('programs')->first();
-        $backupId = $this->actingAs($owner)->postJson('/web-actions/backup/run')->assertOk()->json('backup_id');
-        $this->actingAs($owner)->get("/web-actions/backup/{$backupId}/download")->assertOk();
+        $backupId = $this->createAndProcessTenantBackup($owner);
+        $this->actingAsWithStepUp($owner)->get("/web-actions/backup/{$backupId}/download")->assertOk();
         $this->assertDatabaseHas('backups', ['id' => $backupId, 'encryption_provider' => 'local', 'encryption_key_id' => 'app-key']);
         DB::table('programs')->where('id', $program->id)->update(['name' => 'Nama Rusak']);
         $ownerCode = app(TotpService::class)->currentCode($owner->fresh());
-        $restoreRequestId = $this->actingAs($owner)->postJson("/web-actions/backup/{$backupId}/restore", [
+        DB::table('mfa_recovery_codes')->insert([
+            [
+                'user_id' => $owner->id,
+                'code_hash' => hash('sha256', 'feature-owner-'.$owner->id),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+            [
+                'user_id' => User::where('email', 'superadmin@pesantenku.test')->value('id'),
+                'code_hash' => hash('sha256', 'feature-super-admin'),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        ]);
+        $restoreRequestId = $this->actingAsWithStepUp($owner)->postJson("/web-actions/backup/{$backupId}/restore", [
             'confirmation' => 'RESTORE',
             'mfa_code' => $ownerCode,
             'reason' => 'Memulihkan data program setelah simulasi kerusakan.',
         ])->assertStatus(202)->assertJsonPath('request.status', 'pending')->json('request.id');
+        $tenantId = DB::table('backups')->where('id', $backupId)->value('pesantren_id');
         $superAdmin = User::where('email', 'superadmin@pesantenku.test')->firstOrFail();
         $superCode = app(TotpService::class)->currentCode($superAdmin);
-        $this->actingAs($superAdmin)->postJson("/web-actions/backup/restore-requests/{$restoreRequestId}/approve", ['mfa_code' => $superCode])
+        $this->actingAsWithStepUp($superAdmin)
+            ->withHeader('X-Pesantren-Id', (string) $tenantId)
+            ->postJson("/web-actions/backup/restore-requests/{$restoreRequestId}/approve", ['mfa_code' => $superCode])
             ->assertOk()
             ->assertJsonPath('request.status', 'approved');
-        $this->actingAs($superAdmin)->postJson("/web-actions/backup/restore-requests/{$restoreRequestId}/execute", ['mfa_code' => $superCode])
-            ->assertOk()
-            ->assertJsonPath('message', 'Backup tenant berhasil dipulihkan.');
+        Cache::forget("pesantenku:mfa-replay:{$superAdmin->id}:".intdiv(time(), 30));
+        $superExecuteCode = app(TotpService::class)->currentCode($superAdmin);
+        Queue::fake();
+        $this->actingAsWithStepUp($superAdmin)
+            ->withHeader('X-Pesantren-Id', (string) $tenantId)
+            ->postJson("/web-actions/backup/restore-requests/{$restoreRequestId}/execute", ['mfa_code' => $superExecuteCode])
+            ->assertAccepted()
+            ->assertJsonPath('message', 'Restore tenant masuk antrean pemulihan.')
+            ->assertJsonPath('request.status', 'executing');
+
+        $queuedRestore = null;
+        Queue::assertPushed(RestoreTenantBackupJob::class, function (RestoreTenantBackupJob $job) use (&$queuedRestore) {
+            $queuedRestore = $job;
+
+            return true;
+        });
+        $this->assertNotNull($queuedRestore);
+        app()->call([$queuedRestore, 'handle']);
+
         $this->assertDatabaseHas('programs', ['id' => $program->id, 'name' => $program->name]);
         $this->assertDatabaseHas('backup_restore_requests', ['id' => $restoreRequestId, 'status' => 'executed']);
 
         for ($attempt = 1; $attempt <= 11; $attempt++) {
-            $response = $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.77'])->postJson('/api/v1/auth/login', [
+            $this->withServerVariables(['REMOTE_ADDR' => '198.51.100.77']);
+            $response = $this->postApiLogin([
                 'login' => 'rate-limit@example.test',
                 'password' => 'wrong-password',
             ]);
@@ -665,7 +711,7 @@ class PesantenkuFeatureTest extends TestCase
         $this->assertStringContainsString('pesantenku_http_requests_total', $metrics->getContent());
         $this->assertStringContainsString('pesantenku_database_queries_total', $metrics->getContent());
         $this->assertStringContainsString('pesantenku_database_slow_queries_total', $metrics->getContent());
-        $this->assertStringContainsString('pesantenku_queue_redis_depth', $metrics->getContent());
+        $this->assertStringContainsString('pesantenku_queue_depth', $metrics->getContent());
         $this->assertStringContainsString('pesantenku_reverb_connections', $metrics->getContent());
     }
 
@@ -711,7 +757,7 @@ class PesantenkuFeatureTest extends TestCase
         $this->seed();
         Storage::fake('local');
         $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
-        $backupId = $this->actingAs($owner)->postJson('/web-actions/backup/run')->assertOk()->json('backup_id');
+        $backupId = $this->createAndProcessTenantBackup($owner);
 
         $this->artisan('pesantenku:dr-drill', ['--backup-id' => $backupId])
             ->expectsOutputToContain('Backup integrity')
@@ -727,25 +773,33 @@ class PesantenkuFeatureTest extends TestCase
         Storage::fake('local');
         $superAdmin = User::where('email', 'superadmin@pesantenku.test')->firstOrFail();
 
-        $list = $this->actingAs($superAdmin)->getJson('/web-api/users?per_page=100')->assertOk();
+        $list = $this->actingAsWithStepUp($superAdmin)->getJson('/web-api/users?per_page=100')->assertOk();
         foreach ($list->json('data') as $row) {
             $this->assertArrayNotHasKey('password', $row);
             $this->assertArrayNotHasKey('remember_token', $row);
             $this->assertArrayNotHasKey('mfa_secret', $row);
         }
 
-        $this->actingAs($superAdmin)->getJson("/web-api/users/{$superAdmin->id}")
+        $this->actingAsWithStepUp($superAdmin)->getJson("/web-api/users/{$superAdmin->id}")
             ->assertOk()
             ->assertJsonMissingPath('password')
             ->assertJsonMissingPath('remember_token')
             ->assertJsonMissingPath('mfa_secret');
 
-        $created = $this->actingAs($superAdmin)->postJson('/web-api/users', [
+        $this->actingAsWithStepUp($superAdmin)->postJson('/web-api/users', [
             'name' => 'Credential Safe User',
             'email' => 'credential-safe@example.test',
             'password' => 'secret-password',
             'mfa_secret' => 'must-not-be-accepted',
             'remember_token' => 'must-not-be-accepted',
+            'status' => 'active',
+        ])->assertUnprocessable()
+            ->assertJsonValidationErrors(['mfa_secret', 'remember_token']);
+
+        $created = $this->actingAsWithStepUp($superAdmin)->postJson('/web-api/users', [
+            'name' => 'Credential Safe User',
+            'email' => 'credential-safe@example.test',
+            'password' => 'secret-password',
             'status' => 'active',
         ])->assertCreated();
         $created->assertJsonMissingPath('password')
@@ -760,13 +814,13 @@ class PesantenkuFeatureTest extends TestCase
         $this->assertStringNotContainsString('remember_token', (string) $audit);
         $this->assertStringNotContainsString('mfa_secret', (string) $audit);
 
-        $syncExport = $this->actingAs($superAdmin)->get('/web-api/users/export?format=csv')->assertOk();
+        $syncExport = $this->actingAsWithStepUp($superAdmin)->get('/web-api/users/export?format=csv')->assertOk();
         $header = strtok($syncExport->getContent(), "\n");
         $this->assertStringNotContainsString('password', $header);
         $this->assertStringNotContainsString('remember_token', $header);
         $this->assertStringNotContainsString('mfa_secret', $header);
 
-        $jobUuid = $this->actingAs($superAdmin)->postJson('/web-api/users/export/queue', ['format' => 'csv'])
+        $jobUuid = $this->actingAsWithStepUp($superAdmin)->postJson('/web-api/users/export/queue', ['format' => 'csv'])
             ->assertStatus(202)
             ->json('job.uuid');
         $job = DB::table('operation_jobs')->where('uuid', $jobUuid)->first();
@@ -779,7 +833,7 @@ class PesantenkuFeatureTest extends TestCase
             'users.csv',
             "name,email,password\nImport User,import-user@example.test,plaintext-secret\n"
         );
-        $preview = $this->actingAs($superAdmin)->post('/web-api/users/import/preview', [
+        $preview = $this->actingAsWithStepUp($superAdmin)->post('/web-api/users/import/preview', [
             'file' => $import,
             'mapping' => json_encode(['name' => 'name', 'email' => 'email', 'password' => 'password']),
         ])->assertOk();
@@ -790,7 +844,7 @@ class PesantenkuFeatureTest extends TestCase
             'users.csv',
             "name,email,password\nImport User,import-user@example.test,plaintext-secret\n"
         );
-        $this->actingAs($superAdmin)->post('/web-api/users/import', [
+        $this->actingAsWithStepUp($superAdmin)->post('/web-api/users/import', [
             'file' => $import,
             'mapping' => json_encode(['name' => 'name', 'email' => 'email', 'password' => 'password']),
         ])->assertOk()->assertJsonPath('inserted', 1);
@@ -810,16 +864,16 @@ class PesantenkuFeatureTest extends TestCase
             'updated_at' => now(),
         ]);
 
-        $this->actingAs($owner)->postJson('/web-api/system-settings', [
+        $this->actingAsWithStepUp($owner)->postJson('/web-api/system-settings', [
             'key' => 'permissions.matrix_override',
             'value' => '{}',
         ])->assertForbidden();
-        $this->actingAs($owner)->getJson("/web-api/system-settings/{$protectedId}")->assertNotFound();
-        $this->actingAs($owner)->getJson('/web-api/system-settings?per_page=100')
+        $this->actingAsWithStepUp($owner)->getJson("/web-api/system-settings/{$protectedId}")->assertNotFound();
+        $this->actingAsWithStepUp($owner)->getJson('/web-api/system-settings?per_page=100')
             ->assertOk()
             ->assertJsonMissing(['key' => 'permissions.internal_test']);
 
-        $this->actingAs($owner)->postJson('/web-api/system-settings', [
+        $this->actingAsWithStepUp($owner)->postJson('/web-api/system-settings', [
             'key' => 'pdf.receipt_template',
             'value' => json_encode(['title' => 'Kwitansi Tenant']),
         ])->assertOk();
@@ -830,7 +884,7 @@ class PesantenkuFeatureTest extends TestCase
         $this->seed();
         DB::table('users')->where('email', 'keuangan@pesantenku.test')->update(['status' => 'inactive']);
 
-        $this->postJson('/api/v1/auth/login', [
+        $this->postApiLogin([
             'login' => 'keuangan@pesantenku.test',
             'password' => 'password',
         ])->assertUnprocessable()->assertJsonMissingPath('token');
@@ -842,7 +896,7 @@ class PesantenkuFeatureTest extends TestCase
         Storage::fake('local');
         $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
 
-        $jobUuid = $this->actingAs($owner)->postJson('/web-api/pesantrens/export/queue', [
+        $jobUuid = $this->actingAsWithStepUp($owner)->postJson('/web-api/pesantrens/export/queue', [
             'format' => 'csv',
             'search' => 'Pesantren',
         ])->assertStatus(202)->json('job.uuid');
@@ -852,5 +906,32 @@ class PesantenkuFeatureTest extends TestCase
         $this->assertStringContainsString('Pondok Pesantren Darul Hikmah', $contents);
         $this->assertStringNotContainsString('Pesantren Al-Falah', $contents);
         $this->assertSame(1, (int) $job->processed_rows);
+    }
+
+    private function createAndProcessTenantBackup(User $actor, ?int $tenantId = null): int
+    {
+        $tenantId ??= (int) DB::table('pesantren_user')
+            ->where('user_id', $actor->id)
+            ->where('status', 'active')
+            ->value('pesantren_id');
+
+        Queue::fake();
+        $backupId = (int) $this->actingAs($actor)
+            ->withHeader('X-Pesantren-Id', (string) $tenantId)
+            ->postJson('/web-actions/backup/run')
+            ->assertAccepted()
+            ->assertJsonPath('status', 'queued')
+            ->json('backup_id');
+
+        $queuedBackup = null;
+        Queue::assertPushed(CreateTenantBackupJob::class, function (CreateTenantBackupJob $job) use (&$queuedBackup) {
+            $queuedBackup = $job;
+
+            return true;
+        });
+        $this->assertNotNull($queuedBackup);
+        app()->call([$queuedBackup, 'handle']);
+
+        return $backupId;
     }
 }

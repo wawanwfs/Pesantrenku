@@ -37,4 +37,6 @@ mysqlbinlog --start-datetime="2026-07-11 00:00:00" --stop-datetime="2026-07-11 1
 6. Jalankan backend test, deployment smoke test, dan satu workflow pembayaran pada recovery environment.
 7. Simpan report drill dari prefix `dr-drills/` ke arsip compliance.
 
+Workflow recovery terjadwal mengunggah hanya `build/pitr/report.json`. Dump SQL, binary log, dan replay SQL sengaja tidak dimasukkan ke artifact CI karena dapat memuat data sensitif. Jika file antara perlu dipertahankan untuk investigasi, simpan melalui kanal backup terenkripsi dengan akses terbatas, bukan artifact CI umum.
+
 Jangan menjalankan replay binary log langsung ke database production tanpa change approval, backup terkini, dan verifikasi target waktu.

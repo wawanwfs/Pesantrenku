@@ -1,0 +1,267 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-26T18:45:00Z",
+  "local_date": "2026-07-27",
+  "project": "Pesantrenku",
+  "memory_type": "security_hardening_release_handoff",
+  "candidate": "Pesantrenku-hardening-candidate-2026-07-26-RC6",
+  "baseline": {
+    "previous_candidate": "RC5",
+    "baseline_commit": "ac655d00acbed3ccf689d14cfb625f2ba8bd1f38",
+    "previous_memory": "memory/2026-07-12-system-audit.json"
+  },
+  "release_decision": {
+    "status": "NO-GO production",
+    "reason": "All identified RC5 audit gaps have static code/config/test remediation in RC6, but runtime, database, container, Kubernetes, mobile-device, recovery, and staging evidence is still missing.",
+    "promotion_rule": "Do not promote until all mandatory runtime and staging gates pass against the same commit and image digest."
+  },
+  "development_summary": [
+    "Reaudited RC5 across tenant isolation, authorization, privileged authentication, restore, async jobs, deployment, supply chain, observability, frontend, and mobile.",
+    "Closed six RC5 High findings statically and added contract/regression controls to prevent silent rollback of those protections.",
+    "Extended remediation into Medium and Low findings where implementation could be completed without external infrastructure.",
+    "Split large controllers/services into concerns so authorization and tenant boundaries are easier to review and test."
+  ],
+  "high_findings_closed_static": [
+    {
+      "id": "H-01",
+      "title": "Dashboard global cross-tenant isolation",
+      "implementation": [
+        "Explicit dashboard module registry.",
+        "Per-module entitlement and authorization checks.",
+        "Platform telemetry datasets restricted to super administrators.",
+        "Dataset construction rechecks tenant/platform scope instead of trusting the URL module name."
+      ],
+      "key_files": [
+        "backend/app/Support/DashboardModuleRegistry.php",
+        "backend/app/Services/DashboardService.php",
+        "backend/app/Services/TelemetryService.php"
+      ]
+    },
+    {
+      "id": "H-02",
+      "title": "Privilege change MFA and authorization generation",
+      "implementation": [
+        "Authorization generation is stored in sessions and personal access tokens.",
+        "Role, membership, permission, password, account status, and MFA changes revoke sessions/PATs and increment authorization state.",
+        "Privileged base roles and privileged custom roles require MFA.",
+        "Administration of memberships, roles, and permission overrides requires step-up MFA.",
+        "Mobile tokens are device-bound and use narrow abilities."
+      ],
+      "key_files": [
+        "backend/app/Http/Controllers/AuthController.php",
+        "backend/app/Http/Middleware/EnsureActiveUser.php",
+        "backend/app/Services/UserAccessRevoker.php",
+        "backend/app/Services/StepUpMfaService.php",
+        "backend/app/Services/ResourceAuthorization.php",
+        "backend/database/migrations/2026_07_26_000013_add_authorization_state.php"
+      ]
+    },
+    {
+      "id": "H-03",
+      "title": "Restore security-state replay",
+      "implementation": [
+        "Normal tenant restore excludes membership, custom-role, permission, and control-plane security state.",
+        "Security-state restore is a separate explicit mode with stronger approval requirements.",
+        "Restore approvals are bound to approver authorization generation, backup fingerprint, and approved change hash.",
+        "Restore execution revalidates approvals immediately before mutation and revokes affected tenant credentials after security-state changes."
+      ],
+      "key_files": [
+        "backend/app/Services/TenantBackupService.php",
+        "backend/app/Support/TenantBackupManifest.php",
+        "backend/app/Services/RestoreApprovalService.php",
+        "backend/app/Jobs/RestoreTenantBackupJob.php",
+        "backend/app/Services/BackupRestoreService.php",
+        "backend/database/migrations/2026_07_26_000018_bind_restore_approvals.php"
+      ]
+    },
+    {
+      "id": "H-04",
+      "title": "Atomic canary rollback",
+      "implementation": [
+        "Canary PodTemplate image and revision labels are changed in one atomic patch.",
+        "The prior verified PodTemplate is snapshotted before rollout.",
+        "Rollback restores the explicit prior template rather than relying on a single ambiguous rollout undo.",
+        "Runtime pod image digest is checked after rollout and rollback."
+      ],
+      "key_files": [
+        "deploy/scripts/canary-deploy.sh",
+        "deploy/k8s/canary.yaml"
+      ]
+    },
+    {
+      "id": "H-05",
+      "title": "Critical-flow canary validation",
+      "implementation": [
+        "In-cluster synthetic canary covers privileged MFA login, tenant rejection, idempotent mutation, queue roundtrip, database access, signed storage read/delete, broadcast/Reverb publish, and actual running image verification.",
+        "Synthetic operations use dedicated identities and cleanup paths so the canary can be rerun safely."
+      ],
+      "key_files": [
+        "backend/app/Console/Commands/CanarySmoke.php",
+        "backend/app/Jobs/CanaryRoundTripJob.php",
+        "deploy/scripts/canary-deploy.sh"
+      ]
+    },
+    {
+      "id": "H-06",
+      "title": "Mobile privileged MFA",
+      "implementation": [
+        "Mobile login supports MFA challenge, TOTP, and recovery factor.",
+        "Device identity is included in login and MFA completion.",
+        "Expired/revoked credentials clear local authentication state.",
+        "Mobile API tokens use device binding and a narrow mobile ability instead of wildcard privileges."
+      ],
+      "key_files": [
+        "mobile/lib/core/network/api_client.dart",
+        "mobile/lib/features/dashboard/mobile_shell.dart",
+        "backend/app/Http/Controllers/AuthController.php",
+        "backend/app/Http/Controllers/MfaController.php"
+      ]
+    }
+  ],
+  "additional_hardening": {
+    "tenant_and_authorization": [
+      "Tenant-bound resources fail closed without an active tenant.",
+      "Workflow authorization uses both resource write permission and action-specific abilities.",
+      "Entitlement, subscription state, module allowlist, and quota are enforced request-side.",
+      "Mutation and audit writes share a transaction boundary.",
+      "Minimum-owner invariant is serialized with a tenant-scoped lock.",
+      "Application validation plus database migration/triggers reject tenant-null and cross-tenant identity changes for tenant-bound tables."
+    ],
+    "async_and_storage": [
+      "Import/export workers and artifact downloads/deletions reauthorize against current access state.",
+      "Artifact deletion verifies the object is actually absent before clearing metadata.",
+      "Queue monitoring reads Redis and runtime worker heartbeat rather than assuming database queues.",
+      "Long queue visibility timeouts are separated from short jobs and validated against worker timeouts."
+    ],
+    "backup_and_recovery": [
+      "Restore uses distributed locking, atomic worker claim, and a coherent transaction for mutation/status/audit.",
+      "Backup key rotation writes a new object version, verifies decrypt/checksum, swaps pointers transactionally, and records cleanup/orphan failures.",
+      "PITR uses MySQL tooling, snapshot coordinates, binlog rotation handling, and a concurrent-writer drill path."
+    ],
+    "qr_security": [
+      "QR attendance requires a registered mobile scanner device, short-lived challenge, HMAC proof, allowed campus network, tenant/user binding, and single use.",
+      "A screenshot of the QR code alone is no longer sufficient to record attendance."
+    ],
+    "operations_and_observability": [
+      "Production readiness probes KMS encrypt/decrypt, signed storage read/delete, queue roundtrip, SMTP, Reverb, runtime heartbeats, backup age, Alertmanager, and Loki.",
+      "Alertmanager, Loki, and Promtail were added; Promtail does not receive the Docker socket.",
+      "Compose deployment stores the previous image, drains workers, verifies running services, and performs validated rollback.",
+      "Kubernetes NetworkPolicy is rendered for the deployment namespace instead of being fixed to default."
+    ],
+    "supply_chain": [
+      "GitHub Actions are pinned to full commit SHAs.",
+      "Deployment verifies image signature, provenance, SBOM attestation, and expected identity/issuer before rollout.",
+      "Admission policy and immutable image/base-image controls are included as deployment templates.",
+      "Gradle distribution checksum and pinned infrastructure image inputs were added where applicable."
+    ],
+    "frontend_mobile_quality": [
+      "Production CSP browser guard and performance budget checks were added.",
+      "Runtime third-party fonts and frontend demo credentials were removed.",
+      "Favicon and OpenAPI license metadata were repaired.",
+      "Controller/service bounded contexts were split into concerns.",
+      "Regression tests were updated for device identity, MFA, authorization generation, and scanner proof flows."
+    ]
+  },
+  "static_validation": {
+    "source_tree": "The validation below applies to the source tree packaged as RC6 before this memory-only update.",
+    "git_diff_check": "PASS",
+    "php_syntax": {
+      "status": "PASS",
+      "files": 158
+    },
+    "shell_syntax": "PASS",
+    "node_syntax": "PASS",
+    "json_parse": {
+      "status": "PASS",
+      "files": 29
+    },
+    "yaml_parse": {
+      "status": "PASS",
+      "files": 28,
+      "documents": 32
+    },
+    "jsx_parse": {
+      "status": "PASS",
+      "files": 10
+    },
+    "dart_structure": {
+      "status": "PASS",
+      "files": 9
+    },
+    "php_symbol_resolution": {
+      "status": "PASS",
+      "symbols": 96,
+      "imports": 497,
+      "missing": 0
+    },
+    "csp_source": {
+      "status": "PASS",
+      "files": 13
+    },
+    "github_action_pins": "PASS",
+    "hardening_contracts": {
+      "status": "PASS",
+      "checks": 130
+    },
+    "patch_applicability": "PASS for RC5 to RC6",
+    "zip_integrity": "PASS; .git excluded and packaged source matched the validated tree"
+  },
+  "artifact_integrity_before_memory_update": {
+    "rc6_zip_sha256": "057e6565a1d44556ba1ad2b74c5e2691f2ed494dba5cb5e3609ead8aa23d4a14",
+    "rc5_to_rc6_patch_sha256": "779a706add575ab6e4fae0dcb9e05427c34a6c18545923753739d4bdb6a4739f",
+    "implementation_report_sha256": "d9e6fbddff44167c2f53fbd5ecd3bf003ab6789229e245a5bb747848fa035ab8",
+    "remediation_status_sha256": "460fa32f58208ba2839dbc42ce4bd8733451165eb4a41c89fdd89a10acf6c5f3",
+    "static_evidence_sha256": "f517c673a28557ff987b4351f9c48e0913b5bd8c7f44efacb3a340f89eaf9d7f"
+  },
+  "not_run_and_still_mandatory": [
+    "Composer validate/audit, Artisan commands, PHPUnit, and full migration execution.",
+    "MySQL 8.4 fresh migration, rollback, trigger behavior, query plans, concurrency, and lock tests.",
+    "npm ci, production Vite build, Redocly/OpenAPI CLI, npm audit, and full Playwright execution with production headers.",
+    "Docker/Podman image build, Trivy scan, SBOM/provenance inspection, and runtime Cosign verification.",
+    "Kubernetes multi-replica canary, deterministic routing, migration timeout/termination, rollback, NetworkPolicy, and admission enforcement.",
+    "Flutter analyze/test/build, signed AAB installation, device MFA, secure storage, scanner, and revoked-token behavior.",
+    "KMS, object storage, SMTP, Reverb, Alertmanager, Loki, queue, worker, scheduler, and storage-delete integration.",
+    "Staging backup/restore, security-state restore, PITR, key rotation, disaster-recovery drill, load/soak/chaos, penetration test, and privacy/compliance review."
+  ],
+  "mandatory_release_acceptance": [
+    "Run all runtime and staging gates against the same immutable commit and image digest.",
+    "Verify image signature, identity, issuer, provenance, and SBOM before deployment and through cluster admission.",
+    "Demonstrate negative tenant-isolation and revoked-permission tests for CRUD, dashboard, workflow, jobs, downloads, and restore.",
+    "Demonstrate privilege promotion/demotion, custom-role changes, MFA rotation, and restore invalidating prior sessions and PATs.",
+    "Demonstrate deterministic canary routing, revision-local metrics, critical-flow synthetic checks, and explicit rollback to the prior verified template.",
+    "Complete backup, restore, security-state restore, PITR, key rotation, and disaster-recovery exercises with evidence and named approvers.",
+    "Complete mobile release and real-device tests for MFA, secure storage, device-bound tokens, QR scanner proof, and revoked authorization state.",
+    "Record machine evidence, owner approval, and any temporary risk acceptance with owner and expiry."
+  ],
+  "invariants_future_changes_must_preserve": [
+    "Never allow a tenant-bound request to run without an explicit active tenant, including super administrators.",
+    "Never derive workflow authorization from base roles alone; use resource permission plus action-specific ability at mutation time.",
+    "Never grant or expand privileged access without verified MFA readiness, step-up MFA, authorization-generation bump, and credential revocation.",
+    "Never include security/control-plane state in a normal tenant data restore.",
+    "Never trust a restore approval unless approver authorization generation, backup fingerprint, and approved change hash still match.",
+    "Never expose platform telemetry through tenant dashboard module names or unregistered routes.",
+    "Never treat /health alone as a canary acceptance gate.",
+    "Never update canary image and revision labels through separate PodTemplate mutations.",
+    "Never accept a mobile privileged token without device binding and a narrow ability.",
+    "Never record QR attendance from the QR token alone; scanner challenge proof and network/device binding are mandatory.",
+    "Never report a storage delete, key rotation, restore, rollout, or rollback as successful without verifying the resulting state.",
+    "Never mark a runtime-dependent gate PASS when its required tool or infrastructure was unavailable."
+  ],
+  "next_agent": [
+    "Read this file after memory/2026-07-12-system-audit.json; the earlier file describes the original system/UI baseline, while this file describes the RC5 audit and RC6 hardening state.",
+    "Start by running Composer install/validate/audit and PHPUnit against MySQL 8.4; static PHP syntax is not sufficient evidence for migrations, triggers, transactions, and locks.",
+    "Run npm ci, production build, CSP Playwright, OpenAPI lint, dependency audit, and the performance budget before changing frontend code.",
+    "Run Flutter analyze/test/build and device tests before altering mobile authentication or QR scanner flows.",
+    "Deploy only to staging first; exercise KMS, storage, SMTP, Reverb, Redis queues, worker/scheduler heartbeats, Alertmanager/Loki, backup/restore/PITR, canary, and rollback.",
+    "Use backend/scripts/check-hardening-contracts.mjs after any security or deployment change and extend it when adding new invariants.",
+    "Keep backend/tests/Feature/Rc6HardeningTest.php and the updated tenant/production hardening tests aligned with all authorization and restore changes.",
+    "Do not weaken controls merely to make legacy tests pass; update tests to use step-up MFA, device identity, current authorization generation, and scanner proof.",
+    "Do not call RC6 production-ready until runtime/staging evidence is attached to the exact commit and image digest."
+  ],
+  "package_revision": {
+    "name": "RC6.1",
+    "change_type": "memory-only repack",
+    "source_code_delta_from_rc6": "none",
+    "description": "Adds this project-memory handoff without changing application, infrastructure, test, or mobile source."
+  }
+}

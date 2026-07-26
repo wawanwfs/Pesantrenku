@@ -14,24 +14,198 @@ spec:
       labels:
         app: pesantenku
         track: canary
+        pesantenku.io/revision: replace-me
     spec:
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: 930
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 82
+        runAsGroup: 82
+        seccompProfile:
+          type: RuntimeDefault
       containers:
         - name: app
           image: ghcr.io/example/pesantenku@sha256:replace-me
           ports:
             - containerPort: 8000
+          env:
+            - name: METRICS_TRACK
+              value: canary
+            - name: METRICS_REVISION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['pesantenku.io/revision']
+            - name: METRICS_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
           envFrom:
             - secretRef:
-                name: pesantenku-production-env
+                name: pesantenku-app-env
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          startupProbe:
+            httpGet:
+              path: /up
+              port: 8000
+              httpHeaders:
+                - name: Host
+                  value: pesantrenku.ai
+            failureThreshold: 30
+            periodSeconds: 2
           readinessProbe:
             httpGet:
               path: /health
               port: 8000
+              httpHeaders:
+                - name: Host
+                  value: pesantrenku.ai
             initialDelaySeconds: 10
             periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /up
+              port: 8000
+              httpHeaders:
+                - name: Host
+                  value: pesantrenku.ai
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
           resources:
             requests: {cpu: 250m, memory: 256Mi}
             limits: {cpu: "1", memory: 768Mi}
+        - name: default-worker
+          image: ghcr.io/example/pesantenku@sha256:replace-me
+          command:
+            - php
+            - artisan
+            - queue:work
+            - redis
+            - --queue=default
+            - --sleep=1
+            - --tries=3
+            - --timeout=120
+          env:
+            - name: METRICS_TRACK
+              value: canary
+            - name: METRICS_REVISION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['pesantenku.io/revision']
+            - name: METRICS_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - secretRef:
+                name: pesantenku-worker-default-env
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+        - name: backup-worker
+          image: ghcr.io/example/pesantenku@sha256:replace-me
+          command:
+            - php
+            - artisan
+            - queue:work
+            - redis-long
+            - --queue=backups-v1
+            - --sleep=1
+            - --tries=3
+            - --timeout=900
+          env:
+            - name: METRICS_TRACK
+              value: canary
+            - name: METRICS_REVISION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['pesantenku.io/revision']
+            - name: METRICS_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - secretRef:
+                name: pesantenku-worker-backup-env
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+        - name: import-worker
+          image: ghcr.io/example/pesantenku@sha256:replace-me
+          command:
+            - php
+            - artisan
+            - queue:work
+            - redis-long
+            - --queue=imports-v3
+            - --sleep=1
+            - --tries=3
+            - --timeout=900
+          env:
+            - name: METRICS_TRACK
+              value: canary
+            - name: METRICS_REVISION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['pesantenku.io/revision']
+            - name: METRICS_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - secretRef:
+                name: pesantenku-worker-import-env
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {cpu: 500m, memory: 512Mi}
+        - name: export-worker
+          image: ghcr.io/example/pesantenku@sha256:replace-me
+          command:
+            - php
+            - artisan
+            - queue:work
+            - redis-long
+            - --queue=exports-v3
+            - --sleep=1
+            - --tries=3
+            - --timeout=900
+          env:
+            - name: METRICS_TRACK
+              value: canary
+            - name: METRICS_REVISION
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['pesantenku.io/revision']
+            - name: METRICS_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          envFrom:
+            - secretRef:
+                name: pesantenku-worker-export-env
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            requests: {cpu: 100m, memory: 192Mi}
+            limits: {cpu: 500m, memory: 512Mi}
 ---
 apiVersion: v1
 kind: Service

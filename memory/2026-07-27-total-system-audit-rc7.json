@@ -1,0 +1,241 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-07-27T02:55:01+07:00",
+  "project": "Pesantrenku",
+  "memory_type": "total_system_audit_and_remediation",
+  "candidate": "RC7-audited-landing-merge",
+  "baseline": {
+    "local_baseline_commit": "70e3b6dedf1102b791535c8a30fd3145b2589929",
+    "previous_memory": "memory/2026-07-27-rc6-hardening-handoff.json",
+    "history_policy": "Riwayat RC6 dipertahankan, tetapi status validasi dan temuan di file ini menjadi sumber terbaru.",
+    "main_archive": {
+      "name": "Pesantrenku.zip",
+      "sha256": "c5f665e5b1fefe6dd911e51c1fd0372e5eeb965db04c8bc0792b8f14524749d9"
+    },
+    "landing_patch_archive": {
+      "name": "Pesantrenku(1).zip",
+      "sha256": "1cd7f5c8516f78ddd0866f7b287ef47cd400c60175487af29b41a6a8ef8bc5fa"
+    }
+  },
+  "audit_scope": [
+    "Laravel 13, Inertia React 19, database, tenant isolation, authorization, MFA, QR, import/export, queue, backup/restore, observability, tests, dan dependency.",
+    "Landing page patch, CSP, accessibility, responsive behavior, progressive Three.js, performance budget, dan klaim publik.",
+    "Flutter mobile, Docker/Compose, Kubernetes canary, CI/release, recovery/PITR, supply chain, dokumentasi, dan OpenAPI.",
+    "Audit dilakukan paralel oleh agent backend, subagent security/data/tests, agent landing, dan agent release validation; integrasi dan validasi akhir dilakukan pada tree yang sama."
+  ],
+  "release_decision": {
+    "status": "NO-GO production",
+    "reason": "Temuan deterministik paling kritis telah diperbaiki dan seluruh quality gate lokal yang tersedia hijau, tetapi revalidasi row-scope queued import, workflow provisioning plan/subscription production, serta bukti runtime Docker/MySQL/Kubernetes/Flutter/KMS-S3-SMTP-Reverb masih belum lengkap.",
+    "promotion_rule": "Promosi hanya boleh dilakukan setelah temuan tersisa ditutup dan seluruh gate runtime/staging lulus terhadap commit dan image digest yang sama."
+  },
+  "closed_findings": [
+    {
+      "id": "C-01",
+      "severity": "critical",
+      "title": "Collision lifecycle EnsureActiveUser::terminate",
+      "status": "closed",
+      "remediation": "Helper privat diubah menjadi invalidateAuthentication; penolakan API juga selalu membersihkan guard web bila bukan personal access token."
+    },
+    {
+      "id": "C-02",
+      "severity": "critical",
+      "title": "Bootstrap trusted proxy memakai variabel yang tidak ditangkap closure",
+      "status": "closed",
+      "remediation": "Closure middleware sekarang menangkap trustedProxies secara eksplisit."
+    },
+    {
+      "id": "H-01",
+      "severity": "high",
+      "title": "Import santri melewati quota paket",
+      "status": "closed",
+      "remediation": "Import sinkron atomik memeriksa quota per insert; enqueue memeriksa batch; worker memeriksa ulang quota di dalam transaksi terkunci."
+    },
+    {
+      "id": "H-02",
+      "severity": "high",
+      "title": "Chunk queued import dapat berhenti pada driver sync",
+      "status": "closed",
+      "remediation": "Chunk berikutnya baru didispatch setelah distributed lock dilepas."
+    },
+    {
+      "id": "H-03",
+      "severity": "high",
+      "title": "Signed storage URL bocor melalui list/status job",
+      "status": "closed",
+      "remediation": "Respons job hanya memberi guarded download_url; temporary URL baru dibuat setelah endpoint download mengulang authorization dan entitlement."
+    },
+    {
+      "id": "H-04",
+      "severity": "high",
+      "title": "Step-up MFA tidak terikat purpose",
+      "status": "closed",
+      "remediation": "Session step-up harus cocok masa berlaku, authz_version, dan purpose yang diminta; regresi cross-purpose ditambahkan."
+    },
+    {
+      "id": "H-05",
+      "severity": "high",
+      "title": "OpenAPI tidak sama dengan route dan login runtime",
+      "status": "closed",
+      "remediation": "Empat endpoint MFA, QR scanner register/challenge, proof scan, device_id, dan device_name diselaraskan. CI kini memeriksa 50 operasi route literal terhadap OpenAPI."
+    },
+    {
+      "id": "H-06",
+      "severity": "high",
+      "title": "Workflow PITR kehilangan MYSQL_BINLOG_IMAGE",
+      "status": "closed",
+      "remediation": "Workflow mengekspor kedua image dan menolak reference yang bukan immutable sha256 digest."
+    },
+    {
+      "id": "H-07",
+      "severity": "high",
+      "title": "CI gagal pada ZIP tanpa executable bit",
+      "status": "closed",
+      "remediation": "Script action pin dijalankan eksplisit melalui bash; runbook produksi juga memakai bash."
+    },
+    {
+      "id": "M-01",
+      "severity": "medium",
+      "title": "Audit global super-admin menulis pesantren_id 0",
+      "status": "closed",
+      "remediation": "Operasi platform global sekarang menyimpan null dan tidak melanggar foreign key."
+    },
+    {
+      "id": "M-02",
+      "severity": "medium",
+      "title": "Queue monitor gagal total ketika Redis/client tidak tersedia",
+      "status": "closed",
+      "remediation": "Snapshot monitoring degradasi aman ke depth nol dan heartbeat tidak sehat tanpa menjatuhkan endpoint."
+    },
+    {
+      "id": "M-03",
+      "severity": "medium",
+      "title": "Dashboard super-admin mencampur notifikasi tenant",
+      "status": "closed",
+      "remediation": "Dataset platform tidak lagi menambahkan notifikasi tenant; subscription platform tetap global."
+    },
+    {
+      "id": "M-04",
+      "severity": "medium",
+      "title": "Cold start ingress bergantung pada Grafana",
+      "status": "closed",
+      "remediation": "Caddy tidak lagi menunggu health Grafana; outage observability tidak memblokir aplikasi."
+    },
+    {
+      "id": "M-05",
+      "severity": "medium",
+      "title": "AAB release tidak diverifikasi",
+      "status": "partially_closed",
+      "remediation": "Release memverifikasi signature JAR dan menerbitkan checksum SHA-256 bersama AAB. SBOM/attestation dependency Android masih pekerjaan lanjut."
+    }
+  ],
+  "landing_patch_merge": {
+    "strategy": "selective_port",
+    "integrated": [
+      "Section modul, sepuluh peran aktual, dan alur kerja.",
+      "Navigasi desktop/mobile ke section baru.",
+      "Copy Pesantrenku tanpa angka statistik, koordinat, testimonial, atau status audit palsu.",
+      "Responsive role grid dan semantic section headings."
+    ],
+    "preserved_from_main": [
+      "Inertia entry point dan tujuan login/dashboard.",
+      "Dynamic Three.js chunk, WebGL fallback, reduced motion, dan progressive loading.",
+      "CSP production tanpa inline style.",
+      "Escape, initial focus, outside click, dan focus restore pada menu seluler.",
+      "Dependency React/Vite/Tailwind utama dan performance budget."
+    ],
+    "rejected_from_patch": [
+      "AuditReport publik dan klaim production-ready.",
+      "Testimonial, rating, jumlah pengguna/pesantren, SLA, dan klaim nomor satu yang tidak terverifikasi.",
+      "Inline styles, style element, motion/react, shadcn UI bundle, entry point Vite mandiri, dan konfigurasi PNPM.",
+      "Synchronous Three.js import tanpa fallback."
+    ],
+    "changed_files": [
+      "backend/resources/js/Pages/Landing.jsx",
+      "backend/resources/css/landing.css",
+      "backend/tests/e2e/landing-progressive.spec.js"
+    ]
+  },
+  "dependency_updates": {
+    "composer": [
+      "guzzlehttp/guzzle 7.13.2 -> 7.15.1",
+      "guzzlehttp/promises 2.5.0 -> 2.5.1",
+      "guzzlehttp/psr7 2.12.3 -> 2.13.0"
+    ],
+    "audit_result": "Composer dan npm tidak menemukan advisory/vulnerability."
+  },
+  "validation": {
+    "runtime_tools": {
+      "php": "8.4.23",
+      "node": "24.14.0",
+      "npm": "11.9.0",
+      "composer": "2.10.2",
+      "docker_cli": "29.1.3"
+    },
+    "phpunit": "PASS: 123 tests, 122 passed, 1 skipped, 3715 assertions",
+    "landing_feature_test": "PASS: 2 tests, 12 assertions",
+    "php_syntax": "PASS: 157 files",
+    "pint": "PASS after formatting 34 files that carried baseline style debt",
+    "composer_validate": "PASS strict",
+    "composer_audit": "PASS: no advisories",
+    "npm_audit": "PASS: 0 vulnerabilities at high threshold",
+    "csp": "PASS: 13 frontend source files",
+    "openapi_schema": "PASS",
+    "openapi_route_parity": "PASS: 50 literal operations",
+    "hardening_contracts": "PASS: 130/130",
+    "vite_build": "PASS: 2557 modules",
+    "performance_budget": "PASS: 16 files, 1295822 / 1500000 bytes",
+    "yaml_parse": "PASS: 21 workflow/deploy/compose files",
+    "shell_syntax": "PASS",
+    "git_diff_check": "PASS"
+  },
+  "open_findings": [
+    {
+      "id": "H-REMAIN-01",
+      "severity": "high",
+      "title": "Queued import belum mengulang row-level operational scope",
+      "next_action": "Bangun service row-scope murni yang dapat dipanggil request dan worker, lalu revalidasi setiap row terhadap assignment guru/musyrif terkini sebelum insert."
+    },
+    {
+      "id": "H-REMAIN-02",
+      "severity": "high",
+      "title": "Provisioning plan/subscription production belum menjadi workflow resmi dan teraudit",
+      "next_action": "Tambahkan command atau control-plane workflow idempoten untuk bootstrap plan, subscription, modules, owner, MFA, dan audit."
+    },
+    {
+      "id": "MH-REMAIN-03",
+      "severity": "medium-high",
+      "title": "Queued export membekukan scope hasil query awal",
+      "next_action": "Rebuild scope per chunk atau batasi export ke snapshot authorization yang eksplisit dan dapat diaudit."
+    },
+    {
+      "id": "M-REMAIN-04",
+      "severity": "medium",
+      "title": "Canary belum membuktikan worker panjang, scheduler, dan Reverb",
+      "next_action": "Gunakan runtime entrypoint/heartbeat untuk seluruh container canary dan jalankan smoke per queue serta Reverb."
+    },
+    {
+      "id": "M-REMAIN-05",
+      "severity": "medium",
+      "title": "MFA privileged custom role saat disable belum konsisten",
+      "next_action": "Masukkan privileged custom role ke kebijakan MfaController::isPrivileged dan regression test."
+    },
+    {
+      "id": "M-REMAIN-06",
+      "severity": "medium",
+      "title": "Timeline historis dapat membuka before/after pemilik sebelumnya",
+      "next_action": "Redact snapshot historis berdasarkan actor saat event atau simpan subject ownership yang immutable."
+    },
+    {
+      "id": "M-REMAIN-07",
+      "severity": "medium",
+      "title": "Android dependency supply chain belum memiliki SBOM/attestation khusus",
+      "next_action": "Aktifkan Gradle dependency verification/locking dan hasilkan SBOM serta attestation untuk AAB."
+    }
+  ],
+  "not_run": [
+    "Playwright landing: binary Chromium tidak tersedia; test berhenti sebelum assertion.",
+    "Flutter analyze/test dan signed AAB: Flutter SDK tidak tersedia pada container.",
+    "Docker Compose config/build/runtime: Compose plugin dan daemon tidak tersedia pada container; Docker CLI terpasang.",
+    "MySQL 8.4 fresh migration/rollback, recovery PITR, Kubernetes canary, KMS/S3/SMTP/Reverb, scheduler, worker panjang, dan observability drill membutuhkan CI/staging eksternal."
+  ]
+}

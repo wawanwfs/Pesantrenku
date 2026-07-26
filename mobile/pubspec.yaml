@@ -1,5 +1,5 @@
 name: pesantenku_mobile
-description: "A new Flutter project."
+description: "Aplikasi pendamping resmi platform Pesantenku."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -33,14 +33,11 @@ dependencies:
 
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
-  cupertino_icons: ^1.0.8
+  crypto: ^3.0.6
   dio: ^5.10.0
-  flutter_riverpod: ^3.3.2
-  shared_preferences: ^2.5.5
-  fl_chart: ^1.2.0
+  flutter_secure_storage: ^9.2.4
   mobile_scanner: ^7.2.0
-  google_fonts: ^8.1.0
-  lucide_icons: ^0.257.0
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

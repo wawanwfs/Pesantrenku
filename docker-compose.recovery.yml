@@ -1,6 +1,6 @@
 services:
   mysql-source:
-    image: mysql:8.4
+    image: ${MYSQL_RECOVERY_IMAGE:?MYSQL_RECOVERY_IMAGE must be an immutable digest}
     command: ["--server-id=1", "--log-bin=mysql-bin", "--binlog-format=ROW", "--binlog-expire-logs-seconds=604800"]
     environment:
       MYSQL_ROOT_PASSWORD: recovery-secret
@@ -14,7 +14,7 @@ services:
       retries: 30
 
   mysql-recovery:
-    image: mysql:8.4
+    image: ${MYSQL_RECOVERY_IMAGE:?MYSQL_RECOVERY_IMAGE must be an immutable digest}
     command: ["--server-id=2", "--skip-log-bin"]
     environment:
       MYSQL_ROOT_PASSWORD: recovery-secret

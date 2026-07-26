@@ -11,6 +11,14 @@ groups:
         expr: sum(rate(pesantenku_queue_wait_duration_sum_microseconds[5m])) / clamp_min(sum(rate(pesantenku_queue_wait_duration_count[5m])), 0.001) / 1000000
       - record: pesantenku:slow_queries:rate5m
         expr: sum(rate(pesantenku_database_slow_queries_total[5m]))
+      - alert: PesantenkuTargetDown
+        expr: up{job="pesantenku"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: Pesantenku metrics target is unreachable
       - alert: PesantenkuHighErrorRate
         expr: pesantenku:http_errors:ratio5m > 0.01
         for: 10m
@@ -66,3 +74,52 @@ groups:
           severity: warning
         annotations:
           summary: Metrics cache backend is unavailable
+      - alert: PesantenkuMetricsExporterLeaderMissing
+        expr: sum by (track, revision) (pesantenku_metrics_exporter_leader) < 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "No Pesantenku metrics exporter leader for {{ $labels.track }}/{{ $labels.revision }}"
+          description: "All replicas for this revision have failed to hold the exporter lease, so queue and runtime gauges are unavailable."
+
+      - alert: PesantenkuQueueBacklog
+        expr: max by (queue) (pesantenku_queue_depth{state="pending"}) > 100
+        for: 10m
+        labels:
+          severity: warning
+          slo: queue-latency
+        annotations:
+          summary: Queue {{ $labels.queue }} has more than 100 pending jobs
+      - alert: PesantenkuWorkerHeartbeatStale
+        expr: pesantenku_worker_heartbeat_age_seconds < 0 or pesantenku_worker_heartbeat_age_seconds > 120
+        for: 5m
+        labels:
+          severity: critical
+          slo: durability
+        annotations:
+          summary: Queue worker heartbeat is missing or stale
+      - alert: PesantenkuRuntimeHeartbeatStale
+        expr: pesantenku_runtime_heartbeat_age_seconds < 0 or pesantenku_runtime_heartbeat_age_seconds > 120
+        for: 5m
+        labels:
+          severity: critical
+          slo: availability
+        annotations:
+          summary: Runtime {{ $labels.component }}/{{ $labels.name }} heartbeat is missing or stale
+      - alert: PesantenkuBackupStale
+        expr: pesantenku_backup_last_success_age_seconds < 0 or pesantenku_backup_last_success_age_seconds > 86400
+        for: 15m
+        labels:
+          severity: critical
+          slo: durability
+        annotations:
+          summary: No successful tenant backup has completed within 24 hours
+      - alert: PesantenkuOperationalDrillStale
+        expr: pesantenku_operational_drill_last_success_age_seconds < 0 or pesantenku_operational_drill_last_success_age_seconds > 86400
+        for: 15m
+        labels:
+          severity: warning
+          slo: operability
+        annotations:
+          summary: End-to-end operational drill has not succeeded within 24 hours

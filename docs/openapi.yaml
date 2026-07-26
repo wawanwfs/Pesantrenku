@@ -1,170 +1,1521 @@
 openapi: 3.0.3
 info:
   title: Pesantenku API
-  version: 1.0.0
+  version: 1.2.0
+  license:
+    name: Proprietary
+    url: https://pesantrenku.ai/legal/license
+  description: API multi-tenant Pesantenku. Semua endpoint selain login memerlukan token Sanctum. Pengguna non-super-admin
+    selalu dibatasi ke membership tenant aktif. Super admin harus memilih tenant melalui `X-Pesantren-Id` untuk operasi tenant.
+    Semua endpoint mutasi yang ditandai mewajibkan `Idempotency-Key` pada production.
 servers:
-  - url: http://127.0.0.1:8000/api/v1
+- url: https://api.pesantrenku.ai/api/v1
+  description: Production
+- url: http://127.0.0.1:8000/api/v1
+  description: Local development
+tags:
+- name: Authentication
+  description: Login, logout, dan pemulihan sesi pengguna.
+- name: Tenancy
+  description: Pemilihan tenant aktif pada akun multi-tenant.
+- name: Dashboard
+  description: Ringkasan operasional sesuai role tenant aktif.
+- name: Notifications
+  description: Pembacaan, acknowledgement, dan streaming notifikasi.
+- name: QR
+  description: Pembuatan dan pemindaian QR sekali pakai.
+- name: Workflow
+  description: Transisi state machine untuk resource terkelola.
+- name: Resources
+  description: Operasi CRUD, bulk, timeline, dan analytics generik.
+- name: Import and export
+  description: Preview, import, export sinkron, dan export antrean.
+- name: Permissions
+  description: Matriks permission dan custom role tenant.
+- name: Jobs
+  description: Status, unduhan, pembatalan, dan pemulihan operation job.
+- name: Backup and restore
+  description: Backup terenkripsi dan restore dengan approval berlapis.
+security:
+- bearerAuth: []
+  deviceId: []
 paths:
   /auth/login:
     post:
-      summary: Login dengan email, username, atau telepon
+      operationId: authLogin
+      tags:
+      - Authentication
+      security: []
+      summary: Login dengan email, username, atau nomor telepon
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              type: object
-              required: [login, password]
-              properties:
-                login:
-                  type: string
-                  example: superadmin@pesantenku.test
-                password:
-                  type: string
-                  example: password
+              $ref: '#/components/schemas/LoginRequest'
       responses:
-        "200":
-          description: Token Sanctum dan profil user
+        '200':
+          description: Token Sanctum, user, membership, dan tenant aktif
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /auth/logout:
+    post:
+      operationId: authLogout
+      tags:
+      - Authentication
+      summary: Mencabut token aktif
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
   /auth/me:
     get:
-      security:
-        - bearerAuth: []
-      summary: Profil user saat ini
+      operationId: getAuthSession
+      tags:
+      - Authentication
+      summary: Membaca sesi, role tenant aktif, dan membership pengguna
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
       responses:
-        "200":
-          description: Profil user
-  /tenant/switch:
+        '200':
+          description: Sesi pengguna saat ini
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthSession'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /security/mfa/enroll:
     post:
-      security:
-        - bearerAuth: []
-      summary: Ganti pesantren aktif untuk user multi-tenant
+      operationId: startMfaEnrollment
+      tags:
+      - Authentication
+      summary: Memulai aktivasi atau rotasi MFA
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required: [pesantren_id]
+              required:
+              - password
+              properties:
+                password:
+                  type: string
+                  format: password
+                current_mfa:
+                  type: string
+                  nullable: true
+                  maxLength: 64
+      responses:
+        '200':
+          description: Secret dan provisioning URI yang berlaku sepuluh menit
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - secret
+                - provisioning_uri
+                - expires_in_seconds
+                properties:
+                  secret:
+                    type: string
+                  provisioning_uri:
+                    type: string
+                    format: uri
+                  expires_in_seconds:
+                    type: integer
+                    example: 600
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /security/mfa/confirm:
+    post:
+      operationId: confirmMfaEnrollment
+      tags:
+      - Authentication
+      summary: Mengonfirmasi enrollment MFA dan menerbitkan recovery code
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - code
+              properties:
+                code:
+                  type: string
+                  pattern: ^[0-9]{6}$
+      responses:
+        '200':
+          description: MFA aktif dan recovery code ditampilkan satu kali
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaRecoveryCodes'
+        '410':
+          description: Sesi enrollment sudah kedaluwarsa
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /security/mfa/recovery-codes:
+    post:
+      operationId: regenerateMfaRecoveryCodes
+      tags:
+      - Authentication
+      summary: Mencabut dan membuat ulang recovery code MFA
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaFactorConfirmation'
+      responses:
+        '200':
+          description: Recovery code baru ditampilkan satu kali
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MfaRecoveryCodes'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /security/mfa:
+    delete:
+      operationId: disableMfa
+      tags:
+      - Authentication
+      summary: Menonaktifkan MFA untuk akun non-privileged
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MfaFactorConfirmation'
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /tenant/switch:
+    post:
+      operationId: switchTenant
+      tags:
+      - Tenancy
+      summary: Memilih tenant aktif
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - pesantren_id
               properties:
                 pesantren_id:
                   type: integer
-                  example: 1
+                  minimum: 1
       responses:
-        "200":
-          description: Pesantren aktif
+        '200':
+          description: Tenant dan role aktif
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  active_pesantren:
+                    $ref: '#/components/schemas/Tenant'
+                  active_role:
+                    type: string
+                    nullable: true
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /dashboard/{role}:
     get:
-      security:
-        - bearerAuth: []
-      summary: Data dashboard role
+      operationId: getRoleDashboard
+      tags:
+      - Dashboard
+      summary: Dashboard sesuai panel dan role tenant aktif
       parameters:
-        - $ref: "#/components/parameters/TenantHeader"
-        - in: path
-          name: role
-          required: true
-          schema:
-            type: string
-            enum: [super-admin, owner, keuangan, akademik, tu, santri, wali-murid, musyrif, guru, klinik]
+      - $ref: '#/components/parameters/TenantHeader'
+      - in: path
+        name: role
+        required: true
+        schema:
+          type: string
+          enum:
+          - super-admin
+          - owner
+          - keuangan
+          - akademik
+          - tu
+          - santri
+          - wali-murid
+          - musyrif
+          - guru
+          - klinik
       responses:
-        "200":
-          description: Statistik, chart, tabel, dan widget dashboard
+        '200':
+          description: Statistik, grafik, tabel, dan widget dashboard
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /notifications:
+    get:
+      operationId: listNotifications
+      tags:
+      - Notifications
+      summary: Daftar notifikasi tenant aktif
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      responses:
+        '200':
+          description: Notifikasi dan jumlah belum dibaca
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  unread:
+                    type: integer
+                  notifications:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Notification'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /notifications/read:
+    post:
+      operationId: markNotificationsRead
+      tags:
+      - Notifications
+      summary: Menandai semua atau notifikasi terpilih sebagai sudah dibaca
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+  /notifications/stream:
+    get:
+      operationId: streamNotifications
+      tags:
+      - Notifications
+      summary: Stream perubahan notifikasi dan heartbeat
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Server-sent event stream berdurasi terbatas; client harus reconnect
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /qr/generate:
+    post:
+      operationId: generateQr
+      tags:
+      - QR
+      summary: Membuat QR sekali pakai yang berlaku lima menit
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                purpose:
+                  type: string
+                  default: identity
+                  enum:
+                  - identity
+                  - attendance
+                  - dorm-attendance
+      responses:
+        '201':
+          description: Kode QR mentah hanya dikembalikan satu kali; server menyimpan hash
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QrToken'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /qr/scanner/register:
+    post:
+      operationId: registerQrScanner
+      tags:
+      - QR
+      summary: Mendaftarkan perangkat pemindai QR pada tenant dan jaringan aktif
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_name:
+                  type: string
+                  maxLength: 190
+      responses:
+        '201':
+          description: Secret pemindai ditampilkan satu kali
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - scanner_device_id
+                - scanner_secret
+                - device_id
+                - registered_at
+                properties:
+                  scanner_device_id:
+                    type: integer
+                  scanner_secret:
+                    type: string
+                  device_id:
+                    type: string
+                  registered_at:
+                    type: string
+                    format: date-time
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /qr/scan/challenge:
+    post:
+      operationId: createQrScanChallenge
+      tags:
+      - QR
+      summary: Membuat challenge singkat yang terikat ke QR, perangkat, actor, tenant, dan jaringan
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - code
+              properties:
+                code:
+                  type: string
+                  minLength: 64
+                  maxLength: 64
+      responses:
+        '201':
+          description: Challenge dan pesan yang harus ditandatangani dengan HMAC-SHA256
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                - challenge_id
+                - nonce
+                - expires_at
+                - proof_algorithm
+                - proof_message
+                properties:
+                  challenge_id:
+                    type: string
+                    format: uuid
+                  nonce:
+                    type: string
+                  expires_at:
+                    type: string
+                    format: date-time
+                  proof_algorithm:
+                    type: string
+                    enum:
+                    - HMAC-SHA256
+                  proof_message:
+                    type: string
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /qr/scan:
+    post:
+      operationId: scanQr
+      tags:
+      - QR
+      summary: Memproses QR secara atomik dan menjalankan side effect domain
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - code
+              - challenge_id
+              - nonce
+              - proof
+              properties:
+                code:
+                  type: string
+                  minLength: 64
+                  maxLength: 64
+                challenge_id:
+                  type: string
+                  format: uuid
+                nonce:
+                  type: string
+                  minLength: 32
+                  maxLength: 128
+                proof:
+                  type: string
+                  pattern: ^[a-fA-F0-9]{64}$
+      responses:
+        '200':
+          description: QR berhasil diklaim dan diproses
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  status:
+                    type: string
+                    enum:
+                    - success
+                  token_id:
+                    type: integer
+                  purpose:
+                    type: string
+                  side_effect:
+                    type: object
+                    additionalProperties: true
+        '409':
+          description: QR sedang atau telah diproses pemindai lain
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /workflow/{resource}/{id}/{transition}:
+    post:
+      operationId: transitionResourceWorkflow
+      tags:
+      - Workflow
+      summary: Menjalankan transisi workflow yang tervalidasi dan terkunci
+      description: 'Resource/transisi yang didukung: `permits` (`approve`, `reject`, `cancel`),
+
+        `payments` (`verify`, `reject`), dan `medical-queues` (`start`, `finish`, `cancel`).
+
+        Catatan wajib untuk transisi `reject` dan `cancel`. Selain permission `resource.write`,
+        actor harus memiliki ability aksi eksplisit seperti `payments.verify`.
+
+        '
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      - in: path
+        name: resource
+        required: true
+        schema:
+          type: string
+          enum:
+          - permits
+          - payments
+          - medical-queues
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: integer
+          minimum: 1
+      - in: path
+        name: transition
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note:
+                  type: string
+                  maxLength: 2000
+      responses:
+        '200':
+          description: State baru dan audit workflow
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          description: State berubah secara paralel
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /permissions/matrix:
+    get:
+      operationId: getPermissionMatrix
+      tags:
+      - Permissions
+      summary: Membaca matriks permission global atau tenant aktif
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Role, resource delegable, endpoint, dan workflow
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+      description: Tanpa tenant terpilih, super admin hanya menerima baseline global read-only. Perubahan selalu disimpan
+        sebagai override tenant.
+    patch:
+      operationId: updatePermissionMatrix
+      tags:
+      - Permissions
+      summary: Memperbarui permission role bawaan
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionMatrixUpdate'
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+    post:
+      operationId: replacePermissionMatrix
+      tags:
+      - Permissions
+      summary: Memperbarui permission role bawaan
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PermissionMatrixUpdate'
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /permissions/custom-roles:
+    get:
+      operationId: listCustomRoles
+      tags:
+      - Permissions
+      summary: Daftar custom role tenant aktif
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Custom role, membership, dan resource delegable
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+    post:
+      operationId: createCustomRole
+      tags:
+      - Permissions
+      summary: Membuat custom role tenant
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomRole'
+      responses:
+        '201':
+          description: Custom role dibuat
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /permissions/custom-roles/{id}:
+    patch:
+      operationId: updateCustomRole
+      tags:
+      - Permissions
+      summary: Memperbarui custom role tenant
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CustomRole'
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+    delete:
+      operationId: deleteCustomRole
+      tags:
+      - Permissions
+      summary: Menghapus custom role dan melepas assignment-nya
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /permissions/custom-roles/{id}/assign:
+    post:
+      operationId: assignCustomRole
+      tags:
+      - Permissions
+      summary: Mengganti membership yang memakai custom role
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - membership_ids
+              properties:
+                membership_ids:
+                  type: array
+                  uniqueItems: true
+                  items:
+                    type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+      description: Semua `membership_ids` harus berada pada tenant aktif; request ditolak atomik bila satu ID berada di tenant
+        lain.
+  /jobs:
+    get:
+      operationId: listOperationJobs
+      tags:
+      - Jobs
+      summary: Daftar operation job pengguna pada tenant aktif
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Daftar job
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jobs:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/OperationJob'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /jobs/{uuid}:
+    get:
+      operationId: getOperationJob
+      tags:
+      - Jobs
+      summary: Status operation job
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: Status job
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperationJob'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: cancelOperationJob
+      tags:
+      - Jobs
+      summary: Menghapus metadata dan artefak job milik pengguna
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/UuidPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /jobs/{uuid}/download:
+    get:
+      operationId: downloadOperationJob
+      tags:
+      - Jobs
+      summary: Mengunduh hasil job yang selesai dan belum kedaluwarsa
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/UuidPath'
+      responses:
+        '200':
+          description: File hasil export
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /queue/monitor:
+    get:
+      operationId: getQueueMonitor
+      tags:
+      - Jobs
+      summary: Statistik antrean untuk role operasional berwenang
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      responses:
+        '200':
+          description: Statistik antrean dan failed jobs
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /backup/run:
+    post:
+      operationId: runTenantBackup
+      tags:
+      - Backup and restore
+      summary: Membuat backup terenkripsi untuk tenant aktif
+      description: Backup platform penuh harus dilakukan oleh infrastruktur, bukan endpoint aplikasi.
+      parameters:
+      - $ref: '#/components/parameters/TenantHeaderRequired'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '202':
+          description: Backup job dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  status:
+                    type: string
+                    enum: [queued]
+                  backup_id:
+                    type: integer
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /backup/{id}/download:
+    get:
+      operationId: downloadTenantBackup
+      tags:
+      - Backup and restore
+      summary: Mengunduh backup tenant terenkripsi
+      parameters:
+      - $ref: '#/components/parameters/TenantHeaderRequired'
+      - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Ciphertext backup
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /backup/{id}/restore:
+    post:
+      operationId: requestTenantRestore
+      tags:
+      - Backup and restore
+      summary: Membuat permintaan restore; tidak langsung menimpa data
+      parameters:
+      - $ref: '#/components/parameters/TenantHeaderRequired'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [confirmation, mfa_code, reason]
+              properties:
+                confirmation:
+                  type: string
+                  enum: [RESTORE]
+                mfa_code:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+                reason:
+                  type: string
+                  minLength: 10
+                  maxLength: 1000
+      responses:
+        '202':
+          description: Permintaan restore dibuat
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /backup/restore-requests:
+    get:
+      operationId: listRestoreRequests
+      tags:
+      - Backup and restore
+      summary: Daftar permintaan restore tenant aktif
+      parameters:
+      - $ref: '#/components/parameters/TenantHeaderRequired'
+      responses:
+        '200':
+          description: Daftar approval restore
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /backup/restore-requests/{id}/approve:
+    post:
+      operationId: approveRestoreRequest
+      tags:
+      - Backup and restore
+      summary: Memberi approval terpisah untuk restore
+      parameters:
+      - $ref: '#/components/parameters/TenantHeaderRequired'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mfa_code]
+              properties:
+                mfa_code:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+      responses:
+        '200':
+          description: Approval dicatat
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /backup/restore-requests/{id}/execute:
+    post:
+      operationId: executeRestoreRequest
+      tags:
+      - Backup and restore
+      summary: Menjalankan restore setelah seluruh approval dan integritas lolos
+      parameters:
+      - $ref: '#/components/parameters/TenantHeaderRequired'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [mfa_code]
+              properties:
+                mfa_code:
+                  type: string
+                  pattern: '^[0-9]{6}$'
+      responses:
+        '202':
+          description: Restore job dibuat
+        '409':
+          description: Approval atau state restore belum memenuhi syarat
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /{resource}/import/preview:
+    post:
+      operationId: previewResourceImport
+      tags:
+      - Import and export
+      summary: Memvalidasi file import tanpa menyimpan data
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV/TXT atau XLSX. Legacy binary XLS ditolak.
+                mapping:
+                  oneOf:
+                  - type: object
+                    additionalProperties:
+                      type: string
+                  - type: string
+      responses:
+        '200':
+          description: Preview, mapping, dan error per baris
+        '405':
+          description: Resource dikelola service khusus atau tidak boleh diimport
+        '413':
+          description: File atau hasil ekstraksi terlalu besar
+        '422':
+          $ref: '#/components/responses/ValidationError'
+  /{resource}/import:
+    post:
+      operationId: importResource
+      tags:
+      - Import and export
+      summary: Import tervalidasi secara sinkron atau melalui antrean
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+              - file
+              properties:
+                file:
+                  type: string
+                  format: binary
+                mapping:
+                  oneOf:
+                  - type: object
+                    additionalProperties:
+                      type: string
+                  - type: string
+                queue:
+                  type: boolean
+                  default: false
+      responses:
+        '200':
+          description: Ringkasan import sinkron
+        '202':
+          description: Import job masuk antrean
+        '405':
+          description: Resource tidak dapat diimport generik
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /{resource}/export:
+    get:
+      operationId: exportResource
+      tags:
+      - Import and export
+      summary: Export hasil query tenant aktif
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - in: query
+        name: format
+        schema:
+          type: string
+          enum:
+          - csv
+          - xls
+          - xlsx
+          - excel
+          - pdf
+          default: csv
+      - $ref: '#/components/parameters/SearchQuery'
+      - $ref: '#/components/parameters/StatusQuery'
+      responses:
+        '200':
+          description: CSV aman formula, SpreadsheetML, atau PDF berhalaman
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+            application/vnd.ms-excel:
+              schema:
+                type: string
+                format: binary
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /{resource}/export/queue:
+    post:
+      operationId: queueResourceExport
+      tags:
+      - Import and export
+      summary: Menjadwalkan export besar
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                format:
+                  type: string
+                  enum:
+                  - csv
+                  - xls
+                  - xlsx
+                  - excel
+                  default: csv
+                search:
+                  type: string
+                status:
+                  type: string
+      responses:
+        '202':
+          description: Export job dibuat
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  job:
+                    $ref: '#/components/schemas/OperationJob'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /{resource}/bulk:
+    post:
+      operationId: bulkMutateResource
+      tags:
+      - Resources
+      summary: Bulk delete terbatas untuk resource CRUD biasa
+      description: Bulk status dihapus. Workflow, akun, tenant, membership, dan resource service-managed tidak didukung.
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - action
+              - ids
+              properties:
+                action:
+                  type: string
+                  enum:
+                  - delete
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 100
+                  uniqueItems: true
+                  items:
+                    type: integer
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '405':
+          description: Bulk mutation dilarang untuk resource ini
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /{resource}/analytics:
+    get:
+      operationId: getResourceAnalytics
+      tags:
+      - Resources
+      summary: Agregasi maksimum 1.000 baris yang sudah terscope dan terfilter
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/SearchQuery'
+      - $ref: '#/components/parameters/StatusQuery'
+      responses:
+        '200':
+          description: Total, status, tanggal, kelas, dan santri dari maksimum 1.000 baris yang sudah terscope.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
   /{resource}:
     get:
-      security:
-        - bearerAuth: []
-      summary: List resource CRUD
+      operationId: listResourceRecords
+      tags:
+      - Resources
+      summary: List resource yang terscope tenant dan permission
       parameters:
-        - $ref: "#/components/parameters/TenantHeader"
-        - in: path
-          name: resource
-          required: true
-          schema:
-            type: string
-            example: students
-        - in: query
-          name: search
-          schema:
-            type: string
-        - in: query
-          name: per_page
-          schema:
-            type: integer
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/SearchQuery'
+      - $ref: '#/components/parameters/StatusQuery'
+      - in: query
+        name: page
+        schema:
+          type: integer
+          minimum: 1
+          default: 1
+      - in: query
+        name: per_page
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 15
       responses:
-        "200":
+        '200':
           description: Data paginated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginatedResource'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
-      security:
-        - bearerAuth: []
-      summary: Buat resource
+      operationId: createResourceRecord
+      tags:
+      - Resources
+      summary: Membuat resource CRUD biasa dengan allowlist validasi
+      description: Resource service-managed dan workflow harus memakai endpoint khusus.
       parameters:
-        - $ref: "#/components/parameters/TenantHeader"
-        - in: path
-          name: resource
-          required: true
-          schema:
-            type: string
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
       responses:
-        "201":
+        '201':
           description: Resource dibuat
+        '405':
+          description: Generic create dilarang untuk resource ini
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /{resource}/{id}/timeline:
+    get:
+      operationId: getResourceTimeline
+      tags:
+      - Resources
+      summary: Timeline audit untuk satu record
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/IdPath'
+      responses:
+        '200':
+          description: Record dan audit trail terkait
+        '404':
+          $ref: '#/components/responses/NotFound'
   /{resource}/{id}:
     get:
-      security:
-        - bearerAuth: []
-      summary: Detail resource
+      operationId: getResourceRecord
+      tags:
+      - Resources
+      summary: Detail resource yang terscope tenant
       parameters:
-        - $ref: "#/components/parameters/TenantHeader"
-        - in: path
-          name: resource
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/IdPath'
       responses:
-        "200":
-          description: Detail data
-    patch:
-      security:
-        - bearerAuth: []
-      summary: Update resource
+        '200':
+          description: Detail record dan relation labels
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      operationId: replaceResourceRecord
+      tags:
+      - Resources
+      summary: Mengganti field yang diizinkan pada resource CRUD biasa
       parameters:
-        - $ref: "#/components/parameters/TenantHeader"
-        - in: path
-          name: resource
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
       responses:
-        "200":
+        '200':
           description: Resource diperbarui
-    delete:
-      security:
-        - bearerAuth: []
-      summary: Hapus resource
+        '405':
+          description: Generic update dilarang untuk resource ini
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+    patch:
+      operationId: updateResourceRecord
+      tags:
+      - Resources
+      summary: Memperbarui field yang diizinkan pada resource CRUD biasa
       parameters:
-        - $ref: "#/components/parameters/TenantHeader"
-        - in: path
-          name: resource
-          required: true
-          schema:
-            type: string
-        - in: path
-          name: id
-          required: true
-          schema:
-            type: integer
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
       responses:
-        "200":
-          description: Resource dihapus
+        '200':
+          description: Resource diperbarui
+        '405':
+          description: Generic update dilarang untuk resource ini
+        '422':
+          $ref: '#/components/responses/ValidationError'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+    delete:
+      operationId: deleteResourceRecord
+      tags:
+      - Resources
+      summary: Menghapus resource CRUD biasa
+      description: Workflow dan resource service-managed tidak dapat dihapus generik.
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/ResourcePath'
+      - $ref: '#/components/parameters/IdPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '405':
+          description: Generic delete dilarang untuk resource ini
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /queue/failed/{uuid}/retry:
+    post:
+      operationId: retryFailedJob
+      tags:
+      - Jobs
+      summary: Menjadwalkan ulang failed queue job dalam scope tenant aktif
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/UuidPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
+  /queue/failed/{uuid}:
+    delete:
+      operationId: forgetFailedJob
+      tags:
+      - Jobs
+      summary: Menghapus failed queue job dalam scope tenant aktif
+      parameters:
+      - $ref: '#/components/parameters/TenantHeader'
+      - $ref: '#/components/parameters/UuidPath'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      responses:
+        '200':
+          $ref: '#/components/responses/Message'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/IdempotencyConflict'
+        '428':
+          $ref: '#/components/responses/IdempotencyRequired'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: Sanctum
+    deviceId:
+      type: apiKey
+      in: header
+      name: X-Device-Id
+      description: Identitas perangkat yang sama dengan `device_id` saat token diterbitkan.
   parameters:
     TenantHeader:
       in: header
@@ -172,9 +1523,443 @@ components:
       required: false
       schema:
         type: integer
-      description: Pesantren aktif untuk user yang punya lebih dari satu membership.
-  securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: Sanctum
+        minimum: 1
+      description: Tenant aktif. Wajib bagi super admin saat mengakses resource tenant.
+    TenantHeaderRequired:
+      in: header
+      name: X-Pesantren-Id
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+      description: Tenant yang menjadi scope operasi backup/restore.
+    IdempotencyKey:
+      in: header
+      name: Idempotency-Key
+      required: true
+      schema:
+        type: string
+        minLength: 8
+        maxLength: 128
+      description: Kunci unik 8-128 karakter, terscope user, tenant, method, route, payload, dan fingerprint file.
+    ResourcePath:
+      in: path
+      name: resource
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z0-9-]+$
+      description: Nama resource yang terdaftar pada katalog server.
+    IdPath:
+      in: path
+      name: id
+      required: true
+      schema:
+        type: integer
+        minimum: 1
+    UuidPath:
+      in: path
+      name: uuid
+      required: true
+      schema:
+        type: string
+        format: uuid
+    SearchQuery:
+      in: query
+      name: search
+      schema:
+        type: string
+        maxLength: 200
+    StatusQuery:
+      in: query
+      name: status
+      schema:
+        type: string
+        maxLength: 100
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+      - login
+      - password
+      - device_id
+      properties:
+        login:
+          type: string
+          example: admin@example.com
+        password:
+          type: string
+          format: password
+        mfa_code:
+          type: string
+          nullable: true
+          maxLength: 64
+          description: Kode TOTP enam digit atau recovery code; wajib untuk akun privileged.
+        device_id:
+          type: string
+          minLength: 16
+          maxLength: 128
+          pattern: ^[A-Za-z0-9._:-]+$
+          example: android-production-0001
+        device_name:
+          type: string
+          maxLength: 190
+          example: android-production
+    MfaFactorConfirmation:
+      type: object
+      required:
+      - password
+      - mfa
+      properties:
+        password:
+          type: string
+          format: password
+        mfa:
+          type: string
+          maxLength: 64
+          description: Kode TOTP enam digit atau recovery code.
+    MfaRecoveryCodes:
+      type: object
+      required:
+      - message
+      - recovery_codes
+      properties:
+        message:
+          type: string
+        recovery_codes:
+          type: array
+          description: Kode hanya ditampilkan satu kali.
+          items:
+            type: string
+    AuthSession:
+      type: object
+      properties:
+        token:
+          type: string
+          nullable: true
+          description: Hanya tersedia pada login API
+        token_type:
+          type: string
+          example: Bearer
+        user:
+          $ref: '#/components/schemas/User'
+        memberships:
+          type: array
+          items:
+            $ref: '#/components/schemas/Membership'
+        active_pesantren:
+          type: object
+          allOf:
+          - $ref: '#/components/schemas/Tenant'
+          nullable: true
+        active_role:
+          type: string
+          nullable: true
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        username:
+          type: string
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        status:
+          type: string
+    Tenant:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        city:
+          type: string
+          nullable: true
+        status:
+          type: string
+    Membership:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Tenant ID pada payload sesi
+        name:
+          type: string
+        role:
+          type: string
+        role_label:
+          type: string
+        tenant_role_id:
+          type: integer
+          nullable: true
+        tenant_role:
+          type: string
+          nullable: true
+    Notification:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        message:
+          type: string
+        read_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    QrToken:
+      type: object
+      required:
+      - code
+      - purpose
+      - generated_at
+      - expires_at
+      properties:
+        code:
+          type: string
+          minLength: 64
+          maxLength: 64
+        purpose:
+          type: string
+          enum:
+          - identity
+          - attendance
+          - dorm-attendance
+        generated_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+    PermissionMatrixUpdate:
+      type: object
+      required:
+      - role
+      properties:
+        role:
+          type: string
+        read:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        write:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        actions:
+          type: array
+          uniqueItems: true
+          description: Izin transisi eksplisit seperti payments.verify; resource terkait juga harus berada pada write.
+          items:
+            type: string
+            enum:
+            - permits.approve
+            - permits.reject
+            - permits.cancel
+            - payments.verify
+            - payments.reject
+            - medical-queues.start
+            - medical-queues.finish
+            - medical-queues.cancel
+    CustomRole:
+      type: object
+      required:
+      - name
+      - label
+      properties:
+        name:
+          type: string
+          pattern: ^[a-z0-9_-]+$
+        label:
+          type: string
+          maxLength: 120
+        description:
+          type: string
+          nullable: true
+          maxLength: 1000
+        status:
+          type: string
+          enum:
+          - active
+          - inactive
+          default: active
+        read:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        write:
+          type: array
+          uniqueItems: true
+          items:
+            type: string
+        actions:
+          type: array
+          uniqueItems: true
+          description: Izin aksi workflow eksplisit; resource terkait juga harus berada pada write.
+          items:
+            type: string
+            enum:
+            - permits.approve
+            - permits.reject
+            - permits.cancel
+            - payments.verify
+            - payments.reject
+            - medical-queues.start
+            - medical-queues.finish
+            - medical-queues.cancel
+    OperationJob:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - import
+          - export
+          - backup
+          - restore
+        resource:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+          - queued
+          - processing
+          - completed
+          - failed
+          - cancelled
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+        error:
+          type: string
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+    PaginatedResource:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        first_page_url:
+          type: string
+          nullable: true
+        from:
+          type: integer
+          nullable: true
+        last_page:
+          type: integer
+        last_page_url:
+          type: string
+          nullable: true
+        next_page_url:
+          type: string
+          nullable: true
+        path:
+          type: string
+        per_page:
+          type: integer
+        prev_page_url:
+          type: string
+          nullable: true
+        to:
+          type: integer
+          nullable: true
+        total:
+          type: integer
+    Message:
+      type: object
+      properties:
+        message:
+          type: string
+    Error:
+      type: object
+      properties:
+        message:
+          type: string
+        request_id:
+          type: string
+          nullable: true
+    ValidationError:
+      allOf:
+      - $ref: '#/components/schemas/Error'
+      - type: object
+        properties:
+          errors:
+            type: object
+            additionalProperties:
+              type: array
+              items:
+                type: string
+  responses:
+    Message:
+      description: Operasi berhasil
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Message'
+    Unauthenticated:
+      description: Token tidak ada, tidak valid, atau sudah dicabut
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    Forbidden:
+      description: Role atau tenant aktif tidak berwenang
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    NotFound:
+      description: Resource tidak ditemukan dalam scope tenant aktif
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    ValidationError:
+      description: Payload, state, file, atau relasi tidak valid
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ValidationError'
+    TooManyRequests:
+      description: Rate limit terlampaui
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+    IdempotencyConflict:
+      description: Idempotency-Key sudah digunakan dengan payload atau scope operasi yang berbeda.
+    IdempotencyRequired:
+      description: Production mewajibkan header Idempotency-Key pada endpoint ini.

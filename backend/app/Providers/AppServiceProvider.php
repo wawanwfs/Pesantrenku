@@ -39,7 +39,14 @@ class AppServiceProvider extends ServiceProvider
     {
         app(TelemetryService::class)->initialize();
 
-        RateLimiter::for('login', fn (Request $request) => Limit::perMinute(10)->by(strtolower((string) $request->input('login')).'|'.$request->ip()));
+        RateLimiter::for('login', function (Request $request) {
+            $login = strtolower(trim((string) $request->input('login')));
+
+            return [
+                Limit::perMinute(10)->by('login-account:'.hash('sha256', $login)),
+                Limit::perMinute(60)->by('login-ip:'.$request->ip()),
+            ];
+        });
         RateLimiter::for('operations', fn (Request $request) => Limit::perMinute(120)->by((string) ($request->user()?->id ?: $request->ip())));
         RateLimiter::for('large-files', fn (Request $request) => Limit::perMinute(12)->by((string) ($request->user()?->id ?: $request->ip())));
         RateLimiter::for('sensitive', fn (Request $request) => Limit::perMinute(20)->by((string) ($request->user()?->id ?: $request->ip())));

@@ -1,17 +1,5 @@
 import React from 'react';
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
-
-const colors = ['#127A4F', '#2563EB', '#C2410C', '#DC2626'];
+import { BarVisualization, ChartColorMarker, LineVisualization, chartColors } from './NativeCharts.jsx';
 
 export default function AnalyticsPanel({ analytics, title }) {
   const statusRows = rowsOf(analytics.by_status);
@@ -51,15 +39,15 @@ function AnalyticsCard({ title, children }) {
 }
 
 function SmallBarChart({ data }) {
-  return <div className="h-56"><ResponsiveContainer width="100%" height="100%"><BarChart data={data}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} tick={{ fontSize: 11 }} /><Tooltip /><Bar dataKey="value" fill={colors[1]} radius={[4, 4, 0, 0]} /></BarChart></ResponsiveContainer></div>;
+  return <BarVisualization data={data} ariaLabel="Distribusi status" />;
 }
 
 function SmallLineChart({ data }) {
-  return <div className="h-56"><ResponsiveContainer width="100%" height="100%"><LineChart data={data}><CartesianGrid strokeDasharray="3 3" vertical={false} /><XAxis dataKey="name" tick={{ fontSize: 11 }} /><YAxis allowDecimals={false} tick={{ fontSize: 11 }} /><Tooltip /><Line type="monotone" dataKey="value" stroke={colors[0]} strokeWidth={2} dot={{ r: 3 }} /></LineChart></ResponsiveContainer></div>;
+  return <LineVisualization data={data} ariaLabel="Tren data berdasarkan tanggal" height={224} />;
 }
 
 function LegendList({ items }) {
-  return <div className="space-y-2">{items.map((item, index) => <div key={item.name} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2"><span className="h-3 w-3 rounded-full" style={{ background: colors[index % colors.length] }} />{item.name}</span><span className="font-medium">{item.value}</span></div>)}</div>;
+  return <div className="space-y-2">{items.map((item, index) => <div key={item.name} className="flex items-center justify-between text-sm"><span className="flex items-center gap-2"><ChartColorMarker color={chartColors[index % chartColors.length]} />{item.name}</span><span className="font-medium">{item.value}</span></div>)}</div>;
 }
 
 function EmptyAnalytics() {

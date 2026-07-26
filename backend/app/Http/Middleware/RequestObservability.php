@@ -5,11 +5,17 @@ namespace App\Http\Middleware;
 use App\Services\MetricRegistry;
 use App\Services\RequestTelemetry;
 use App\Services\TelemetryService;
+use App\Services\TenantContext;
 use Closure;
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Auth\AuthenticationException;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 
 class RequestObservability
 {
@@ -17,6 +23,7 @@ class RequestObservability
         private readonly MetricRegistry $metrics,
         private readonly RequestTelemetry $telemetry,
         private readonly TelemetryService $tracing,
+        private readonly TenantContext $tenantContext,
     ) {}
 
     public function handle(Request $request, Closure $next): Response
@@ -39,7 +46,7 @@ class RequestObservability
         try {
             $response = $next($request);
         } catch (\Throwable $exception) {
-            $this->record($request, 500, $startedAt, $correlationId, $traceId, $exception);
+            $this->record($request, $this->exceptionStatus($exception), $startedAt, $correlationId, $traceId, $exception);
             $this->tracing->endHttpSpan($spanState, $exception);
             throw $exception;
         }
@@ -83,6 +90,8 @@ class RequestObservability
         $this->metrics->increment('pesantenku_database_slow_queries_total', ['route' => $labels['route']], $slowQueryCount);
         $this->metrics->observeMilliseconds('pesantenku_database_slowest_query', $slowestQueryMs, ['route' => $labels['route']]);
 
+        $tenantId = $this->resolvedTenantId($request);
+
         $context = [
             'event' => 'http.request.completed',
             'correlation_id' => $correlationId,
@@ -96,7 +105,7 @@ class RequestObservability
             'db_slow_query_count' => $slowQueryCount,
             'db_slowest_query_ms' => $slowestQueryMs,
             'user_id' => $request->user()?->id,
-            'tenant_id' => $request->hasSession() ? $request->session()->get('active_pesantren_id') : null,
+            'tenant_id' => $tenantId,
             'ip' => $request->ip(),
         ];
 
@@ -113,6 +122,41 @@ class RequestObservability
         ], $exception);
 
         $exception ? Log::error('HTTP request failed.', $context + ['exception' => $exception::class]) : Log::info('HTTP request completed.', $context);
+    }
+
+    private function resolvedTenantId(Request $request): ?int
+    {
+        if (! $request->user()) {
+            return null;
+        }
+
+        try {
+            return $this->tenantContext->activePesantrenId($request);
+        } catch (\Throwable) {
+            // Observability must never replace the original application response.
+            return null;
+        }
+    }
+
+    private function exceptionStatus(\Throwable $exception): int
+    {
+        if ($exception instanceof HttpResponseException) {
+            return $exception->getResponse()->getStatusCode();
+        }
+        if ($exception instanceof HttpExceptionInterface) {
+            return $exception->getStatusCode();
+        }
+        if ($exception instanceof ValidationException) {
+            return $exception->status;
+        }
+        if ($exception instanceof AuthenticationException) {
+            return 401;
+        }
+        if ($exception instanceof AuthorizationException) {
+            return 403;
+        }
+
+        return 500;
     }
 
     private function correlationId(Request $request): string

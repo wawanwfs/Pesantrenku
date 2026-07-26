@@ -1,0 +1,11 @@
+extends:
+  - recommended
+
+telemetry: off
+
+rules:
+  # The Laravel API intentionally exposes a generic resource route alongside
+  # literal dashboard and action routes. Router precedence is covered by the
+  # route/OpenAPI parity gate, so ambiguity here is structural rather than an
+  # undocumented collision.
+  no-ambiguous-paths: off

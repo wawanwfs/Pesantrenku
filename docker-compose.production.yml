@@ -1,8 +1,31 @@
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-app-runtime: &app-runtime
+  image: ${PESANTRENKU_IMAGE:?PESANTRENKU_IMAGE is required}
+  restart: unless-stopped
+  logging: *default-logging
+  environment:
+    METRICS_TRACK: stable
+    METRICS_REVISION: ${PESANTRENKU_METRICS_REVISION:?PESANTRENKU_METRICS_REVISION is required}
+  networks: [app, data, observability, egress]
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
 services:
   caddy:
-    image: caddy:2.10-alpine
+    image: ${CADDY_IMAGE:?CADDY_IMAGE is required}
     restart: unless-stopped
-    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    logging: *default-logging
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL is required}
+      PRIMARY_DOMAIN: ${PRIMARY_DOMAIN:?PRIMARY_DOMAIN is required}
     ports:
       - "80:80"
       - "443:443"
@@ -11,72 +34,99 @@ services:
       - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
+    networks: [edge, app, observability]
     depends_on:
       app:
         condition: service_healthy
       reverb:
-        condition: service_started
-      grafana:
-        condition: service_started
+        condition: service_healthy
 
   app:
-    image: ${PESANTRENKU_IMAGE}
-    restart: unless-stopped
-    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
-    expose:
-      - "8000"
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+    <<: *app-runtime
+    env_file: ${PESANTRENKU_APP_ENV_FILE:?PESANTRENKU_APP_ENV_FILE is required}
+    expose: ["8000"]
 
-  queue:
-    image: ${PESANTRENKU_IMAGE}
-    restart: unless-stopped
-    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
-    command: php artisan queue:work redis --queue=default,imports,exports --sleep=1 --tries=3 --timeout=900
+  queue-default:
+    <<: *app-runtime
+    env_file: ${PESANTRENKU_DEFAULT_WORKER_ENV_FILE:?PESANTRENKU_DEFAULT_WORKER_ENV_FILE is required}
+    command: ["/app/bin/runtime-entrypoint", "worker", "default", "php", "artisan", "queue:work", "redis", "--queue=default", "--sleep=1", "--tries=3", "--timeout=120"]
+    stop_grace_period: 210s
+    healthcheck: &worker-health
+      test: ["CMD", "php", "artisan", "pesantenku:runtime-heartbeat", "worker", "default", "--check=60"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  queue-backup:
+    <<: *app-runtime
+    env_file: ${PESANTRENKU_BACKUP_WORKER_ENV_FILE:?PESANTRENKU_BACKUP_WORKER_ENV_FILE is required}
+    command: ["/app/bin/runtime-entrypoint", "worker", "backups-v1", "php", "artisan", "queue:work", "redis-long", "--queue=backups-v1", "--sleep=1", "--tries=3", "--timeout=900"]
+    stop_grace_period: 1020s
     healthcheck:
-      disable: true
-    depends_on:
-      - mysql
-      - redis
+      <<: *worker-health
+      test: ["CMD", "php", "artisan", "pesantenku:runtime-heartbeat", "worker", "backups-v1", "--check=60"]
+
+  queue-import:
+    <<: *app-runtime
+    env_file: ${PESANTRENKU_IMPORT_WORKER_ENV_FILE:?PESANTRENKU_IMPORT_WORKER_ENV_FILE is required}
+    command: ["/app/bin/runtime-entrypoint", "worker", "imports-v3", "php", "artisan", "queue:work", "redis-long", "--queue=imports-v3", "--sleep=1", "--tries=3", "--timeout=900"]
+    stop_grace_period: 1020s
+    healthcheck:
+      <<: *worker-health
+      test: ["CMD", "php", "artisan", "pesantenku:runtime-heartbeat", "worker", "imports-v3", "--check=60"]
+
+  queue-export:
+    <<: *app-runtime
+    env_file: ${PESANTRENKU_EXPORT_WORKER_ENV_FILE:?PESANTRENKU_EXPORT_WORKER_ENV_FILE is required}
+    command: ["/app/bin/runtime-entrypoint", "worker", "exports-v3", "php", "artisan", "queue:work", "redis-long", "--queue=exports-v3", "--sleep=1", "--tries=3", "--timeout=900"]
+    stop_grace_period: 1020s
+    healthcheck:
+      <<: *worker-health
+      test: ["CMD", "php", "artisan", "pesantenku:runtime-heartbeat", "worker", "exports-v3", "--check=60"]
 
   scheduler:
-    image: ${PESANTRENKU_IMAGE}
-    restart: unless-stopped
-    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
-    command: php artisan schedule:work
+    <<: *app-runtime
+    env_file: ${PESANTRENKU_SCHEDULER_ENV_FILE:?PESANTRENKU_SCHEDULER_ENV_FILE is required}
+    command: ["/app/bin/runtime-entrypoint", "scheduler", "primary", "php", "artisan", "schedule:work"]
+    stop_grace_period: 90s
     healthcheck:
-      disable: true
-    depends_on:
-      - mysql
-      - redis
+      test: ["CMD", "php", "artisan", "pesantenku:runtime-heartbeat", "scheduler", "primary", "--check=60"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   reverb:
-    image: ${PESANTRENKU_IMAGE}
-    restart: unless-stopped
-    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
-    command: php artisan reverb:start --host=0.0.0.0 --port=8080
+    <<: *app-runtime
+    env_file: ${PESANTRENKU_REVERB_ENV_FILE:?PESANTRENKU_REVERB_ENV_FILE is required}
+    command: ["/app/bin/runtime-entrypoint", "reverb", "primary", "php", "artisan", "reverb:start", "--host=0.0.0.0", "--port=8080"]
+    stop_grace_period: 60s
+    healthcheck:
+      test: ["CMD", "php", "artisan", "pesantenku:runtime-heartbeat", "reverb", "primary", "--check=60"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    expose: ["8080"]
+
+  operations:
+    <<: *app-runtime
+    profiles: [operations]
+    env_file: ${PESANTRENKU_OPERATIONS_ENV_FILE:?PESANTRENKU_OPERATIONS_ENV_FILE is required}
+    command: ["php", "artisan", "list"]
     healthcheck:
       disable: true
-    expose:
-      - "8080"
-    depends_on:
-      redis:
-        condition: service_healthy
 
   mysql:
-    image: mysql:8.4
+    image: ${MYSQL_IMAGE:?MYSQL_IMAGE is required}
     restart: unless-stopped
-    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    logging: *default-logging
     environment:
-      MYSQL_DATABASE: ${DB_DATABASE}
-      MYSQL_USER: ${DB_USERNAME}
-      MYSQL_PASSWORD: ${DB_PASSWORD}
-      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_DATABASE:?DB_DATABASE is required}
+      MYSQL_USER: ${DB_USERNAME:?DB_USERNAME is required}
+      MYSQL_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?MYSQL_ROOT_PASSWORD is required}
     volumes:
       - mysql-data:/var/lib/mysql
+    networks: [data]
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -84,43 +134,49 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    image: ${REDIS_IMAGE:?REDIS_IMAGE is required}
     restart: unless-stopped
-    command: redis-server --appendonly yes
+    logging: *default-logging
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    command: ["sh", "-c", "exec redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
     volumes:
       - redis-data:/data
+    networks: [data]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD-SHELL", "redis-cli --no-auth-warning -a \"$$REDIS_PASSWORD\" ping | grep -qx PONG"]
       interval: 10s
       timeout: 5s
       retries: 10
 
   otel-collector:
-    image: otel/opentelemetry-collector-contrib:0.156.0
+    image: ${OTEL_COLLECTOR_IMAGE:?OTEL_COLLECTOR_IMAGE is required}
     restart: unless-stopped
+    logging: *default-logging
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes:
       - ./deploy/otel-collector.yaml:/etc/otelcol/config.yaml:ro
-    expose:
-      - "4317"
-      - "4318"
-      - "13133"
+    expose: ["4317", "4318", "13133", "8888"]
+    networks: [observability]
     depends_on:
-      - tempo
+      tempo:
+        condition: service_started
 
   tempo:
-    image: grafana/tempo:2.8.1
+    image: ${TEMPO_IMAGE:?TEMPO_IMAGE is required}
     restart: unless-stopped
+    logging: *default-logging
     command: ["-config.file=/etc/tempo.yaml"]
     volumes:
       - ./deploy/tempo.yaml:/etc/tempo.yaml:ro
       - tempo-data:/var/tempo
-    expose:
-      - "3200"
+    expose: ["3200"]
+    networks: [observability]
 
   prometheus:
-    image: prom/prometheus:v3.4.1
+    image: ${PROMETHEUS_IMAGE:?PROMETHEUS_IMAGE is required}
     restart: unless-stopped
+    logging: *default-logging
     command: ["--config.file=/etc/prometheus/prometheus.yaml", "--storage.tsdb.path=/prometheus"]
     volumes:
       - ./deploy/prometheus.yaml:/etc/prometheus/prometheus.yaml:ro
@@ -128,36 +184,125 @@ services:
       - prometheus-data:/prometheus
     secrets:
       - pesantenku_metrics_token
-    expose:
-      - "9090"
+    expose: ["9090"]
+    networks: [app, observability]
     depends_on:
-      - app
+      app:
+        condition: service_healthy
+      alertmanager:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9090/-/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  alertmanager:
+    image: ${ALERTMANAGER_IMAGE:?ALERTMANAGER_IMAGE is required}
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["--config.file=/etc/alertmanager/alertmanager.yaml", "--storage.path=/alertmanager"]
+    volumes:
+      - ./deploy/alertmanager.yaml:/etc/alertmanager/alertmanager.yaml:ro
+      - alertmanager-data:/alertmanager
+    secrets:
+      - alertmanager_webhook_url
+    expose: ["9093"]
+    networks: [observability]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9093/-/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  loki:
+    image: ${LOKI_IMAGE:?LOKI_IMAGE is required}
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["-config.file=/etc/loki/config.yaml"]
+    volumes:
+      - ./deploy/loki.yaml:/etc/loki/config.yaml:ro
+      - loki-data:/loki
+    expose: ["3100"]
+    networks: [observability]
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3100/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  promtail:
+    image: ${PROMTAIL_IMAGE:?PROMTAIL_IMAGE is required}
+    restart: unless-stopped
+    logging: *default-logging
+    command: ["-config.file=/etc/promtail/config.yaml"]
+    volumes:
+      - ./deploy/promtail.yaml:/etc/promtail/config.yaml:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - promtail-positions:/tmp
+    expose: ["9080"]
+    networks: [observability]
+    depends_on:
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:9080/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
   grafana:
-    image: grafana/grafana:12.0.2
+    image: ${GRAFANA_IMAGE:?GRAFANA_IMAGE is required}
     restart: unless-stopped
-    env_file: ${PESANTRENKU_ENV_FILE:-./backend/.env.production}
+    logging: *default-logging
     environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?GF_SECURITY_ADMIN_PASSWORD is required}
+      GF_SERVER_DOMAIN: ${GF_SERVER_DOMAIN:?GF_SERVER_DOMAIN is required}
+      GF_SERVER_ROOT_URL: ${GF_SERVER_ROOT_URL:?GF_SERVER_ROOT_URL is required}
       GF_USERS_ALLOW_SIGN_UP: "false"
     volumes:
       - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
       - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
-    expose:
-      - "3000"
+    expose: ["3000"]
+    networks: [observability]
     depends_on:
-      - prometheus
-      - tempo
+      prometheus:
+        condition: service_healthy
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
 
 volumes:
   mysql-data:
   redis-data:
   tempo-data:
   prometheus-data:
+  alertmanager-data:
+  loki-data:
+  promtail-positions:
   grafana-data:
   caddy-data:
   caddy-config:
 
+networks:
+  edge:
+  egress:
+  app:
+    internal: true
+  data:
+    internal: true
+  observability:
+    internal: true
+
 secrets:
   pesantenku_metrics_token:
     environment: PESANTRENKU_METRICS_TOKEN
+  alertmanager_webhook_url:
+    environment: ALERTMANAGER_WEBHOOK_URL

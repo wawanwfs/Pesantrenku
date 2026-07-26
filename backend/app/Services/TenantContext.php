@@ -11,6 +11,9 @@ use Illuminate\Support\Facades\Schema;
 
 class TenantContext
 {
+    /** Tables intentionally available without an active tenant context. */
+    private const GLOBAL_TABLES = ['users', 'roles', 'permissions', 'permission_role', 'role_user', 'pesantrens', 'plans'];
+
     public function memberships(Request $request): Collection
     {
         $user = $request->user();
@@ -30,7 +33,6 @@ class TenantContext
             ->leftJoin('tenant_roles', 'pesantren_user.tenant_role_id', '=', 'tenant_roles.id')
             ->where('pesantren_user.user_id', $user->id)
             ->where('pesantren_user.status', 'active')
-            ->where('pesantrens.status', 'active')
             ->where('pesantrens.status', 'active')
             ->whereNull('pesantrens.deleted_at')
             ->select([
@@ -63,14 +65,14 @@ class TenantContext
             return null;
         }
 
-        $requested = $this->requestedPesantrenId($request);
+        $requested = $this->requestedPesantrenId($request, ! $user->hasRole('super_admin'));
 
         if ($user->hasRole('super_admin')) {
             if (! $requested) {
                 return null;
             }
 
-            abort_unless(DB::table('pesantrens')->where('id', $requested)->whereNull('deleted_at')->exists(), 404);
+            abort_unless(DB::table('pesantrens')->where('id', $requested)->where('status', 'active')->whereNull('deleted_at')->exists(), 404);
 
             return $requested;
         }
@@ -93,6 +95,27 @@ class TenantContext
         return (int) $memberships->first()->id;
     }
 
+    public function requireActivePesantrenId(Request $request, string|array|null $requiredRoles = null): int
+    {
+        $tenantId = $this->activePesantrenId($request, $requiredRoles);
+        abort_unless($tenantId, 422, 'Pilih tenant aktif melalui header X-Pesantren-Id sebelum mengakses resource tenant.');
+
+        return $tenantId;
+    }
+
+    public function tenantIdForTable(Request $request, string $table, string|array|null $requiredRoles = null): ?int
+    {
+        if ($table === 'pesantrens' && ! $this->isSuperAdmin($request)) {
+            return $this->requireActivePesantrenId($request, $requiredRoles);
+        }
+
+        if (! $this->isTenantBoundTable($request, $table)) {
+            return null;
+        }
+
+        return $this->requireActivePesantrenId($request, $requiredRoles);
+    }
+
     public function activePesantren(Request $request, string|array|null $requiredRoles = null): ?object
     {
         $id = $this->activePesantrenId($request, $requiredRoles);
@@ -109,6 +132,7 @@ class TenantContext
         $tenant = Cache::remember("pesantenku:tenant:{$id}", now()->addSeconds(30), fn () => (array) DB::table('pesantrens')
             ->select('id', 'name', 'city', 'address', 'phone', 'email', 'status', 'metadata')
             ->where('id', $id)
+            ->where('status', 'active')
             ->whereNull('deleted_at')
             ->first());
         $tenant = $tenant ? (object) $tenant : null;
@@ -117,20 +141,55 @@ class TenantContext
         return $tenant;
     }
 
-    public function activeRole(Request $request): ?string
+    public function isSuperAdmin(Request $request): bool
     {
-        $user = $request->user();
-        if (! $user) {
-            return null;
-        }
+        $user = $request->user()?->loadMissing('roles');
 
-        if ($user->hasRole('super_admin')) {
-            return 'super_admin';
+        return (bool) $user?->hasRole('super_admin');
+    }
+
+    public function activeMembership(Request $request): ?object
+    {
+        if ($this->isSuperAdmin($request)) {
+            return null;
         }
 
         $tenantId = $this->activePesantrenId($request);
 
-        return $this->memberships($request)->firstWhere('id', $tenantId)?->role;
+        return $this->memberships($request)->firstWhere('id', $tenantId);
+    }
+
+    public function activeRole(Request $request): ?string
+    {
+        if (! $request->user()) {
+            return null;
+        }
+
+        if ($this->isSuperAdmin($request)) {
+            return 'super_admin';
+        }
+
+        return $this->activeMembership($request)?->role;
+    }
+
+    public function hasActiveRole(Request $request, string|array $roles, bool $allowSuperAdmin = false): bool
+    {
+        $roles = is_array($roles) ? $roles : [$roles];
+        $activeRole = $this->activeRole($request);
+
+        if ($activeRole === 'super_admin') {
+            return $allowSuperAdmin || in_array('super_admin', $roles, true);
+        }
+
+        return $activeRole !== null && in_array($activeRole, $roles, true);
+    }
+
+    public function authorizeActiveRole(Request $request, string|array $roles, bool $allowSuperAdmin = false, string $message = 'Role tenant aktif tidak memiliki akses.'): string
+    {
+        abort_unless($request->user(), 401);
+        abort_unless($this->hasActiveRole($request, $roles, $allowSuperAdmin), 403, $message);
+
+        return (string) $this->activeRole($request);
     }
 
     public function setActive(Request $request, int $pesantrenId): object
@@ -142,11 +201,16 @@ class TenantContext
             abort_unless($this->memberships($request)->contains('id', $pesantrenId), 403);
         }
 
-        abort_unless(DB::table('pesantrens')->where('id', $pesantrenId)->whereNull('deleted_at')->exists(), 404);
+        abort_unless(DB::table('pesantrens')->where('id', $pesantrenId)->where('status', 'active')->whereNull('deleted_at')->exists(), 404);
 
         if ($request->hasSession()) {
             $request->session()->put('active_pesantren_id', $pesantrenId);
         }
+
+        // An API tenant switch commonly arrives with the previous tenant in
+        // X-Pesantren-Id. Keep the newly selected tenant authoritative for the
+        // remainder of this request without trusting mutable client input.
+        $request->attributes->set('pesantenku.requested-pesantren-id', $pesantrenId);
 
         return $this->activePesantren($request) ?? DB::table('pesantrens')->find($pesantrenId);
     }
@@ -160,9 +224,9 @@ class TenantContext
         }
 
         if ($table === 'pesantrens' && ! $user->hasRole('super_admin')) {
-            $ids = $this->memberships($request)->pluck('id')->all();
+            $tenantId = $this->requireActivePesantrenId($request, $requiredRoles);
 
-            return $query->whereIn('pesantrens.id', $ids ?: [0]);
+            return $query->where('pesantrens.id', $tenantId);
         }
 
         if ($table === 'users' && ! $user->hasRole('super_admin')) {
@@ -177,30 +241,22 @@ class TenantContext
             });
         }
 
-        if (! $this->hasColumn($request, $table, 'pesantren_id')) {
+        if (! $this->isTenantBoundTable($request, $table)) {
             return $query;
         }
 
-        $tenantId = $this->activePesantrenId($request, $requiredRoles);
-
-        if (! $tenantId) {
-            return $query;
-        }
+        $tenantId = $this->requireActivePesantrenId($request, $requiredRoles);
 
         return $query->where("{$table}.pesantren_id", $tenantId);
     }
 
     public function withTenantPayload(Request $request, string $table, array $data): array
     {
-        if (! $this->hasColumn($request, $table, 'pesantren_id')) {
+        if (! $this->isTenantBoundTable($request, $table)) {
             return $data;
         }
 
-        $tenantId = $this->activePesantrenId($request);
-
-        if ($tenantId) {
-            $data['pesantren_id'] = $tenantId;
-        }
+        $data['pesantren_id'] = $this->requireActivePesantrenId($request);
 
         return $data;
     }
@@ -219,16 +275,41 @@ class TenantContext
         }
     }
 
-    private function requestedPesantrenId(Request $request): ?int
+    private function requestedPesantrenId(Request $request, bool $allowRequestParameters = true): ?int
     {
+        $internalTenantId = $request->attributes->get('pesantenku.requested-pesantren-id');
+        if ($internalTenantId) {
+            return (int) $internalTenantId;
+        }
+
         $sessionTenantId = $request->hasSession() ? $request->session()->get('active_pesantren_id') : null;
 
-        $value = $request->query('pesantren_id')
-            ?? $request->header('X-Pesantren-Id')
-            ?? $request->input('pesantren_id')
+        $value = $request->header('X-Pesantren-Id')
             ?? $sessionTenantId;
+        if (($value === null || $value === '') && $allowRequestParameters) {
+            $value = $request->input('pesantren_id')
+                ?? $request->query('pesantren_id');
+        }
 
-        return $value ? (int) $value : null;
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        $validated = filter_var($value, FILTER_VALIDATE_INT, [
+            'options' => ['min_range' => 1],
+        ]);
+        abort_if($validated === false, 422, 'Identitas pesantren harus berupa bilangan bulat positif.');
+
+        return (int) $validated;
+    }
+
+    private function isTenantBoundTable(Request $request, string $table): bool
+    {
+        if (in_array($table, self::GLOBAL_TABLES, true)) {
+            return false;
+        }
+
+        return $this->hasColumn($request, $table, 'pesantren_id');
     }
 
     private function hasColumn(Request $request, string $table, string $column): bool

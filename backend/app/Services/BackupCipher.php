@@ -31,7 +31,7 @@ class BackupCipher
             'tag' => base64_encode($tag),
             'ciphertext' => base64_encode($ciphertext),
         ];
-        $contents = json_encode($envelope, JSON_UNESCAPED_SLASHES);
+        $contents = json_encode($envelope, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
 
         return [
             'contents' => $contents,
@@ -41,30 +41,83 @@ class BackupCipher
         ];
     }
 
-    public function decrypt(string $contents): string
-    {
-        $envelope = json_decode($contents, true);
-        if (! is_array($envelope) || ! isset($envelope['ciphertext'], $envelope['encrypted_key'])) {
-            return $contents;
+    public function decrypt(
+        string $contents,
+        ?string $expectedProvider = null,
+        ?string $expectedKeyId = null,
+    ): string {
+        try {
+            $envelope = json_decode($contents, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException $exception) {
+            throw new \RuntimeException('Envelope backup terenkripsi tidak valid.', previous: $exception);
         }
 
-        $encryptedKey = base64_decode((string) $envelope['encrypted_key'], true);
-        $dataKey = ($envelope['key_provider'] ?? 'local') === 'kms'
-            ? $this->kmsDecryptKey($encryptedKey ?: '')
-            : base64_decode(Crypt::decryptString($encryptedKey ?: ''), true);
+        $required = ['version', 'algorithm', 'key_provider', 'key_id', 'encrypted_key', 'iv', 'tag', 'ciphertext'];
+        if (! is_array($envelope) || array_diff($required, array_keys($envelope)) !== []) {
+            throw new \RuntimeException('Envelope backup terenkripsi tidak lengkap.');
+        }
+        if ((int) $envelope['version'] !== 1 || (string) $envelope['algorithm'] !== 'AES-256-GCM') {
+            throw new \RuntimeException('Versi atau algoritma enkripsi backup tidak didukung.');
+        }
+
+        $provider = (string) $envelope['key_provider'];
+        $keyId = (string) $envelope['key_id'];
+        if (! in_array($provider, ['local', 'kms'], true) || $keyId === '') {
+            throw new \RuntimeException('Metadata penyedia kunci backup tidak valid.');
+        }
+        if ($expectedProvider !== null && ! hash_equals($expectedProvider, $provider)) {
+            throw new \RuntimeException('Penyedia kunci backup tidak cocok dengan metadata database.');
+        }
+        if ($expectedKeyId !== null && ! hash_equals($expectedKeyId, $keyId)) {
+            throw new \RuntimeException('ID kunci backup tidak cocok dengan metadata database.');
+        }
+
+        $encryptedKey = $this->decodeBase64Field($envelope, 'encrypted_key');
+        $iv = $this->decodeBase64Field($envelope, 'iv');
+        $tag = $this->decodeBase64Field($envelope, 'tag');
+        $ciphertext = $this->decodeBase64Field($envelope, 'ciphertext');
+        if (strlen($iv) !== 12 || strlen($tag) !== 16 || $ciphertext === '') {
+            throw new \RuntimeException('Parameter kriptografi backup tidak valid.');
+        }
+
+        try {
+            $dataKey = $provider === 'kms'
+                ? $this->kmsDecryptKey($encryptedKey)
+                : base64_decode(Crypt::decryptString($encryptedKey), true);
+        } catch (\Throwable $exception) {
+            throw new \RuntimeException('Kunci data backup tidak dapat didekripsi.', previous: $exception);
+        }
+        if (! is_string($dataKey) || strlen($dataKey) !== 32) {
+            throw new \RuntimeException('Kunci data backup tidak valid.');
+        }
+
         $plaintext = openssl_decrypt(
-            base64_decode((string) $envelope['ciphertext'], true) ?: '',
+            $ciphertext,
             'aes-256-gcm',
-            $dataKey ?: '',
+            $dataKey,
             OPENSSL_RAW_DATA,
-            base64_decode((string) $envelope['iv'], true) ?: '',
-            base64_decode((string) $envelope['tag'], true) ?: '',
+            $iv,
+            $tag,
         );
         if ($plaintext === false) {
             throw new \RuntimeException('Backup decryption or authentication failed.');
         }
 
         return $plaintext;
+    }
+
+    private function decodeBase64Field(array $envelope, string $field): string
+    {
+        if (! is_string($envelope[$field] ?? null) || $envelope[$field] === '') {
+            throw new \RuntimeException("Field {$field} pada envelope backup tidak valid.");
+        }
+
+        $decoded = base64_decode($envelope[$field], true);
+        if ($decoded === false) {
+            throw new \RuntimeException("Field {$field} pada envelope backup bukan base64 yang valid.");
+        }
+
+        return $decoded;
     }
 
     private function kmsEncryptKey(string $dataKey): array

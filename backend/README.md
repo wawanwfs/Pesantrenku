@@ -1,4 +1,4 @@
-# Pesantenku Backend
+# Pesantrenku Backend
 
 Laravel 13 backend untuk API, auth Sanctum, dan web panel Inertia React.
 

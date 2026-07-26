@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
+import { installCspGuard } from './csp-guard.js';
 import crypto from 'node:crypto';
+installCspGuard(test);
 
 const roles = [
   ['super-admin', 'superadmin@pesantenku.test'],
@@ -206,6 +208,31 @@ test('Escape closes the mobile navigation drawer', async ({ page }, testInfo) =>
   await expect(drawer).toBeHidden();
 });
 
+test('tenant switch remains available from the account menu on mobile', async ({ page }, testInfo) => {
+  test.skip(testInfo.project.name !== 'mobile-chromium', 'Regresi ini khusus viewport Pixel 7.');
+  await login(page, 'owner', 'owner@pesantenku.test');
+
+  await page.getByLabel('Buka menu akun').click();
+  await expect(page.getByLabel('Ganti pesantren aktif')).toBeVisible();
+});
+
+test('santri web creates an attendance QR without exposing scan controls', async ({ page }, testInfo) => {
+  test.skip(!testInfo.project.metadata.workflows, 'Workflow suite dijalankan pada shard utama tiap viewport.');
+  await login(page, 'santri', 'santri@pesantenku.test');
+  await navigate(page, '/santri/module/qr-scanner');
+
+  await expect(page.getByRole('heading', { name: 'QR Presensi Aktif' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Scan Manual' })).toHaveCount(0);
+  const [response] = await Promise.all([
+    page.waitForResponse((item) => item.url().includes('/web-actions/qr/generate') && item.request().method() === 'POST'),
+    page.getByRole('button', { name: 'Buat QR' }).click(),
+  ]);
+
+  expect(response.ok()).toBeTruthy();
+  expect(response.request().postDataJSON()).toEqual({ purpose: 'attendance' });
+  await expect(page.getByText('QR berhasil dibuat dan dicatat di audit log.')).toBeVisible();
+});
+
 test('owner can open and save permission matrix and PDF template editor', async ({ page }, testInfo) => {
   test.skip(!testInfo.project.metadata.workflows, 'Workflow suite dijalankan pada shard utama tiap viewport.');
   await login(page, 'owner', 'owner@pesantenku.test');
@@ -311,7 +338,7 @@ test('owner scaling tools custom role queue monitor download manager and restore
     page.waitForResponse((response) => response.url().includes('/backup/run') && response.request().method() === 'POST'),
     page.getByRole('button', { name: 'Jalankan Backup' }).click(),
   ]);
-  expect(backupResponse.status()).toBe(200);
+  expect(backupResponse.status()).toBe(202);
   const backupId = (await backupResponse.json()).backup_id;
   const backupList = await apiJson(page, '/web-api/backups?per_page=20');
   const backup = backupList.body.data.find((row) => row.id === backupId);

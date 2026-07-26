@@ -1,35 +1,41 @@
 {
-    "$schema": "https://www.schemastore.org/package.json",
-    "private": true,
-    "type": "module",
-    "scripts": {
-        "build": "vite build",
-        "dev": "vite",
-        "test:e2e": "node scripts/prepare-e2e.mjs && playwright test",
-        "audit:ui": "node scripts/prepare-e2e.mjs && playwright test tests/e2e/visual-audit.spec.js --config=playwright.visual.config.js",
-        "test:e2e:local-domain": "playwright test --config=playwright.local-domain.config.js",
-        "test:e2e:local-domain:sharded": "powershell -ExecutionPolicy Bypass -File ../deploy/scripts/prepare-sharded-e2e.ps1 && playwright test --config=playwright.local-domain.config.js",
-        "benchmark:local-domain": "node scripts/benchmark-local-domain.mjs"
-    },
-    "devDependencies": {
-        "@playwright/test": "^1.61.1",
-        "@tailwindcss/vite": "^4.3.2",
-        "concurrently": "^9.0.1",
-        "laravel-vite-plugin": "^3.1",
-        "tailwindcss": "^4.3.2",
-        "vite": "^8.0.0"
-    },
-    "dependencies": {
-        "@inertiajs/react": "^3.6.0",
-        "@vitejs/plugin-react": "^6.0.3",
-        "clsx": "^2.1.1",
-        "laravel-echo": "^2.3.7",
-        "lucide-react": "^1.23.0",
-        "pusher-js": "^8.5.0",
-        "qrcode.react": "^4.2.0",
-        "react": "^19.2.7",
-        "react-dom": "^19.2.7",
-        "recharts": "^3.9.2",
-        "three": "^0.185.1"
-    }
+  "$schema": "https://www.schemastore.org/package.json",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite",
+    "lint:csp": "node scripts/check-csp-compatibility.mjs",
+    "lint:openapi": "node scripts/lint-openapi.mjs",
+    "lint:openapi-parity": "node scripts/check-openapi-route-parity.mjs",
+    "test:e2e": "node scripts/prepare-e2e.mjs && playwright test",
+    "audit:ui": "node scripts/prepare-e2e.mjs && playwright test tests/e2e/visual-audit.spec.js --config=playwright.visual.config.js",
+    "test:e2e:local-domain": "playwright test --config=playwright.local-domain.config.js",
+    "test:e2e:local-domain:sharded": "powershell -ExecutionPolicy Bypass -File ../deploy/scripts/prepare-sharded-e2e.ps1 && playwright test --config=playwright.local-domain.config.js",
+    "benchmark:local-domain": "node scripts/benchmark-local-domain.mjs",
+    "check:performance-budget": "node scripts/check-performance-budget.mjs",
+    "lint:hardening": "node scripts/check-hardening-contracts.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "@redocly/cli": "2.40.0",
+    "@tailwindcss/vite": "^4.3.2",
+    "@vitejs/plugin-react": "^6.0.3",
+    "concurrently": "^10.0.4",
+    "laravel-vite-plugin": "^3.1",
+    "postcss": "^8.5.23",
+    "tailwindcss": "^4.3.2",
+    "vite": "^8.0.0"
+  },
+  "dependencies": {
+    "@inertiajs/react": "^3.6.0",
+    "clsx": "^2.1.1",
+    "laravel-echo": "^2.3.7",
+    "lucide-react": "^1.23.0",
+    "pusher-js": "^8.5.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "three": "^0.185.1"
+  }
 }

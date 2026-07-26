@@ -2,32 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { EyeOff } from 'lucide-react';
 import { router, useForm, icons } from '../lib/deps.jsx';
 
-const demoAccounts = [
-  ['superadmin@pesantenku.test', 'Super Admin'],
-  ['owner@pesantenku.test', 'Owner Pesantren'],
-  ['keuangan@pesantenku.test', 'Keuangan'],
-  ['akademik@pesantenku.test', 'Akademik'],
-  ['tu@pesantenku.test', 'Tata Usaha'],
-  ['santri@pesantenku.test', 'Santri'],
-  ['wali@pesantenku.test', 'Wali Santri'],
-  ['guru@pesantenku.test', 'Guru'],
-  ['musyrif@pesantenku.test', 'Musyrif'],
-  ['klinik@pesantenku.test', 'Klinik'],
-];
-
 const fieldBase = 'min-h-12 w-full rounded-lg border bg-[#fffdf8] py-3 pl-11 text-sm text-[#102c27] outline-none transition placeholder:text-[#63736d] hover:border-[#8bb4a2] focus:border-[#0d3b32] focus:ring-4 focus:ring-[#d6efdc] disabled:cursor-wait disabled:bg-[#f4f3ed] disabled:text-[#5c6d66] [&:-webkit-autofill]:[-webkit-text-fill-color:#102c27] [&:-webkit-autofill]:[box-shadow:0_0_0_1000px_#fffdf8_inset]';
 
 export default function Login({ auth, app }) {
   const runtimeEnvironment = app?.environment || auth?.environment;
   const demoEnabled = app?.demo_enabled ?? auth?.demo_enabled ?? (runtimeEnvironment ? ['local', 'demo'].includes(runtimeEnvironment) : import.meta.env.DEV);
+  const demoAccounts = Array.isArray(app?.demo_accounts) ? app.demo_accounts : [];
   const [passwordVisible, setPasswordVisible] = useState(false);
   const { data, setData, post, processing, errors } = useForm({
-    login: demoEnabled ? 'superadmin@pesantenku.test' : '',
-    password: demoEnabled ? 'password' : '',
+    login: '',
+    password: '',
+    mfa_code: '',
   });
-  const home = dashboardHref(auth?.roles?.[0]);
+  const home = dashboardHref(auth?.active_role || auth?.roles?.[0]);
   const hasErrors = Object.keys(errors).length > 0;
-  const selectedDemo = demoAccounts.some(([email]) => email === data.login) ? data.login : '';
+  const selectedDemo = demoAccounts.some((account) => account.email === data.login) ? data.login : '';
 
   useEffect(() => {
     if (auth?.user && home) {
@@ -143,7 +132,7 @@ export default function Login({ auth, app }) {
                     className="min-h-11 w-full appearance-none rounded-lg border border-[#cfd8d2] bg-[#f7f4ec] py-2.5 pl-10 pr-10 text-sm font-medium text-[#21483d] outline-none transition hover:border-[#8bb4a2] focus:border-[#0d3b32] focus:ring-4 focus:ring-[#d6efdc] disabled:cursor-wait disabled:opacity-70"
                   >
                     <option value="">Gunakan akun lain</option>
-                    {demoAccounts.map(([email, role]) => <option key={email} value={email}>{role}</option>)}
+                    {demoAccounts.map((account) => <option key={account.email} value={account.email}>{account.role}</option>)}
                   </select>
                   <icons.ChevronRight className="pointer-events-none absolute right-3.5 top-1/2 h-4 w-4 -translate-y-1/2 rotate-90 text-[#5b7b70]" aria-hidden="true" />
                 </div>
@@ -207,6 +196,26 @@ export default function Login({ auth, app }) {
                   </button>
                 </div>
                 {errors.password && <FieldError id="password-error">{errors.password}</FieldError>}
+              </div>
+
+              <div className="mt-5">
+                <label htmlFor="mfa_code" className="block text-sm font-semibold text-[#294d43]">Kode MFA atau recovery</label>
+                <div className="relative mt-2">
+                  <icons.ShieldCheck className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6c8179]" aria-hidden="true" />
+                  <input
+                    id="mfa_code"
+                    name="mfa_code"
+                    autoComplete="one-time-code"
+                    value={data.mfa_code}
+                    onChange={(event) => setData('mfa_code', event.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ''))}
+                    aria-invalid={Boolean(errors.mfa_code)}
+                    aria-describedby={errors.mfa_code ? 'mfa-code-error' : 'mfa-code-help'}
+                    disabled={processing}
+                    className={`${fieldBase} pr-4 font-mono tracking-[0.12em] ${errors.mfa_code ? 'border-red-400 bg-red-50/30 focus:border-red-500 focus:ring-red-100' : 'border-[#cfd8d2]'}`}
+                    placeholder="123456 atau ABCDE-FGHIJ"
+                  />
+                </div>
+                {errors.mfa_code ? <FieldError id="mfa-code-error">{errors.mfa_code}</FieldError> : <p id="mfa-code-help" className="mt-1.5 text-[11px] text-[#62736d]">Wajib untuk akun privileged; akun lain dapat mengosongkannya.</p>}
               </div>
 
               <button

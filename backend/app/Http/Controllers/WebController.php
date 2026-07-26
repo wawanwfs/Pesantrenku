@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Services\DashboardService;
+use App\Services\EntitlementService;
 use App\Services\TenantContext;
+use App\Support\DashboardModuleRegistry;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -12,11 +14,13 @@ class WebController extends Controller
     public function __construct(
         private readonly DashboardService $dashboard,
         private readonly TenantContext $tenantContext,
+        private readonly EntitlementService $entitlements,
     ) {}
 
     public function dashboard(Request $request, string $panel = 'super-admin')
     {
         $this->authorizePanel($request, $panel);
+        $this->entitlements->assertDashboard($request, $panel);
 
         return Inertia::render('App', [
             'screen' => 'dashboard',
@@ -29,6 +33,11 @@ class WebController extends Controller
     public function module(Request $request, string $panel, string $module)
     {
         $this->authorizePanel($request, $panel);
+        abort_unless(DashboardModuleRegistry::allows($panel, $module), 404);
+        if (DashboardModuleRegistry::isPlatformDataset($module)) {
+            abort_unless($panel === 'super-admin' && $request->user()?->hasRole('super_admin'), 403);
+        }
+        $this->entitlements->assertModule($request, $panel, $module);
 
         return Inertia::render('App', [
             'screen' => 'module',

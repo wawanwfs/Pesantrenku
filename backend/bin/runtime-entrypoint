@@ -1,0 +1,21 @@
+#!/bin/sh
+set -eu
+
+if [ "$#" -lt 4 ]; then
+    echo "usage: runtime-entrypoint <component> <name> <command> [args...]" >&2
+    exit 64
+fi
+
+component=$1
+name=$2
+shift 2
+
+heartbeat() {
+    while true; do
+        php artisan pesantenku:runtime-heartbeat "$component" "$name" >/dev/null 2>&1 || true
+        sleep "${PESANTRENKU_HEARTBEAT_INTERVAL_SECONDS:-20}"
+    done
+}
+
+heartbeat &
+exec "$@"

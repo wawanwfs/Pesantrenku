@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 class AppColors {
   static const primary50 = Color(0xFFE6F4EE);
@@ -27,7 +26,7 @@ class AppTheme {
     );
     return base.copyWith(
       scaffoldBackgroundColor: AppColors.neutral50,
-      textTheme: GoogleFonts.poppinsTextTheme(base.textTheme),
+      textTheme: base.textTheme.apply(fontFamily: 'sans-serif'),
       cardTheme: CardThemeData(
         color: Colors.white,
         elevation: 0,

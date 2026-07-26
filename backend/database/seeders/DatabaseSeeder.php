@@ -14,6 +14,10 @@ class DatabaseSeeder extends Seeder
 
     public function run(): void
     {
+        if (app()->environment('production')) {
+            throw new \RuntimeException('Seeder demo dilarang di production. Gunakan pesantenku:bootstrap-admin dan workflow provisioning tenant.');
+        }
+
         $now = now();
 
         $roles = [
@@ -109,8 +113,8 @@ class DatabaseSeeder extends Seeder
                 'pesantren_id' => $darulId,
                 'plan_id' => $growthPlanId,
                 'status' => 'active',
-                'starts_at' => '2025-01-01',
-                'ends_at' => '2025-12-31',
+                'starts_at' => $now->copy()->subMonth(),
+                'ends_at' => $now->copy()->addYear(),
                 'amount' => 1500000,
                 'created_at' => $now,
                 'updated_at' => $now,
@@ -119,8 +123,8 @@ class DatabaseSeeder extends Seeder
                 'pesantren_id' => $falahId,
                 'plan_id' => $starterPlanId,
                 'status' => 'trial',
-                'starts_at' => '2025-05-01',
-                'ends_at' => '2025-06-30',
+                'starts_at' => $now->copy()->subWeek(),
+                'ends_at' => $now->copy()->addMonths(3),
                 'amount' => 0,
                 'created_at' => $now,
                 'updated_at' => $now,
