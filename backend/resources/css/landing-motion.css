@@ -1,0 +1,310 @@
+/*
+ * Scroll-driven motion layer for the landing page.
+ *
+ * Loaded after landing.css so it can add motion to the existing markup without
+ * editing Landing.jsx or landing.css.
+ *
+ * Audit findings this file addresses:
+ *   1. Motion happened once, on load, and only in the hero (.landing-reveal ->
+ *      landing-appear). Modules, roles, workflow, final CTA and footer had no
+ *      entrance motion at all.
+ *   2. Nothing was tied to scroll direction, so scrolling back up revealed
+ *      static, already-settled content.
+ *   3. Anchor links (#modul, #peran, #alur) scrolled their target under the
+ *      fixed header.
+ *   4. The reduced-motion guard in app.css is scoped to .app-shell, so the
+ *      landing page ignored the user's motion preference.
+ *
+ * Constraints honoured here:
+ *   - No JavaScript and no inline styles. The production CSP lint rejects
+ *     style attributes, `<style>` blocks and `element.style` writes, so all
+ *     motion is expressed in CSS.
+ *   - Reversibility comes from the timeline, not from scripting. A view()
+ *     timeline maps animation progress to the element's position in the
+ *     viewport, so scrolling up plays the same motion backwards frame for
+ *     frame. This is what makes the page feel expensive rather than twitchy.
+ *   - Progressive enhancement is mandatory. Every reveal sits inside
+ *     @supports (animation-timeline: view()). Browsers without scroll-driven
+ *     animations render the page fully visible; no element can get stuck at
+ *     opacity 0.
+ *   - Longhands only. The `animation` shorthand resets `animation-timeline` to
+ *     `auto`, which silently converts a scroll-driven animation back into a
+ *     time-based one. Every rule below uses longhand properties.
+ */
+
+/* ---------------------------------------------------------------- easing */
+
+:root {
+  /* Same curve as the approved prototype tokens: a long, calm settle. */
+  --pk-land-ease: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ------------------------------------------------- scroll ergonomics (all) */
+
+/* Anchor targets stop below the fixed header instead of beneath it. */
+html:has(.landing-shell) {
+  scroll-padding-top: 96px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  html:has(.landing-shell) {
+    scroll-behavior: smooth;
+  }
+}
+
+/* -------------------------------------------------------------- keyframes */
+
+@keyframes pk-land-rise {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 44px, 0) scale(0.976);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pk-land-rise-sm {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 24px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pk-land-in-left {
+  from {
+    opacity: 0;
+    transform: translate3d(-44px, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pk-land-in-right {
+  from {
+    opacity: 0;
+    transform: translate3d(44px, 18px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes pk-land-settle {
+  from {
+    opacity: 0;
+    transform: scale(0.945) translate3d(0, 26px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* Release: a section relaxes as it leaves the viewport, so scrolling up feels
+   like recovering it rather than jumping to it. */
+@keyframes pk-land-release {
+  from {
+    opacity: 1;
+    transform: none;
+  }
+  to {
+    opacity: 0.3;
+    transform: translate3d(0, -22px, 0);
+  }
+}
+
+/* Header earns its weight only once content is behind it. */
+@keyframes pk-land-glass {
+  from {
+    backdrop-filter: blur(0) saturate(1);
+    box-shadow: 0 0 0 0 rgba(6, 32, 26, 0);
+  }
+  to {
+    backdrop-filter: blur(16px) saturate(1.35);
+    box-shadow: 0 18px 40px -28px rgba(6, 32, 26, 0.55);
+  }
+}
+
+/* ------------------------------------------------------ scroll-driven layer */
+
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    /* Shared defaults. Duration is intentionally absent: a scroll-driven
+       animation takes its progress from the timeline, never from time. */
+    .landing-features .landing-section-heading,
+    .landing-roles .landing-section-heading,
+    .landing-feature-card,
+    .landing-role-card,
+    .landing-workflow-visual,
+    .landing-workflow-copy,
+    .landing-workflow-copy ol li,
+    .landing-final-cta .landing-kicker,
+    .landing-final-cta h2,
+    .landing-final-cta > p,
+    .landing-final-cta .landing-button,
+    .landing-footer {
+      animation-fill-mode: both;
+      animation-timing-function: var(--pk-land-ease);
+      animation-timeline: view();
+    }
+
+    /* --- section headings: rise in, release out ------------------------- */
+    .landing-features .landing-section-heading,
+    .landing-roles .landing-section-heading {
+      animation-name: pk-land-rise, pk-land-release;
+      animation-fill-mode: both, both;
+      animation-timing-function: var(--pk-land-ease), linear;
+      animation-timeline: view(), view();
+      animation-range: entry 5% entry 58%, exit 15% exit 95%;
+    }
+
+    /* --- module cards: staggered by entry offset ------------------------ */
+    .landing-feature-card {
+      animation-name: pk-land-rise;
+    }
+
+    .landing-feature-card:nth-child(1) {
+      animation-range: entry 4% entry 52%;
+    }
+
+    .landing-feature-card:nth-child(2) {
+      animation-range: entry 10% entry 58%;
+    }
+
+    .landing-feature-card:nth-child(3) {
+      animation-range: entry 16% entry 64%;
+    }
+
+    /* --- role cards: stagger across each row of three ------------------- */
+    .landing-role-card {
+      animation-name: pk-land-rise-sm;
+    }
+
+    .landing-role-card:nth-child(3n + 1) {
+      animation-range: entry 6% entry 54%;
+    }
+
+    .landing-role-card:nth-child(3n + 2) {
+      animation-range: entry 11% entry 59%;
+    }
+
+    .landing-role-card:nth-child(3n + 3) {
+      animation-range: entry 16% entry 64%;
+    }
+
+    /* --- workflow: console settles, copy rises -------------------------- */
+    .landing-workflow-visual {
+      animation-name: pk-land-settle;
+      animation-range: entry 8% entry 68%;
+      will-change: transform, opacity;
+    }
+
+    .landing-workflow-copy {
+      animation-name: pk-land-rise;
+      animation-range: entry 10% entry 62%;
+    }
+
+    .landing-workflow-copy ol li {
+      animation-name: pk-land-rise-sm;
+    }
+
+    .landing-workflow-copy ol li:nth-child(1) {
+      animation-range: entry 12% entry 56%;
+    }
+
+    .landing-workflow-copy ol li:nth-child(2) {
+      animation-range: entry 18% entry 62%;
+    }
+
+    .landing-workflow-copy ol li:nth-child(3) {
+      animation-range: entry 24% entry 68%;
+    }
+
+    /* On wide screens the two halves arrive from their own sides. Kept off
+       narrow screens, where the columns stack and a horizontal translate can
+       push the page sideways. */
+    @media (min-width: 961px) {
+      .landing-workflow-visual {
+        animation-name: pk-land-in-left;
+      }
+
+      .landing-workflow-copy {
+        animation-name: pk-land-in-right;
+      }
+    }
+
+    /* --- final CTA: four beats ----------------------------------------- */
+    .landing-final-cta .landing-kicker {
+      animation-name: pk-land-rise-sm;
+      animation-range: entry 6% entry 50%;
+    }
+
+    .landing-final-cta h2 {
+      animation-name: pk-land-rise;
+      animation-range: entry 12% entry 58%;
+    }
+
+    .landing-final-cta > p {
+      animation-name: pk-land-rise-sm;
+      animation-range: entry 18% entry 64%;
+    }
+
+    .landing-final-cta .landing-button {
+      animation-name: pk-land-settle;
+      animation-range: entry 24% entry 70%;
+    }
+
+    /* --- footer -------------------------------------------------------- */
+    .landing-footer {
+      animation-name: pk-land-rise-sm;
+      animation-range: entry 2% entry 46%;
+    }
+  }
+}
+
+/* Header glass is driven by the document scroll offset, not by an element's
+   position, so it needs the root scroll timeline instead of view(). */
+@supports (animation-timeline: scroll(root)) {
+  @media (prefers-reduced-motion: no-preference) {
+    .landing-header {
+      animation-name: pk-land-glass;
+      animation-fill-mode: both;
+      animation-timing-function: linear;
+      animation-timeline: scroll(root);
+      animation-range: 0 140px;
+    }
+  }
+}
+
+/* ------------------------------------------------------- reduced motion */
+
+/*
+ * app.css scopes its reduced-motion reset to .app-shell, which never matches
+ * the landing page. This is the landing equivalent. Resetting the timeline to
+ * `auto` matters: duration is ignored on a scroll-driven animation, so without
+ * this the reveals would keep responding to scroll. With `auto` plus a
+ * near-zero duration each animation snaps straight to its settled state.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .landing-shell *,
+  .landing-shell *::before,
+  .landing-shell *::after,
+  .landing-header,
+  .landing-header *::before,
+  .landing-header *::after {
+    animation-timeline: auto !important;
+    animation-delay: 0ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
