@@ -1,0 +1,64 @@
+name: Security test report
+
+# The five security-critical suites already run inside the main CI job, but a
+# red run there only tells you that something failed. This workflow prints the
+# failing assertions into a pull request comment so the diagnosis is visible
+# without opening the Actions log.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240 # v2
+        with:
+          php-version: '8.4'
+          extensions: mbstring, sqlite3, pdo_sqlite
+          coverage: none
+      - run: composer install --no-interaction --prefer-dist
+      - run: cp .env.example .env
+      - run: php artisan key:generate
+      - name: Run security-critical suites
+        id: suites
+        run: |
+          set +e
+          php artisan test \
+            tests/Unit/TimelineRedactorTest.php \
+            tests/Unit/ImportRowScopeTest.php \
+            tests/Feature/PrivilegedAccessTest.php \
+            tests/Feature/SubscriptionProvisionerTest.php \
+            tests/Feature/OperationalScopeTest.php \
+            > suite-output.txt 2>&1
+          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          cat suite-output.txt
+      - name: Publish result as a pull request comment
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXIT_CODE: ${{ steps.suites.outputs.exit_code }}
+        run: |
+          {
+            echo "### Hasil suite keamanan"
+            echo
+            echo "Kode keluar \`php artisan test\`: \`$EXIT_CODE\` (0 berarti hijau)."
+            echo
+            echo '```text'
+            tail -n 400 suite-output.txt
+            echo '```'
+          } > suite-comment.md
+          gh pr comment "${{ github.event.pull_request.number }}" --body-file suite-comment.md
+      - name: Fail the job when a suite is red
+        env:
+          EXIT_CODE: ${{ steps.suites.outputs.exit_code }}
+        run: exit "$EXIT_CODE"
