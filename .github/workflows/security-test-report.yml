@@ -4,6 +4,10 @@ name: Security test report
 # red run there only tells you that something failed. This workflow prints the
 # failing assertions into a pull request comment so the diagnosis is visible
 # without opening the Actions log.
+#
+# Every command runs inside a single capturing step and the comment step runs
+# with always(), so a failure during setup still produces a readable report
+# instead of an aborted job with no output.
 
 on:
   pull_request:
@@ -26,39 +30,58 @@ jobs:
           php-version: '8.4'
           extensions: mbstring, sqlite3, pdo_sqlite
           coverage: none
-      - run: composer install --no-interaction --prefer-dist
-      - run: cp .env.example .env
-      - run: php artisan key:generate
       - name: Run security-critical suites
         id: suites
         run: |
           set +e
-          php artisan test \
-            tests/Unit/TimelineRedactorTest.php \
-            tests/Unit/ImportRowScopeTest.php \
-            tests/Feature/PrivilegedAccessTest.php \
-            tests/Feature/SubscriptionProvisionerTest.php \
-            tests/Feature/OperationalScopeTest.php \
-            > suite-output.txt 2>&1
-          echo "exit_code=$?" >> "$GITHUB_OUTPUT"
+          {
+            echo "== php --version =="
+            php --version
+            echo
+            echo "== composer install =="
+            composer install --no-interaction --prefer-dist
+            echo "composer install exit: $?"
+            echo
+            echo "== application key =="
+            cp .env.example .env
+            php artisan key:generate
+            echo "key:generate exit: $?"
+            echo
+            echo "== php artisan test =="
+            php artisan test \
+              tests/Unit/TimelineRedactorTest.php \
+              tests/Unit/ImportRowScopeTest.php \
+              tests/Feature/PrivilegedAccessTest.php \
+              tests/Feature/SubscriptionProvisionerTest.php \
+              tests/Feature/OperationalScopeTest.php
+            echo "SUITE_EXIT=$?"
+          } > suite-output.txt 2>&1
           cat suite-output.txt
+          if grep -qx 'SUITE_EXIT=0' suite-output.txt; then
+            echo "exit_code=0" >> "$GITHUB_OUTPUT"
+          else
+            echo "exit_code=1" >> "$GITHUB_OUTPUT"
+          fi
       - name: Publish result as a pull request comment
-        if: github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          EXIT_CODE: ${{ steps.suites.outputs.exit_code }}
         run: |
+          set +e
           {
             echo "### Hasil suite keamanan"
             echo
-            echo "Kode keluar \`php artisan test\`: \`$EXIT_CODE\` (0 berarti hijau)."
-            echo
             echo '```text'
-            tail -n 400 suite-output.txt
+            if [ -f suite-output.txt ]; then
+              tail -c 55000 suite-output.txt
+            else
+              echo "Langkah pengujian tidak sempat menghasilkan keluaran apa pun."
+            fi
             echo '```'
           } > suite-comment.md
           gh pr comment "${{ github.event.pull_request.number }}" --body-file suite-comment.md
       - name: Fail the job when a suite is red
+        if: always()
         env:
           EXIT_CODE: ${{ steps.suites.outputs.exit_code }}
-        run: exit "$EXIT_CODE"
+        run: exit "${EXIT_CODE:-1}"
