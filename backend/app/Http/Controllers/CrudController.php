@@ -18,6 +18,7 @@ use App\Services\UserAccessRevoker;
 use App\Support\QueueNames;
 use App\Support\ResourceCatalog;
 use App\Support\SafeSpreadsheet;
+use App\Support\TimelineRedactor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
@@ -132,8 +133,9 @@ class CrudController extends Controller
             ->select('audit_logs.*', 'users.name as actor_name')
             ->latest('audit_logs.id')
             ->paginate(min(100, max(10, (int) $request->integer('per_page', 50))))
-            ->through(function ($log) use ($table) {
+            ->through(function ($log) use ($table, $row) {
                 $metadata = json_decode($log->metadata ?: '{}', true) ?: [];
+                $metadata = TimelineRedactor::redactMetadata($metadata, $row);
 
                 return [
                     'id' => $log->id,
