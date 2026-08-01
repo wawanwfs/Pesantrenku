@@ -9,12 +9,14 @@ use App\Http\Controllers\Concerns\CrudPayloadConcern;
 use App\Http\Controllers\Concerns\CrudPermissionConcern;
 use App\Jobs\BuildResourceExportJob;
 use App\Jobs\ProcessResourceImportJob;
+use App\Models\User;
 use App\Services\EntitlementService;
 use App\Services\OperationStorage;
 use App\Services\ResourceAuthorization;
 use App\Services\StepUpMfaService;
 use App\Services\TenantContext;
 use App\Services\UserAccessRevoker;
+use App\Support\PrivilegedAccess;
 use App\Support\QueueNames;
 use App\Support\ResourceCatalog;
 use App\Support\SafeSpreadsheet;
@@ -216,10 +218,22 @@ class CrudController extends Controller
             $this->assertMembershipTransitionAllowed($request, $table, [], $row, true);
             $this->assertSystemSettingPayloadAllowed($request, $table, [], $row);
 
+            // Deleting a privileged platform account is the same class of
+            // sensitive event PrivilegedAccess already protects for MFA
+            // disablement; capture why the account was privileged in the
+            // audit trail before the row disappears.
+            $auditMetadata = [];
+            if ($table === 'users') {
+                $targetUser = User::find($id);
+                if ($targetUser && PrivilegedAccess::isPrivileged($targetUser)) {
+                    $auditMetadata['privileged_reasons'] = PrivilegedAccess::reasons($targetUser);
+                }
+            }
+
             $this->hasColumn($table, 'deleted_at')
                 ? DB::table($table)->where('id', $id)->update(['deleted_at' => now(), 'updated_at' => now()])
                 : DB::table($table)->where('id', $id)->delete();
-            $this->audit($request, 'delete', $table, $id, $row, null);
+            $this->audit($request, 'delete', $table, $id, $row, null, $auditMetadata);
             if ($table === 'users') {
                 $this->accessRevoker->revoke($id);
             }
