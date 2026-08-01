@@ -616,4 +616,41 @@ class TenantSecurityTest extends TestCase
             ->getJson('/web-api/roles')
             ->assertOk();
     }
+
+    public function test_user_without_any_membership_cannot_impersonate_a_foreign_tenant_via_header(): void
+    {
+        $this->seed();
+        $finance = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+        $ownTenant = DB::table('pesantren_user')->where('user_id', $finance->id)->value('pesantren_id');
+        $foreignTenant = DB::table('pesantrens')->where('id', '!=', $ownTenant)->where('status', 'active')->value('id');
+        $this->assertNotNull($foreignTenant, 'Seeder harus menyediakan tenant aktif lain untuk kasus ini.');
+
+        // This is the header-trust attack item 6 asks about: a user who has
+        // zero membership rows in the foreign tenant (not even under a
+        // different role) simply claims it via X-Pesantren-Id. TenantContext
+        // must reject this the same way regardless of which route reads the
+        // resolved tenant id (CRUD read, workflow action, or the role-gated
+        // dashboard route), because all three ultimately resolve tenant
+        // identity through TenantContext::activePesantrenId /
+        // requireActivePesantrenId rather than trusting the header directly.
+        $this->assertDatabaseMissing('pesantren_user', ['user_id' => $finance->id, 'pesantren_id' => $foreignTenant]);
+
+        $this->actingAs($finance)
+            ->withHeader('X-Pesantren-Id', (string) $foreignTenant)
+            ->getJson('/web-api/students')
+            ->assertForbidden();
+
+        $student = DB::table('students')->where('pesantren_id', $foreignTenant)->first();
+        if ($student) {
+            $this->actingAs($finance)
+                ->withHeader('X-Pesantren-Id', (string) $foreignTenant)
+                ->postJson("/web-actions/workflow/payments/1/verify")
+                ->assertForbidden();
+        }
+
+        $this->actingAs($finance)
+            ->withHeader('X-Pesantren-Id', (string) $foreignTenant)
+            ->get('/dashboard/keuangan')
+            ->assertForbidden();
+    }
 }
