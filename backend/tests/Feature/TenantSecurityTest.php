@@ -528,4 +528,92 @@ class TenantSecurityTest extends TestCase
         $metadata = json_decode($audit->metadata, true, 512, JSON_THROW_ON_ERROR);
         $this->assertContains('tenant_custom_role:'.$customRoleId, $metadata['privileged_reasons'] ?? []);
     }
+
+    public function test_dead_global_table_aliases_are_unreachable_through_generic_crud(): void
+    {
+        $this->seed();
+        $superAdmin = User::where('email', 'superadmin@pesantenku.test')->firstOrFail();
+
+        // TenantContext::GLOBAL_TABLES lists 'permissions', 'permission_role',
+        // and 'role_user' as tenant-unbound, but they are intentionally absent
+        // from ResourceCatalog::ALL, so the generic resource API can never
+        // route to them (CrudAuthorizationConcern::table() 404s first). This
+        // locks in that they stay unreachable even for a super admin, rather
+        // than silently becoming reachable through a future ResourceCatalog
+        // change without review.
+        foreach (['permissions', 'permission-role', 'role-user'] as $resource) {
+            $this->actingAsWithStepUp($superAdmin)
+                ->getJson("/web-api/{$resource}")
+                ->assertNotFound();
+        }
+    }
+
+    public function test_platform_catalog_tables_cannot_be_delegated_via_override_or_custom_role(): void
+    {
+        $this->seed();
+        $superAdmin = User::where('email', 'superadmin@pesantenku.test')->firstOrFail();
+        $finance = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+        $academic = User::where('email', 'akademik@pesantenku.test')->firstOrFail();
+        $tenantId = DB::table('pesantren_user')->where('user_id', $finance->id)->value('pesantren_id');
+
+        // Simulate a tampered or legacy tenant override that tries to grant a
+        // built-in tenant role access to platform catalog tables ('roles' and
+        // 'plans' are global, not tenant data, and are in
+        // ResourceCatalog::NON_DELEGABLE). This must be rejected at read time
+        // by ResourceAuthorization's delegable-resource filtering, not only by
+        // the write-time validator in updatePermissionMatrix, so it still
+        // fails even if the raw JSON in system_settings already contains it.
+        DB::table('system_settings')->updateOrInsert(
+            ['pesantren_id' => $tenantId, 'key' => 'permissions.matrix_override'],
+            [
+                'value' => json_encode([
+                    'admin_keuangan' => ['read' => ['roles', 'plans'], 'write' => ['roles', 'plans'], 'actions' => []],
+                ], JSON_THROW_ON_ERROR),
+                'created_at' => now(),
+                'updated_at' => now(),
+            ],
+        );
+
+        $this->actingAs($finance)
+            ->withHeader('X-Pesantren-Id', (string) $tenantId)
+            ->getJson('/web-api/roles')
+            ->assertForbidden();
+        $this->actingAs($finance)
+            ->withHeader('X-Pesantren-Id', (string) $tenantId)
+            ->postJson('/web-api/plans', ['name' => 'Tampered Plan'])
+            ->assertForbidden();
+
+        // Same fail-closed guarantee for a tenant custom role, the other
+        // source of delegated access.
+        $membership = DB::table('pesantren_user')->where('user_id', $academic->id)->firstOrFail();
+        $customRoleId = DB::table('tenant_roles')->insertGetId([
+            'pesantren_id' => $membership->pesantren_id,
+            'name' => 'platform_reacher',
+            'label' => 'Platform Reacher',
+            'description' => null,
+            'permissions' => json_encode([
+                'read' => ['roles', 'plans'],
+                'write' => ['roles', 'plans'],
+                'actions' => [],
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('pesantren_user')->where('id', $membership->id)->update([
+            'tenant_role_id' => $customRoleId,
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAs($academic)
+            ->withHeader('X-Pesantren-Id', (string) $membership->pesantren_id)
+            ->getJson('/web-api/roles')
+            ->assertForbidden();
+
+        // Positive control: super admin still has legitimate access, proving
+        // the resource itself is not simply broken for every actor.
+        $this->actingAsWithStepUp($superAdmin)
+            ->getJson('/web-api/roles')
+            ->assertOk();
+    }
 }
