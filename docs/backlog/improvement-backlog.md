@@ -32,8 +32,8 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 
 1. **[V][P0]** ~~Pasang pemanggilan `TimelineRedactor` di `CrudController::timeline`; kelasnya masih kode mati (M-REMAIN-06).~~ Selesai 2026-08-01: `timeline()` kini memanggil `TimelineRedactor::redactMetadata()`.
 2. **[V][P1]** ~~Satukan cakupan asrama: export memakai `room_assignments`, `OperationalScope` memakai `musyrif_room_assignments`. Dua sumber kebenaran untuk pertanyaan yang sama.~~ Selesai 2026-08-01: `DashboardScopeConcern::dormScope()` dan `OperationalScope::dormScope()` kini menghitung `student_ids` dari tabel relasional `room_assignments` (status aktif, berjendela tanggal `assigned_at`/`ended_at`) alih-alih mencocokkan teks `students.room`, selaras dengan `CrudAuthorizationConcern`, `ActionWorkflowConcern`, dan `BuildResourceExportJob` yang sebelumnya sudah benar. `QrScannerService` diperiksa dan sudah benar sejak awal (menggabungkan `room_assignments` + `musyrif_room_assignments` langsung dengan filter status/tanggal untuk keduanya). Diuji regresi di dua tes baru pada `OperationalScopeTest.php` yang membuktikan cakupan mengikuti `room_assignments`, bukan `students.room`, baik saat keduanya berbeda maupun saat assignment sudah berakhir. Commit `d4a8666b56cc30883c27983323a11cae28d22be9` (DashboardScopeConcern), `14d560c2fe5c0f298111ec258f80cea8cc7aef69` (OperationalScope), `6c108006a93c38d8eb1630b35b4172a7f7c9ec61` (tes regresi).
-3. **[V][P1]** Uji `PrivilegedAccess::grantsSensitiveAccess` terhadap payload JSON rusak; jalur fail-closed belum pernah dieksekusi.
-4. **[V][P1]** Terapkan `PrivilegedAccess` pada penghapusan akun dan penurunan peran, bukan hanya penonaktifan MFA.
+3. **[V][P1]** ~~Uji `PrivilegedAccess::grantsSensitiveAccess` terhadap payload JSON rusak; jalur fail-closed belum pernah dieksekusi.~~ Selesai 2026-08-01: sudah terwakili oleh `PrivilegedAccessTest::test_unreadable_permission_payload_fails_closed()`, yang memasang `permissions => 'bukan-json-yang-valid'` dan membuktikan `PrivilegedAccess::isPrivileged()` mengembalikan `true` lewat cabang `! is_array($decoded)` di `grantsSensitiveAccess()`. Tidak ada perubahan kode; penutupan bersifat dokumentasi.
+4. **[V][P1]** ~~Terapkan `PrivilegedAccess` pada penghapusan akun dan penurunan peran, bukan hanya penonaktifan MFA.~~ Selesai 2026-08-01: sebelumnya `PrivilegedAccess` hanya dipakai `MfaController::disable()`; mutasi tabel `users` (termasuk penghapusan akun platform) sama sekali tidak mewajibkan step-up MFA. Sekarang `CrudAuthorizationConcern::assertAccessAdministrationStepUp()` mewajibkan step-up MFA (purpose `membership-administration`, sama dengan `pesantren_user`) untuk seluruh mutasi tabel `users`, bukan hanya `pesantren_user`. `CrudController::destroy()` mencatat `privileged_reasons` pada metadata audit saat akun `users` yang privileged dihapus. `CrudAuthorizationConcern::assertMembershipTransitionAllowed()` kini mendeteksi saat membership yang privileged (owner aktif, atau custom role tenant dengan akses tulis sensitif) diturunkan atau dihapus, dan mencatat entri audit terpisah (`privileged membership demoted`/`removed`) berisi `privileged_reasons`, sehingga penurunan peran privileged tidak lagi tidak bisa dibedakan dari edit membership rutin. `CrudPermissionConcern::audit()` diperluas menerima metadata tambahan opsional (`$extra`, default kosong, tidak mengubah pemanggilan lama). Diuji regresi tiga tes baru di `TenantSecurityTest.php`: `test_users_administration_requires_step_up_mfa` (mutasi `users` tanpa step-up kini ditolak), `test_deleting_privileged_user_account_is_audited_with_privileged_reasons` (penghapusan akun super admin lain tercatat dengan `global_role`), `test_privileged_custom_role_demotion_is_audited` (melepas custom role bertulis-sensitif dari membership tercatat dengan `tenant_custom_role:<id>`). Commit `df4a98b355ab03376f1f6fac9977ecb056094f49` (CrudPermissionConcern), `bd9d53e4a9e07a93ec803fa89cb658c99ea5c7c6` (CrudAuthorizationConcern), `ada8b374928250ebcd038dbc0e31de81f9df6179` (CrudController), `d80f5e20d0e717ca2b60ffce84239872dac3444c` (tes regresi).
 5. **[V][P1]** Audit `TenantContext::GLOBAL_TABLES`; tabel global melewati penyaringan tenant, jadi daftar itu adalah permukaan serangan.
 6. **[?][P1]** Verifikasi setiap endpoint menegakkan `X-Pesantren-Id` terhadap keanggotaan aktif, bukan menerima begitu saja.
 7. **[V][P1]** Cache keanggotaan 30 detik berarti pencabutan akses tertunda 30 detik; invalidasi eksplisit saat keanggotaan berubah.
@@ -314,11 +314,11 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 
 Item P0 yang tersisa: 87, 134, 228, dan 65. Item 1, 101, 102, 103, dan 104
 sudah selesai dan terverifikasi lolos di CI (lihat
-`memory/2026-07-27-rc9-remediation-handoff.md`). Item 2 (P1) juga sudah
-selesai dan terverifikasi lolos di CI. Yang tersisa menutup utang dari audit
-RC7-RC9. Tanpa itu, setiap fitur baru dibangun di atas fondasi yang belum
-terbukti sepenuhnya lewat eksekusi nyata (build, e2e, MySQL 8.4, dan bukti
-kanari staging).
+`memory/2026-07-27-rc9-remediation-handoff.md`). Item 2, 3, dan 4 (semuanya
+P1) juga sudah selesai dan terverifikasi lolos di CI. Yang tersisa menutup
+utang dari audit RC7-RC9. Tanpa itu, setiap fitur baru dibangun di atas
+fondasi yang belum terbukti sepenuhnya lewat eksekusi nyata (build, e2e,
+MySQL 8.4, dan bukti kanari staging).
 
 Sesudah itu barulah bagian 15 layak dikerjakan. Fitur domain adalah yang paling
 menarik untuk dibangun dan paling mudah menjebak: menambah modul tahfidz di atas
