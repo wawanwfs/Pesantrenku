@@ -18,7 +18,11 @@ trait CrudPermissionConcern
             ->all();
     }
 
-    private function audit(Request $request, string $action, string $table, ?int $rowId = null, ?object $before = null, ?object $after = null): void
+    /**
+     * @param  array<string, mixed>  $extra  Additional metadata merged into the audit entry, for
+     *                                        example privileged-access reasons on sensitive account changes.
+     */
+    private function audit(Request $request, string $action, string $table, ?int $rowId = null, ?object $before = null, ?object $after = null, array $extra = []): void
     {
         $user = $request->user();
         if (! $user || $table === 'audit_logs') {
@@ -40,11 +44,11 @@ trait CrudPermissionConcern
             'module' => $table,
             'row_id' => $rowId,
             'ip_address' => $request->ip(),
-            'metadata' => json_encode([
+            'metadata' => json_encode(array_merge([
                 'row_id' => $rowId,
                 'before' => $this->redactRow($table, $before),
                 'after' => $this->redactRow($table, $after),
-            ]),
+            ], $extra)),
             'created_at' => now(),
             'updated_at' => now(),
         ]);
