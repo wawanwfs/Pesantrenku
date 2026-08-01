@@ -5,7 +5,9 @@ namespace App\Services;
 use App\Support\ProvisioningException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Throwable;
 
 /**
  * Idempotent, audited provisioning of tenant plan/subscription state.
@@ -306,12 +308,28 @@ final class SubscriptionProvisioner
      */
     private function auditRejection(array $desired, string $fingerprint, array $intent, string $reason): void
     {
-        $this->audit((int) $desired['pesantren_id'], null, 'PROVISION SUBSCRIPTION REJECTED', $intent, [
-            'fingerprint' => $fingerprint,
-            'outcome' => 'rejected',
-            'desired' => $desired,
-            'rejection_reason' => $reason,
-        ]);
+        try {
+            $this->audit((int) $desired['pesantren_id'], null, 'PROVISION SUBSCRIPTION REJECTED', $intent, [
+                'fingerprint' => $fingerprint,
+                'outcome' => 'rejected',
+                'desired' => $desired,
+                'rejection_reason' => $reason,
+            ]);
+        } catch (Throwable $auditFailure) {
+            // A rejection can legitimately carry a tenant id that does not
+            // exist, and audit_logs.pesantren_id is a real foreign key, so the
+            // audit insert itself can fail. Losing the audit row is bad, but
+            // letting a database constraint error escape is worse: it would
+            // replace "Pesantren 42 tidak ditemukan" with an SQL dump and hide
+            // the actual reason from the operator. The trail is preserved in
+            // the application log instead.
+            Log::warning('Audit penolakan provisioning gagal ditulis ke audit_logs.', [
+                'pesantren_id' => (int) $desired['pesantren_id'],
+                'fingerprint' => $fingerprint,
+                'rejection_reason' => $reason,
+                'audit_error' => $auditFailure->getMessage(),
+            ]);
+        }
     }
 
     /**
