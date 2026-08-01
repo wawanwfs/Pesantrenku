@@ -207,6 +207,85 @@ class OperationalScopeTest extends TestCase
     }
 
     /**
+     * Regression test for the room_assignments/students.room drift (backlog
+     * item 2): a musyrif's scope for tables like dorm_attendances must be
+     * decided by the relational room_assignments table, not the legacy
+     * students.room text column, because those two can disagree.
+     */
+    public function test_musyrif_dorm_scope_for_related_tables_follows_room_assignments_not_students_room_text(): void
+    {
+        $this->seed();
+        $tenantId = $this->tenantId();
+        $musyrif = $this->userWithRole('musyrif');
+        $roomName = $this->assignMusyrifToRoom($tenantId, $musyrif);
+        $roomId = (int) DB::table('rooms')->where('pesantren_id', $tenantId)->where('name', $roomName)->value('id');
+
+        $studentId = (int) DB::table('students')->where('pesantren_id', $tenantId)->value('id');
+        $this->assertGreaterThan(0, $studentId);
+
+        // The student's legacy room text field intentionally does NOT match
+        // the musyrif's supervised room, but their room_assignments row does.
+        // room_assignments is the authoritative source, so this row must
+        // still be considered in scope.
+        DB::table('students')->where('id', $studentId)->update(['room' => 'Kamar Lain Yang Tidak Dibina']);
+        DB::table('room_assignments')->where('pesantren_id', $tenantId)->where('student_id', $studentId)->delete();
+        DB::table('room_assignments')->insert([
+            'pesantren_id' => $tenantId,
+            'student_id' => $studentId,
+            'room_id' => $roomId,
+            'assigned_at' => now()->subMonth()->toDateString(),
+            'ended_at' => null,
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $scope = (new OperationalScope())->importRowScope($tenantId, $musyrif, 'musyrif', 'dorm_attendances');
+
+        $this->assertNull(
+            $scope->deniedReason(['student_id' => $studentId, 'room_id' => $roomId]),
+            'an active room_assignments row must grant scope even when students.room text disagrees',
+        );
+    }
+
+    /**
+     * Mirror of the above: an ended room_assignments row must not grant scope
+     * even when the legacy students.room text column still matches, because
+     * that text column is never kept in sync with assignment lifecycle.
+     */
+    public function test_musyrif_dorm_scope_for_related_tables_denies_ended_room_assignment(): void
+    {
+        $this->seed();
+        $tenantId = $this->tenantId();
+        $musyrif = $this->userWithRole('musyrif');
+        $roomName = $this->assignMusyrifToRoom($tenantId, $musyrif);
+        $roomId = (int) DB::table('rooms')->where('pesantren_id', $tenantId)->where('name', $roomName)->value('id');
+
+        $studentId = (int) DB::table('students')->where('pesantren_id', $tenantId)->value('id');
+        $this->assertGreaterThan(0, $studentId);
+
+        DB::table('students')->where('id', $studentId)->update(['room' => $roomName]);
+        DB::table('room_assignments')->where('pesantren_id', $tenantId)->where('student_id', $studentId)->delete();
+        DB::table('room_assignments')->insert([
+            'pesantren_id' => $tenantId,
+            'student_id' => $studentId,
+            'room_id' => $roomId,
+            'assigned_at' => now()->subMonth()->toDateString(),
+            'ended_at' => now()->subDay()->toDateString(),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $scope = (new OperationalScope())->importRowScope($tenantId, $musyrif, 'musyrif', 'dorm_attendances');
+
+        $this->assertNotNull(
+            $scope->deniedReason(['student_id' => $studentId, 'room_id' => $roomId]),
+            'an ended room_assignments row must not grant scope even when students.room text still matches',
+        );
+    }
+
+    /**
      * Applies $update to the only active assignment and asserts that the class
      * it used to grant is no longer reachable.
      *
