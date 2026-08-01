@@ -4,6 +4,13 @@ Release decision: **NO-GO for production.** Nothing in this pass changes that.
 No test suite, build, container, database or cluster gate was executed while
 making these changes, so none of the work below is verified by execution.
 
+> Update 2026-08-01: GitHub Actions now runs `php artisan test` on every push
+> via `.github/workflows/security-test-report.yml`, and the note above about
+> "no test suite executed" no longer holds for the five suites listed below.
+> All 63 tests (199 assertions) pass. The release decision is still NO-GO
+> because the remaining gates (build, e2e, MySQL 8.4 migrations, canary
+> proofs) have not run.
+
 ## Closed in code during this pass
 
 | ID | Finding | Delivery |
@@ -13,18 +20,9 @@ making these changes, so none of the work below is verified by execution.
 | H-REMAIN-02 | Plan/subscription provisioning was neither idempotent nor audited | `Services/SubscriptionProvisioner.php`, `Support/ProvisioningException.php`, `Console/Commands/ProvisionTenantSubscription.php` |
 | M-REMAIN-05 | Disable-MFA guard ignored privileged tenant custom roles | `Support/PrivilegedAccess.php`, `Http/Controllers/MfaController.php` |
 | M-REMAIN-07 | Android bundle shipped without SBOM or attestation | `.github/workflows/android-supply-chain.yml` |
+| M-REMAIN-06 | Timeline history leaked previous owner's personal data | `Http/Controllers/CrudController.php`: wired `TimelineRedactor::redactMetadata()` into `timeline()`, closed 2026-08-01 |
 
 ## Still open
-
-### M-REMAIN-06 — timeline history redaction (partially delivered)
-
-`Support/TimelineRedactor.php` and `docs/security/timeline-redaction.md` are in
-place, but the call site inside `CrudController::timeline` is **not wired**. The
-redactor is currently unreachable code. See the doc for the exact change.
-
-Reason it was not applied: `CrudController.php` is ~44 KB and the tooling used
-for this pass can only replace whole files, which is not a safe way to touch a
-central controller. Apply it locally with a normal editor and a diff review.
 
 ### M-REMAIN-04 — canary proofs
 
@@ -35,8 +33,20 @@ workers, scheduler heartbeat, and Reverb, with evidence attached.
 
 - MAINT-01: `resources/js/Pages/App.jsx` is ~101 KB and should be split.
 - MAINT-02: no CI assertion for `prefers-reduced-motion` behaviour.
-- No PHPUnit coverage yet for `OperationalScope`, `ImportRowScope`,
-  `SubscriptionProvisioner`, `PrivilegedAccess`, or `TimelineRedactor`.
+- `CrudController.php` (~44 KB) should still be split (item 87 in the
+  backlog); the M-REMAIN-06 fix proved a targeted whole-file replacement via
+  the GitHub API is possible without corruption, but that does not replace a
+  proper decomposition into smaller controllers/services.
+
+## Test coverage added since this handoff was written
+
+`backend/tests/Unit/TimelineRedactorTest.php`,
+`backend/tests/Feature/OperationalScopeTest.php`,
+`backend/tests/Feature/ImportRowScopeTest.php`,
+`backend/tests/Feature/SubscriptionProvisionerTest.php`, and
+`backend/tests/Feature/PrivilegedAccessTest.php` now exist and all pass in CI
+(63 tests, 199 assertions, `SUITE_EXIT=0` as of the `ci/security-test-report`
+workflow run on 2026-08-01). This closes backlog items 101-104.
 
 ## Gates that must pass before any GO decision
 
