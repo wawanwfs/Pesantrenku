@@ -126,45 +126,19 @@ class OperationalScopeTest extends TestCase
         $this->assertStringContainsString('tidak memuat kolom cakupan penugasan', $reason);
     }
 
-    /**
-     * @return array<string, array<int, string>>
-     */
-    public static function inactiveAssignmentProvider(): array
+    public function test_an_assignment_that_already_ended_grants_nothing(): void
     {
-        return [
-            'assignment already ended' => ['ended'],
-            'assignment not started yet' => ['future'],
-            'assignment revoked' => ['revoked'],
-        ];
+        $this->assertAssignmentGrantsNothing(['ended_at' => now()->subDay()->toDateString()]);
     }
 
-    /**
-     * @dataProvider inactiveAssignmentProvider
-     */
-    public function test_an_assignment_that_is_not_currently_valid_grants_nothing(string $variant): void
+    public function test_an_assignment_that_has_not_started_grants_nothing(): void
     {
-        $this->seed();
-        $tenantId = $this->tenantId();
-        $guru = $this->userWithRole('guru');
-        $classId = $this->assignTeacherToClass($tenantId, $guru);
+        $this->assertAssignmentGrantsNothing(['assigned_at' => now()->addWeek()->toDateString()]);
+    }
 
-        $update = match ($variant) {
-            'ended' => ['ended_at' => now()->subDay()->toDateString()],
-            'future' => ['assigned_at' => now()->addWeek()->toDateString()],
-            'revoked' => ['status' => 'revoked'],
-        };
-
-        DB::table('teacher_assignments')
-            ->where('pesantren_id', $tenantId)
-            ->update($update + ['updated_at' => now()]);
-
-        $scope = (new OperationalScope())->importRowScope($tenantId, $guru, 'guru', 'students');
-
-        $this->assertSame(
-            'nilai class_id berada di luar penugasan aktif actor.',
-            $scope->deniedReason(['class_id' => $classId]),
-            'an assignment outside its validity window must not grant access',
-        );
+    public function test_a_revoked_assignment_grants_nothing(): void
+    {
+        $this->assertAssignmentGrantsNothing(['status' => 'revoked']);
     }
 
     public function test_an_assignment_valid_today_at_its_boundaries_still_grants_access(): void
@@ -230,6 +204,32 @@ class OperationalScopeTest extends TestCase
         $scope = (new OperationalScope())->importRowScope($tenantId, $musyrif, 'musyrif', 'students');
 
         $this->assertNotNull($scope->deniedReason(['room' => $roomName]));
+    }
+
+    /**
+     * Applies $update to the only active assignment and asserts that the class
+     * it used to grant is no longer reachable.
+     *
+     * @param  array<string, mixed>  $update
+     */
+    private function assertAssignmentGrantsNothing(array $update): void
+    {
+        $this->seed();
+        $tenantId = $this->tenantId();
+        $guru = $this->userWithRole('guru');
+        $classId = $this->assignTeacherToClass($tenantId, $guru);
+
+        DB::table('teacher_assignments')
+            ->where('pesantren_id', $tenantId)
+            ->update($update + ['updated_at' => now()]);
+
+        $scope = (new OperationalScope())->importRowScope($tenantId, $guru, 'guru', 'students');
+
+        $this->assertSame(
+            'nilai class_id berada di luar penugasan aktif actor.',
+            $scope->deniedReason(['class_id' => $classId]),
+            'an assignment outside its validity window must not grant access',
+        );
     }
 
     private function tenantId(): int
