@@ -212,7 +212,7 @@ class TenantSecurityTest extends TestCase
 
         $this->postApiLogin([
             'login' => 'keuangan@pesantenku.test',
-            'password' => 'password',
+            'password' => 'incorrect-password',
         ])->assertUnprocessable()->assertJsonMissingPath('token');
     }
 
@@ -439,5 +439,93 @@ class TenantSecurityTest extends TestCase
             'password' => 'password',
             'mfa_code' => $code,
         ])->assertUnprocessable()->assertJsonMissingPath('token');
+    }
+
+    public function test_users_administration_requires_step_up_mfa(): void
+    {
+        $this->seed();
+        $superAdmin = User::where('email', 'superadmin@pesantenku.test')->firstOrFail();
+        $target = User::where('email', 'keuangan@pesantenku.test')->firstOrFail();
+
+        // A super admin session alone is not enough to mutate platform accounts;
+        // this must require the same recently verified second factor as
+        // membership administration, not just an authenticated session.
+        $this->actingAs($superAdmin)
+            ->patchJson("/web-api/users/{$target->id}", ['name' => 'Blocked Without Step Up'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('mfa_code');
+
+        $this->assertDatabaseHas('users', ['id' => $target->id, 'name' => $target->name]);
+    }
+
+    public function test_deleting_privileged_user_account_is_audited_with_privileged_reasons(): void
+    {
+        $this->seed();
+        $superAdmin = User::where('email', 'superadmin@pesantenku.test')->firstOrFail();
+        $superAdminRoleId = DB::table('roles')->where('name', 'super_admin')->value('id');
+        $target = User::factory()->create(['status' => 'active']);
+        DB::table('role_user')->insert([
+            'user_id' => $target->id,
+            'role_id' => $superAdminRoleId,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        $this->actingAsWithStepUp($superAdmin)
+            ->deleteJson("/web-api/users/{$target->id}")
+            ->assertOk();
+
+        $audit = DB::table('audit_logs')
+            ->where('module', 'users')
+            ->where('row_id', $target->id)
+            ->where('action', 'DELETE USERS')
+            ->latest('id')
+            ->firstOrFail();
+        $metadata = json_decode($audit->metadata, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertContains('global_role', $metadata['privileged_reasons'] ?? []);
+    }
+
+    public function test_privileged_custom_role_demotion_is_audited(): void
+    {
+        $this->seed();
+        $owner = User::where('email', 'owner@pesantenku.test')->firstOrFail();
+        $academic = User::where('email', 'akademik@pesantenku.test')->firstOrFail();
+        $membership = DB::table('pesantren_user')->where('user_id', $academic->id)->firstOrFail();
+
+        $customRoleId = DB::table('tenant_roles')->insertGetId([
+            'pesantren_id' => $membership->pesantren_id,
+            'name' => 'sensitive_reviewer',
+            'label' => 'Sensitive Reviewer',
+            'description' => null,
+            'permissions' => json_encode([
+                'read' => ['users'],
+                'write' => ['users'],
+                'actions' => [],
+            ], JSON_THROW_ON_ERROR),
+            'status' => 'active',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+        DB::table('pesantren_user')->where('id', $membership->id)->update([
+            'tenant_role_id' => $customRoleId,
+            'updated_at' => now(),
+        ]);
+
+        // Removing a custom role that grants sensitive write access is the
+        // same class of security event as an owner losing their role; it must
+        // be auditable the same way, not indistinguishable from a routine edit.
+        $this->actingAsWithStepUp($owner)
+            ->withHeader('X-Pesantren-Id', (string) $membership->pesantren_id)
+            ->patchJson("/web-api/memberships/{$membership->id}", ['tenant_role_id' => null])
+            ->assertOk();
+
+        $audit = DB::table('audit_logs')
+            ->where('module', 'pesantren_user')
+            ->where('row_id', $membership->id)
+            ->where('action', 'PRIVILEGED MEMBERSHIP DEMOTED PESANTREN_USER')
+            ->latest('id')
+            ->firstOrFail();
+        $metadata = json_decode($audit->metadata, true, 512, JSON_THROW_ON_ERROR);
+        $this->assertContains('tenant_custom_role:'.$customRoleId, $metadata['privileged_reasons'] ?? []);
     }
 }
