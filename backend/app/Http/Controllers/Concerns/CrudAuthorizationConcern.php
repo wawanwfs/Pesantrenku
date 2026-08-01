@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers\Concerns;
 
+use App\Models\User;
+use App\Support\PrivilegedAccess;
 use App\Support\ResourceCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -417,7 +419,11 @@ trait CrudAuthorizationConcern
             ? (int) $data['user_id']
             : (int) ($current?->user_id ?? 0);
         $targetStatus = (string) ($data['status'] ?? $current?->status ?? 'active');
-        if (! $deleting && $targetStatus === 'active' && ($roleName === 'owner_pesantren' || $this->customRoleIsPrivileged($tenantRoleId, (int) ($data['pesantren_id'] ?? $current?->pesantren_id ?? $this->tenantContext->activePesantrenId($request))))) {
+        $tenantIdForRole = (int) ($data['pesantren_id'] ?? $current?->pesantren_id ?? $this->tenantContext->activePesantrenId($request));
+        $willBePrivileged = ! $deleting
+            && $targetStatus === 'active'
+            && ($roleName === 'owner_pesantren' || $this->customRoleIsPrivileged($tenantRoleId, $tenantIdForRole));
+        if ($willBePrivileged) {
             $this->assertUsersMfaReady([$targetUserId]);
         }
 
@@ -428,6 +434,18 @@ trait CrudAuthorizationConcern
         DB::table('pesantrens')->where('id', $current->pesantren_id)->lockForUpdate()->first();
 
         $currentRole = DB::table('roles')->where('id', $current->role_id)->value('name');
+
+        // A membership that was privileged (owner, or an active custom role
+        // granting sensitive write access) is losing that status here, either
+        // through demotion or deletion. This is the same class of event that
+        // PrivilegedAccess protects against for MFA; record it explicitly so
+        // it is not silently indistinguishable from a routine membership edit.
+        $wasPrivileged = $current->status === 'active'
+            && ($currentRole === 'owner_pesantren' || $this->customRoleIsPrivileged((int) ($current->tenant_role_id ?? 0), (int) $current->pesantren_id));
+        if ($wasPrivileged && ! $willBePrivileged) {
+            $this->auditPrivilegedMembershipChange($request, $table, $current, $deleting);
+        }
+
         $willRemainOwner = ! $deleting
             && $roleName === 'owner_pesantren'
             && (($data['status'] ?? $current->status) === 'active');
@@ -446,9 +464,38 @@ trait CrudAuthorizationConcern
         abort_unless($otherOwners, 422, 'Tenant harus selalu memiliki minimal satu owner aktif.');
     }
 
+    /**
+     * Record a dedicated audit entry when a privileged membership (owner, or
+     * an active custom role with sensitive write access) is demoted or
+     * removed, tagged with the same reasons PrivilegedAccess would report.
+     * This keeps role demotion and membership removal auditable the same way
+     * MFA-disable attempts already are for privileged accounts.
+     */
+    private function auditPrivilegedMembershipChange(Request $request, string $table, object $current, bool $deleting): void
+    {
+        $targetUser = User::find((int) ($current->user_id ?? 0));
+        if (! $targetUser) {
+            return;
+        }
+
+        $this->audit(
+            $request,
+            $deleting ? 'privileged membership removed' : 'privileged membership demoted',
+            $table,
+            (int) $current->id,
+            $current,
+            null,
+            ['privileged_reasons' => PrivilegedAccess::reasons($targetUser)]
+        );
+    }
+
     private function assertAccessAdministrationStepUp(Request $request, string $table): void
     {
-        if ($table === 'pesantren_user') {
+        // Managing tenant memberships and platform user accounts are both
+        // sensitive account-administration actions: either can grant, remove,
+        // or delete access. Both require a recently verified second factor,
+        // not just an authenticated super admin/owner session.
+        if (in_array($table, ['pesantren_user', 'users'], true)) {
             $this->stepUpMfa->assert($request, 'membership-administration');
         }
     }
