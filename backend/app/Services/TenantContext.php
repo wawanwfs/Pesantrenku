@@ -11,7 +11,38 @@ use Illuminate\Support\Facades\Schema;
 
 class TenantContext
 {
-    /** Tables intentionally available without an active tenant context. */
+    /**
+     * Tables intentionally available without an active tenant context.
+     *
+     * Audited 2026-08-01 (backlog item 5: "GLOBAL_TABLES melewati
+     * penyaringan tenant"). Every consumer of this list
+     * (`isTenantBoundTable()`, reached only from `applyScope()`,
+     * `tenantIdForTable()`, and `withTenantPayload()`) is always invoked with
+     * a `$table` value that already passed
+     * `CrudAuthorizationConcern::table()`'s `ResourceCatalog::ALL` gate, so
+     * this list can only ever be consulted for tables reachable through the
+     * generic CRUD resource route. Per-entry rationale:
+     * - 'users', 'pesantrens': NOT actually unscoped. Both have earlier,
+     *   stricter special-case branches in `applyScope()`/`tenantIdForTable()`
+     *   below that enforce tenant membership before this list is ever
+     *   consulted; their presence here only controls `withTenantPayload()`
+     *   (correctly skips injecting `pesantren_id`, a column neither table
+     *   has).
+     * - 'roles', 'plans': genuinely global platform catalog data with no
+     *   `pesantren_id` column. Write access is restricted to `super_admin`
+     *   and cannot be delegated to any tenant role or custom role: both are
+     *   in `ResourceCatalog::NON_DELEGABLE`, which
+     *   `ResourceAuthorization::normalizeDelegableAccess()` strips from every
+     *   grant path (default matrix, DB-provisioned role permissions, tenant
+     *   `permissions.matrix_override`, and tenant custom roles), even if the
+     *   stored override/permissions JSON already contains them. See
+     *   `TenantSecurityTest::test_platform_catalog_tables_cannot_be_delegated_via_override_or_custom_role()`.
+     * - 'permissions', 'permission_role', 'role_user': not present in
+     *   `ResourceCatalog::ALL`, so `CrudAuthorizationConcern::table()` 404s
+     *   before a request ever reaches this service. Currently unreachable
+     *   (defensive/dead) via the generic CRUD path. See
+     *   `TenantSecurityTest::test_dead_global_table_aliases_are_unreachable_through_generic_crud()`.
+     */
     private const GLOBAL_TABLES = ['users', 'roles', 'permissions', 'permission_role', 'role_user', 'pesantrens', 'plans'];
 
     public function memberships(Request $request): Collection
