@@ -31,7 +31,7 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 ## 1. Keamanan dan multi-tenancy
 
 1. **[V][P0]** ~~Pasang pemanggilan `TimelineRedactor` di `CrudController::timeline`; kelasnya masih kode mati (M-REMAIN-06).~~ Selesai 2026-08-01: `timeline()` kini memanggil `TimelineRedactor::redactMetadata()`.
-2. **[V][P1]** Satukan cakupan asrama: export memakai `room_assignments`, `OperationalScope` memakai `musyrif_room_assignments`. Dua sumber kebenaran untuk pertanyaan yang sama.
+2. **[V][P1]** ~~Satukan cakupan asrama: export memakai `room_assignments`, `OperationalScope` memakai `musyrif_room_assignments`. Dua sumber kebenaran untuk pertanyaan yang sama.~~ Selesai 2026-08-01: `DashboardScopeConcern::dormScope()` dan `OperationalScope::dormScope()` kini menghitung `student_ids` dari tabel relasional `room_assignments` (status aktif, berjendela tanggal `assigned_at`/`ended_at`) alih-alih mencocokkan teks `students.room`, selaras dengan `CrudAuthorizationConcern`, `ActionWorkflowConcern`, dan `BuildResourceExportJob` yang sebelumnya sudah benar. `QrScannerService` diperiksa dan sudah benar sejak awal (menggabungkan `room_assignments` + `musyrif_room_assignments` langsung dengan filter status/tanggal untuk keduanya). Diuji regresi di dua tes baru pada `OperationalScopeTest.php` yang membuktikan cakupan mengikuti `room_assignments`, bukan `students.room`, baik saat keduanya berbeda maupun saat assignment sudah berakhir. Commit `d4a8666b56cc30883c27983323a11cae28d22be9` (DashboardScopeConcern), `14d560c2fe5c0f298111ec258f80cea8cc7aef69` (OperationalScope), `6c108006a93c38d8eb1630b35b4172a7f7c9ec61` (tes regresi).
 3. **[V][P1]** Uji `PrivilegedAccess::grantsSensitiveAccess` terhadap payload JSON rusak; jalur fail-closed belum pernah dieksekusi.
 4. **[V][P1]** Terapkan `PrivilegedAccess` pada penghapusan akun dan penurunan peran, bukan hanya penonaktifan MFA.
 5. **[V][P1]** Audit `TenantContext::GLOBAL_TABLES`; tabel global melewati penyaringan tenant, jadi daftar itu adalah permukaan serangan.
@@ -146,7 +146,7 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 96. **[V][P2]** `MetricRegistry` dan `TelemetryService` tumpang tindih; perjelas batasnya.
 97. **[?][P3]** Pertimbangkan event domain untuk memisahkan notifikasi dari alur utama.
 98. **[N][P3]** Arsitektur modul agar fitur klinik, keuangan, dan akademik bisa dinyalakan per tenant tanpa cabang if.
-99. **[V][P2]** Hilangkan duplikasi logika cakupan antara `DashboardScopeConcern` dan `OperationalScope`.
+99. **[V][P2]** Hilangkan duplikasi logika cakupan antara `DashboardScopeConcern` dan `OperationalScope`. Catatan 2026-08-01: kedua kelas kini konsisten secara fungsional (sama-sama memakai `room_assignments`), tapi implementasinya masih diduplikasi, bukan dibagi lewat satu sumber; butir ini tetap terbuka.
 100. **[N][P3]** Adopsi konvensi penamaan tunggal; kini ada `pesantenku` dan `pesantrenku` berdampingan di kunci cache dan perintah.
 
 ## 8. Pengujian
@@ -314,10 +314,11 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 
 Item P0 yang tersisa: 87, 134, 228, dan 65. Item 1, 101, 102, 103, dan 104
 sudah selesai dan terverifikasi lolos di CI (lihat
-`memory/2026-07-27-rc9-remediation-handoff.md`). Yang tersisa menutup utang
-dari audit RC7-RC9. Tanpa itu, setiap fitur baru dibangun di atas fondasi yang
-belum terbukti sepenuhnya lewat eksekusi nyata (build, e2e, MySQL 8.4, dan
-bukti kanari staging).
+`memory/2026-07-27-rc9-remediation-handoff.md`). Item 2 (P1) juga sudah
+selesai dan terverifikasi lolos di CI. Yang tersisa menutup utang dari audit
+RC7-RC9. Tanpa itu, setiap fitur baru dibangun di atas fondasi yang belum
+terbukti sepenuhnya lewat eksekusi nyata (build, e2e, MySQL 8.4, dan bukti
+kanari staging).
 
 Sesudah itu barulah bagian 15 layak dikerjakan. Fitur domain adalah yang paling
 menarik untuk dibangun dan paling mudah menjebak: menambah modul tahfidz di atas
