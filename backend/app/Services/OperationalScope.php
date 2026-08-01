@@ -183,11 +183,27 @@ class OperationalScope
             ->get();
 
         $roomNames = $rooms->pluck('name')->filter()->values()->all();
-        $studentIds = DB::table('students')
-            ->where('pesantren_id', $tenantId)
-            ->whereIn('room', $roomNames ?: ['__none__'])
-            ->pluck('id')
-            ->all();
+
+        // Resolve students through the relational room_assignments table
+        // (same source CrudAuthorizationConcern, ActionWorkflowConcern, and
+        // BuildResourceExportJob already use), instead of matching the legacy
+        // students.room text column. Text matching ignored assignment
+        // status/date range, so a musyrif's queued-import scope could disagree
+        // with what interactive CRUD writes and exports allowed for the same
+        // student.
+        $studentIds = $this->hasTable('room_assignments')
+            ? DB::table('room_assignments')
+                ->where('pesantren_id', $tenantId)
+                ->where('status', 'active')
+                ->whereIn('room_id', $assignedRoomIds ?: [0])
+                ->where(fn ($query) => $query->whereNull('assigned_at')->orWhere('assigned_at', '<=', $today))
+                ->where(fn ($query) => $query->whereNull('ended_at')->orWhere('ended_at', '>=', $today))
+                ->pluck('student_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all()
+            : [];
 
         return [
             'room_ids' => $rooms->pluck('id')->all(),
