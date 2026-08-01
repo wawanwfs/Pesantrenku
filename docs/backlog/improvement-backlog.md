@@ -16,6 +16,7 @@ Penanda:
 - **[V]** Terverifikasi. Berdasar kode yang sudah dibaca langsung.
 - **[?]** Perlu diperiksa dulu. Dugaan kuat, tapi filenya belum dibaca.
 - **[N]** Fitur baru. Bukan perbaikan cacat.
+- ~~Dicoret~~ menandai butir yang sudah selesai dan terverifikasi lolos di CI.
 
 Prioritas: **P0** menahan rilis, **P1** penting, **P2** peningkatan, **P3** nilai
 tambah jangka panjang.
@@ -29,7 +30,7 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 
 ## 1. Keamanan dan multi-tenancy
 
-1. **[V][P0]** Pasang pemanggilan `TimelineRedactor` di `CrudController::timeline`; kelasnya masih kode mati (M-REMAIN-06).
+1. **[V][P0]** ~~Pasang pemanggilan `TimelineRedactor` di `CrudController::timeline`; kelasnya masih kode mati (M-REMAIN-06).~~ Selesai 2026-08-01: `timeline()` kini memanggil `TimelineRedactor::redactMetadata()`.
 2. **[V][P1]** Satukan cakupan asrama: export memakai `room_assignments`, `OperationalScope` memakai `musyrif_room_assignments`. Dua sumber kebenaran untuk pertanyaan yang sama.
 3. **[V][P1]** Uji `PrivilegedAccess::grantsSensitiveAccess` terhadap payload JSON rusak; jalur fail-closed belum pernah dieksekusi.
 4. **[V][P1]** Terapkan `PrivilegedAccess` pada penghapusan akun dan penurunan peran, bukan hanya penonaktifan MFA.
@@ -133,7 +134,7 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 
 ## 7. Arsitektur backend dan kualitas kode
 
-87. **[V][P0]** Pecah `CrudController.php`, 44 KB. Ukuran ini yang membuat perbaikan timeline tertunda.
+87. **[V][P0]** Pecah `CrudController.php`, 44 KB. Perbaikan M-REMAIN-06 (item 1) sudah dilakukan lewat penggantian berkas penuh via API tanpa korupsi, tapi itu bukan pengganti pemecahan sesungguhnya menjadi controller/service yang lebih kecil.
 88. **[V][P1]** CRUD generik berbasis nama tabel mengorbankan aturan domain; pertimbangkan controller khusus untuk sumber daya bernilai tinggi seperti pembayaran dan rekam medis.
 89. **[?][P1]** Pindahkan aturan bisnis dari controller ke service atau action.
 90. **[V][P2]** `ResourceCatalog` menyimpan matriks izin sebagai konstanta; pertimbangkan sumber tunggal yang bisa diuji dan didokumentasikan otomatis.
@@ -150,10 +151,10 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 
 ## 8. Pengujian
 
-101. **[V][P0]** Uji `OperationalScope` dan `ImportRowScope`.
-102. **[V][P0]** Uji `SubscriptionProvisioner`.
-103. **[V][P0]** Uji `PrivilegedAccess`, termasuk custom role tenant.
-104. **[V][P0]** Uji `TimelineRedactor` setelah dipasang.
+101. **[V][P0]** ~~Uji `OperationalScope` dan `ImportRowScope`.~~ Selesai: `OperationalScopeTest.php` dan `ImportRowScopeTest.php` lolos di CI.
+102. **[V][P0]** ~~Uji `SubscriptionProvisioner`.~~ Selesai: `SubscriptionProvisionerTest.php` lolos di CI.
+103. **[V][P0]** ~~Uji `PrivilegedAccess`, termasuk custom role tenant.~~ Selesai: `PrivilegedAccessTest.php` lolos di CI.
+104. **[V][P0]** ~~Uji `TimelineRedactor` setelah dipasang.~~ Selesai: `TimelineRedactorTest.php` lolos di CI dan kelasnya kini benar-benar dipanggil dari `CrudController::timeline`.
 105. **[V][P1]** Uji isolasi tenant: pengguna tenant A tidak boleh membaca apa pun milik tenant B, untuk setiap sumber daya.
 106. **[V][P1]** Uji matriks izin untuk sepuluh peran; ini inti produk.
 107. **[?][P1]** Uji bahwa endpoint tanpa autentikasi memang hanya yang dimaksud.
@@ -311,9 +312,12 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 
 ## Urutan yang saya sarankan
 
-Selesaikan dulu sepuluh butir P0: 1, 87, 101, 102, 103, 104, 143, ditambah 134,
-228, dan 65. Tujuh di antaranya menutup utang dari audit RC7-RC9. Tanpa itu,
-setiap fitur baru dibangun di atas fondasi yang belum terbukti.
+Item P0 yang tersisa: 87, 134, 228, dan 65. Item 1, 101, 102, 103, dan 104
+sudah selesai dan terverifikasi lolos di CI (lihat
+`memory/2026-07-27-rc9-remediation-handoff.md`). Yang tersisa menutup utang
+dari audit RC7-RC9. Tanpa itu, setiap fitur baru dibangun di atas fondasi yang
+belum terbukti sepenuhnya lewat eksekusi nyata (build, e2e, MySQL 8.4, dan
+bukti kanari staging).
 
 Sesudah itu barulah bagian 15 layak dikerjakan. Fitur domain adalah yang paling
 menarik untuk dibangun dan paling mudah menjebak: menambah modul tahfidz di atas
