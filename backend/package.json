@@ -31,7 +31,7 @@
     "@inertiajs/react": "^3.6.0",
     "clsx": "^2.1.1",
     "laravel-echo": "^2.3.7",
-    "lucide-react": "^1.23.0",
+    "lucide-react": "^1.27.0",
     "pusher-js": "^8.5.0",
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
