@@ -19,7 +19,7 @@
   "devDependencies": {
     "@playwright/test": "^1.61.1",
     "@redocly/cli": "2.40.0",
-    "@tailwindcss/vite": "^4.3.2",
+    "@tailwindcss/vite": "^4.3.3",
     "@vitejs/plugin-react": "^6.0.3",
     "concurrently": "^10.0.4",
     "laravel-vite-plugin": "^3.1",
