@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ArrowRight,
+  ArrowUp,
   Baby,
   BarChart3,
   BookOpen,
@@ -22,7 +23,9 @@ import {
   WalletCards,
   X,
 } from 'lucide-react';
+import { ThemeToggleButton } from '../components/ThemeToggle.jsx';
 import '../../css/landing.css';
+import '../../css/landing-extras.css';
 
 let THREE;
 
@@ -119,8 +122,66 @@ const roleCards = [
   },
 ];
 
+const roleGroups = [
+  ['semua', 'Semua peran', null],
+  ['pengelola', 'Pengelola', ['Super Admin', 'Owner Pesantren', 'Admin Keuangan', 'Admin Akademik', 'Tata Usaha']],
+  ['pengasuh', 'Pengajar & pengasuh', ['Guru', 'Musyrif', 'Klinik']],
+  ['keluarga', 'Santri & wali', ['Santri', 'Wali Murid']],
+];
+
+const sectionLinks = [
+  ['modul', 'Modul'],
+  ['peran', 'Peran'],
+  ['alur', 'Alur kerja'],
+];
+
+/** Status chrome halaman: dock muncul setelah hero, bagian aktif, dan alur kerja yang sedang dibaca. */
+function useLandingChrome() {
+  const [pastHero, setPastHero] = useState(false);
+  const [activeSection, setActiveSection] = useState('');
+  const [activeStep, setActiveStep] = useState(-1);
+  const [workflowLive, setWorkflowLive] = useState(false);
+
+  useEffect(() => {
+    if (!('IntersectionObserver' in window)) return undefined;
+    const observers = [];
+    const observe = (elements, callback, options) => {
+      if (!elements.length) return;
+      const observer = new IntersectionObserver(callback, options);
+      elements.forEach((element) => observer.observe(element));
+      observers.push(observer);
+    };
+
+    const hero = document.getElementById('beranda');
+    if (hero) observe([hero], ([entry]) => setPastHero(!entry.isIntersecting), { rootMargin: '-72px 0px 0px 0px' });
+
+    const sections = sectionLinks.map(([id]) => document.getElementById(id)).filter(Boolean);
+    observe(sections, (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) setActiveSection(entry.target.id);
+      });
+    }, { rootMargin: '-45% 0px -45% 0px' });
+
+    const workflow = document.getElementById('alur');
+    if (workflow) observe([workflow], ([entry]) => { if (entry.isIntersecting) setWorkflowLive(true); }, { threshold: 0.25 });
+
+    const stepItems = Array.from(document.querySelectorAll('.landing-workflow-copy ol li'));
+    observe(stepItems, (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) setActiveStep(stepItems.indexOf(entry.target));
+      });
+    }, { rootMargin: '-40% 0px -40% 0px' });
+
+    return () => observers.forEach((observer) => observer.disconnect());
+  }, []);
+
+  return { pastHero, activeSection: pastHero ? activeSection : '', activeStep, workflowLive };
+}
+
 export default function Landing({ auth }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const [roleGroup, setRoleGroup] = useState('semua');
+  const { pastHero, activeSection, activeStep, workflowLive } = useLandingChrome();
   const menuButtonRef = useRef(null);
   const mobileMenuRef = useRef(null);
   const isSignedIn = Boolean(auth?.user);
@@ -150,6 +211,7 @@ export default function Landing({ auth }) {
 
   return (
     <main className="landing-shell">
+      <div className="landing-progress" aria-hidden="true"><span /></div>
       <div className="landing-noise" aria-hidden="true" />
       <header className="landing-header">
         <a href="#beranda" className="landing-brand" aria-label="Pesantrenku, ke beranda">
@@ -167,18 +229,30 @@ export default function Landing({ auth }) {
         <a className="landing-header-cta" href={destination}>
           {isSignedIn ? 'Buka dashboard' : 'Masuk'} <ArrowRight size={16} aria-hidden="true" />
         </a>
-        <button
-          ref={menuButtonRef}
-          type="button"
-          className="landing-menu-button"
-          aria-expanded={menuOpen}
-          aria-controls="landing-mobile-menu"
-          onClick={() => setMenuOpen((open) => !open)}
-        >
-          <span className="sr-only">{menuOpen ? 'Tutup menu' : 'Buka menu'}</span>
-          {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
-        </button>
+        <div className="landing-header-tools">
+          <ThemeToggleButton className="landing-theme-button" />
+          <button
+            ref={menuButtonRef}
+            type="button"
+            className="landing-menu-button"
+            aria-expanded={menuOpen}
+            aria-controls="landing-mobile-menu"
+            onClick={() => setMenuOpen((open) => !open)}
+          >
+            <span className="sr-only">{menuOpen ? 'Tutup menu' : 'Buka menu'}</span>
+            {menuOpen ? <X aria-hidden="true" /> : <Menu aria-hidden="true" />}
+          </button>
+        </div>
       </header>
+
+      <div className={`landing-dock ${pastHero ? 'is-visible' : ''}`} inert={!pastHero}>
+        <a href="#beranda" className="landing-dock-brand" aria-label="Kembali ke awal halaman"><BrandMark /></a>
+        <nav className="landing-dock-links" aria-label="Pintasan bagian">
+          {sectionLinks.map(([id, label]) => <a key={id} href={`#${id}`} aria-current={activeSection === id ? 'true' : undefined}>{label}</a>)}
+        </nav>
+        <ThemeToggleButton className="landing-theme-button" />
+        <a className="landing-dock-cta" href={destination}>{isSignedIn ? 'Dashboard' : 'Masuk'} <ArrowRight size={14} aria-hidden="true" /></a>
+      </div>
 
       <nav ref={mobileMenuRef} id="landing-mobile-menu" className={`landing-mobile-menu ${menuOpen ? 'is-open' : ''}`} aria-label="Navigasi seluler">
         <a href="#modul" onClick={() => setMenuOpen(false)}>Modul</a>
@@ -246,8 +320,15 @@ export default function Landing({ auth }) {
           <h2 id="landing-peran-title">Satu sistem, <em>banyak peran.</em></h2>
           <p>Setiap pengguna melihat konteks dan tindakan yang relevan dengan kewenangannya, tanpa kehilangan hubungan dengan proses lain.</p>
         </div>
-        <div className="landing-role-grid">
-          {roleCards.map(({ icon: Icon, title, scope, text }) => (
+        <div className="landing-role-tabs" role="group" aria-label="Kelompokkan peran">
+          {roleGroups.map(([id, label, members]) => (
+            <button key={id} type="button" className="landing-role-tab" aria-pressed={roleGroup === id} onClick={() => setRoleGroup(id)}>
+              {label}<small>{members ? members.length : roleCards.length}</small>
+            </button>
+          ))}
+        </div>
+        <div className={`landing-role-grid ${roleGroup === 'semua' ? '' : 'is-filtered'}`} key={roleGroup}>
+          {roleCards.filter(({ title }) => !activeRoleMembers(roleGroup) || activeRoleMembers(roleGroup).includes(title)).map(({ icon: Icon, title, scope, text }) => (
             <article className="landing-role-card" key={title}>
               <div className="landing-role-card-top">
                 <span className="landing-role-icon"><Icon size={19} strokeWidth={1.8} aria-hidden="true" /></span>
@@ -260,7 +341,7 @@ export default function Landing({ auth }) {
         </div>
       </section>
 
-      <section id="alur" className="landing-workflow landing-section" aria-labelledby="landing-alur-title">
+      <section id="alur" className={`landing-workflow landing-section ${workflowLive ? 'is-live' : ''} ${activeStep >= 0 ? 'is-tracking' : ''}`} aria-labelledby="landing-alur-title">
         <div className="landing-workflow-visual" aria-hidden="true">
           <div className="landing-workflow-glow" aria-hidden="true" />
           <div className="landing-workflow-console">
@@ -283,7 +364,7 @@ export default function Landing({ auth }) {
           <h2 id="landing-alur-title">Kerja yang semestinya mengalir.</h2>
           <p>Pesantrenku tidak hanya mengumpulkan data. Sistem menghubungkan peran, memberi konteks, dan menjaga setiap keputusan tetap dekat dengan kebutuhan santri.</p>
           <ol>
-            {steps.map(([number, title, text]) => <li key={number}><b>{number}</b><div><h3>{title}</h3><p>{text}</p></div></li>)}
+            {steps.map(([number, title, text], index) => <li key={number} className={activeStep === index ? 'is-active' : ''}><b>{number}</b><div><h3>{title}</h3><p>{text}</p></div></li>)}
           </ol>
         </div>
       </section>
@@ -295,6 +376,8 @@ export default function Landing({ auth }) {
         <p>Buka ruang yang menyatukan seluruh ikhtiar baik di pesantren Anda.</p>
         <a className="landing-button landing-button-light" href={destination}>{isSignedIn ? 'Buka dashboard' : 'Masuk ke Pesantrenku'} <ArrowRight size={18} aria-hidden="true" /></a>
       </section>
+
+      <a href="#beranda" className={`landing-top ${pastHero ? 'is-visible' : ''}`} aria-label="Kembali ke atas" inert={!pastHero}><ArrowUp size={18} aria-hidden="true" /></a>
 
       <footer className="landing-footer">
         <a href="#beranda" className="landing-brand"><BrandMark /><span><strong>Pesantrenku</strong><small>Ruang tumbuh pesantren</small></span></a>
@@ -867,6 +950,10 @@ function createCloud() {
     cloud.add(puff);
   });
   return cloud;
+}
+
+function activeRoleMembers(groupId) {
+  return roleGroups.find(([id]) => id === groupId)?.[2] ?? null;
 }
 
 function BrandMark() {

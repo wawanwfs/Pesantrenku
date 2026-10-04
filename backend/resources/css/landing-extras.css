@@ -1,0 +1,699 @@
+/*
+ * Landing: lapisan tambahan (progres scroll, dock navigasi, filter peran, tombol ke atas,
+ * langkah alur aktif) dan mode gelap. Dimuat setelah landing.css dan landing-motion.css.
+ *
+ * Aturan yang sama dengan motion.css: tanpa inline style, semua gerak progresif dan mati
+ * pada prefers-reduced-motion, keadaan dasar selalu terlihat.
+ *
+ * Catatan kaskade: berkas ini unlayered sehingga mengalahkan utilitas Tailwind; jangan
+ * mengandalkan utilitas untuk menimpa properti yang sudah diatur di sini.
+ */
+
+/* ------------------------------------------------------------ progres scroll */
+
+.landing-progress {
+  display: none;
+}
+
+@supports (animation-timeline: scroll(root)) {
+  @media (prefers-reduced-motion: no-preference) {
+    .landing-progress {
+      position: fixed;
+      z-index: 70;
+      inset: 0 0 auto 0;
+      display: block;
+      height: 3px;
+      pointer-events: none;
+    }
+
+    .landing-progress span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, #f3c960, #dff47c 60%, #5bd19a);
+      box-shadow: 0 0 12px rgba(223, 244, 124, 0.55);
+      transform: scaleX(0);
+      transform-origin: left;
+      animation-name: landing-progress-grow;
+      animation-duration: 1ms;
+      animation-timing-function: linear;
+      animation-fill-mode: both;
+      animation-timeline: scroll(root);
+    }
+  }
+}
+
+@keyframes landing-progress-grow {
+  to { transform: scaleX(1); }
+}
+
+/* ------------------------------------------------------------- tombol tema */
+
+.landing-theme-button {
+  display: inline-grid;
+  width: 42px;
+  height: 42px;
+  flex-shrink: 0;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 10px;
+  background: rgba(8, 45, 40, 0.28);
+  color: #fffdf3;
+  backdrop-filter: blur(8px);
+  transition: background-color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+
+.landing-theme-button:hover {
+  border-color: rgba(255, 255, 255, 0.7);
+  background: rgba(8, 45, 40, 0.5);
+  transform: translateY(-2px);
+}
+
+.landing-header .landing-theme-button {
+  margin-left: 0;
+}
+
+.landing-header-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+@media (max-width: 700px) {
+  .landing-header-tools .landing-theme-button {
+    width: 44px;
+    height: 44px;
+  }
+
+  .landing-header-tools {
+    margin-left: auto;
+  }
+
+  .landing-header-tools .landing-menu-button {
+    margin-left: 0;
+  }
+}
+
+/* -------------------------------------------------------------------- dock */
+
+.landing-dock {
+  position: fixed;
+  z-index: 60;
+  top: 14px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 6px;
+  border: 1px solid rgba(24, 74, 59, 0.14);
+  border-radius: 16px;
+  background: rgba(255, 253, 248, 0.82);
+  box-shadow: 0 18px 40px -18px rgba(8, 47, 41, 0.45);
+  backdrop-filter: blur(16px) saturate(1.4);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-50%, -18px, 0) scale(0.97);
+  visibility: hidden;
+  transition: opacity 0.28s ease, transform 0.36s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0.36s;
+}
+
+.landing-dock.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translate3d(-50%, 0, 0) scale(1);
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.landing-dock-brand {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 10px;
+}
+
+.landing-dock-brand .landing-brand-mark {
+  transform: scale(0.8) rotate(-1deg);
+}
+
+.landing-dock-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.landing-dock-links a {
+  position: relative;
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: #3d5750;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.landing-dock-links a:hover {
+  background: rgba(13, 59, 50, 0.07);
+  color: var(--landing-forest);
+}
+
+.landing-dock-links a[aria-current='true'] {
+  background: var(--landing-forest);
+  color: #ffffff;
+}
+
+.landing-dock .landing-theme-button {
+  width: 40px;
+  height: 40px;
+  border-color: rgba(24, 74, 59, 0.14);
+  background: transparent;
+  color: var(--landing-forest);
+  backdrop-filter: none;
+}
+
+.landing-dock .landing-theme-button:hover {
+  background: rgba(13, 59, 50, 0.07);
+  transform: none;
+}
+
+.landing-dock-cta {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border-radius: 10px;
+  background: #f3cf70;
+  color: #153a34;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.landing-dock-cta:hover {
+  background: #ffe59d;
+  transform: translateY(-1px);
+}
+
+@media (max-width: 700px) {
+  .landing-dock-links {
+    display: none;
+  }
+
+  .landing-dock {
+    gap: 8px;
+  }
+}
+
+/* ---------------------------------------------------------- filter peran */
+
+.landing-role-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: -17px 0 31px;
+}
+
+.landing-role-tab {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid var(--landing-line);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, 0.6);
+  color: #3d5750;
+  font-size: 12px;
+  font-weight: 700;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+
+.landing-role-tab:hover {
+  border-color: rgba(46, 120, 88, 0.4);
+  transform: translateY(-1px);
+}
+
+.landing-role-tab[aria-pressed='true'] {
+  border-color: var(--landing-forest);
+  background: var(--landing-forest);
+  color: #ffffff;
+}
+
+.landing-role-tab small {
+  margin-left: 6px;
+  font-family: var(--landing-mono);
+  font-size: 10px;
+  opacity: 0.7;
+}
+
+/* Kartu yang baru muncul karena filter: animasi waktu (bukan scroll) */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-role-grid.is-filtered .landing-role-card {
+    animation-name: landing-role-pop;
+    animation-duration: 0.42s;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-fill-mode: both;
+    animation-timeline: auto;
+    animation-range: normal;
+  }
+
+  .landing-role-grid.is-filtered .landing-role-card:nth-child(2) { animation-delay: 50ms; }
+  .landing-role-grid.is-filtered .landing-role-card:nth-child(3) { animation-delay: 100ms; }
+  .landing-role-grid.is-filtered .landing-role-card:nth-child(4) { animation-delay: 150ms; }
+  .landing-role-grid.is-filtered .landing-role-card:nth-child(n + 5) { animation-delay: 200ms; }
+}
+
+@keyframes landing-role-pop {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 14px, 0) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.landing-role-grid.is-filtered {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+}
+
+/* ---------------------------------------------------------- alur kerja aktif */
+
+.landing-workflow-copy ol li {
+  transition: opacity 0.35s ease;
+}
+
+.landing-workflow.is-tracking .landing-workflow-copy ol li:not(.is-active) {
+  opacity: 0.55;
+}
+
+.landing-workflow-copy ol li.is-active > b {
+  background: var(--landing-forest);
+  color: #ffffff;
+  transform: scale(1.1);
+}
+
+.landing-workflow-copy ol li > b {
+  transition: background-color 0.3s ease, color 0.3s ease, transform 0.3s ease;
+}
+
+@keyframes landing-bar-grow {
+  from { transform: scaleY(0.08); }
+  to { transform: scaleY(1); }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-workflow.is-live .landing-console-chart i {
+    transform-origin: bottom;
+    animation-name: landing-bar-grow;
+    animation-duration: 0.9s;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+    animation-fill-mode: both;
+  }
+
+  .landing-workflow.is-live .landing-console-chart i:nth-child(1) { animation-delay: 0ms; }
+  .landing-workflow.is-live .landing-console-chart i:nth-child(2) { animation-delay: 70ms; }
+  .landing-workflow.is-live .landing-console-chart i:nth-child(3) { animation-delay: 140ms; }
+  .landing-workflow.is-live .landing-console-chart i:nth-child(4) { animation-delay: 210ms; }
+  .landing-workflow.is-live .landing-console-chart i:nth-child(5) { animation-delay: 280ms; }
+  .landing-workflow.is-live .landing-console-chart i:nth-child(6) { animation-delay: 350ms; }
+  .landing-workflow.is-live .landing-console-chart i:nth-child(7) { animation-delay: 420ms; }
+}
+
+/* ---------------------------------------------------------------- ke atas */
+
+.landing-top {
+  position: fixed;
+  z-index: 55;
+  right: 18px;
+  bottom: 18px;
+  display: grid;
+  width: 46px;
+  height: 46px;
+  place-items: center;
+  border: 1px solid rgba(24, 74, 59, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 253, 248, 0.88);
+  color: var(--landing-forest);
+  box-shadow: 0 14px 30px -12px rgba(8, 47, 41, 0.45);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(0, 14px, 0);
+  visibility: hidden;
+  transition: opacity 0.25s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0.3s, background-color 0.2s ease;
+}
+
+.landing-top.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.landing-top:hover {
+  background: #ffffff;
+  transform: translate3d(0, -3px, 0);
+}
+
+/* =========================================================================
+ * Mode gelap
+ * ===================================================================== */
+
+[data-theme='dark'] {
+  --landing-ink: #E6EDF5;
+  --landing-forest: #5FCB97;
+  --landing-deep: #061F1B;
+  --landing-mint: #123629;
+  --landing-sand: #0A0F16;
+  --landing-paper: #111A26;
+  --landing-muted: #94A6BC;
+  --landing-line: rgba(230, 237, 245, 0.12);
+}
+
+[data-theme='dark'] .landing-noise {
+  opacity: 0.18;
+  background-image: radial-gradient(rgba(230, 237, 245, 0.1) 0.5px, transparent 0.5px);
+}
+
+[data-theme='dark'] .landing-nav a,
+[data-theme='dark'] .landing-footer a,
+[data-theme='dark'] .landing-lead {
+  color: #A9B8CB;
+}
+
+[data-theme='dark'] .landing-nav a:hover,
+[data-theme='dark'] .landing-footer a:hover {
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-shell .landing-kicker {
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-hero .landing-kicker {
+  color: #f1cf72;
+}
+
+[data-theme='dark'] .landing-kicker > span {
+  background: #4FBE88;
+}
+
+[data-theme='dark'] .landing-header-cta:hover,
+[data-theme='dark'] .landing-button-primary:hover {
+  background: #145345;
+}
+
+[data-theme='dark'] .landing-hero .landing-button-primary:hover {
+  background: #ffe49a;
+}
+
+[data-theme='dark'] .landing-three-scene canvas {
+  filter: brightness(0.62) saturate(0.92) contrast(1.05);
+}
+
+[data-theme='dark'] .landing-hero {
+  background: #0E2A2A;
+}
+
+[data-theme='dark'] .landing-hero-shade {
+  background:
+    linear-gradient(90deg, rgba(3, 20, 18, 0.92) 0%, rgba(3, 20, 18, 0.74) 36%, rgba(3, 20, 18, 0.26) 66%, rgba(3, 20, 18, 0.08) 100%),
+    linear-gradient(0deg, rgba(3, 18, 17, 0.62) 0%, transparent 40%, rgba(3, 18, 17, 0.3) 100%);
+}
+
+/* kartu modul */
+[data-theme='dark'] .landing-feature-card {
+  border-color: rgba(111, 209, 163, 0.14);
+  box-shadow: 0 18px 30px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme='dark'] .landing-feature-card.mint { background: #12291F; }
+[data-theme='dark'] .landing-feature-card.amber { background: #292213; }
+[data-theme='dark'] .landing-feature-card.sky { background: #112529; }
+
+[data-theme='dark'] .landing-feature-card:hover {
+  box-shadow: 0 24px 40px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='dark'] .landing-card-top,
+[data-theme='dark'] .landing-feature-card > a {
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-feature-card > p {
+  color: #8FB7A5;
+}
+
+[data-theme='dark'] .landing-feature-card h3 {
+  color: #E4F2E8;
+}
+
+[data-theme='dark'] .landing-feature-card > span {
+  color: #A9C0B6;
+}
+
+[data-theme='dark'] .landing-card-shape {
+  border-color: rgba(111, 209, 163, 0.26);
+}
+
+[data-theme='dark'] .landing-card-shape::after {
+  background: rgba(111, 209, 163, 0.07);
+}
+
+/* peran */
+[data-theme='dark'] .landing-role-card {
+  border-color: rgba(111, 209, 163, 0.14);
+  background: rgba(17, 26, 38, 0.82);
+  box-shadow: 0 15px 28px rgba(0, 0, 0, 0.3);
+}
+
+[data-theme='dark'] .landing-role-card:hover {
+  border-color: rgba(111, 209, 163, 0.4);
+  box-shadow: 0 20px 34px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme='dark'] .landing-role-icon {
+  background: #123629;
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-role-scope {
+  border-color: #26344A;
+  color: #A9B8CB;
+}
+
+[data-theme='dark'] .landing-role-card h3 {
+  color: #E6EDF5;
+}
+
+[data-theme='dark'] .landing-role-card p {
+  color: #94A6BC;
+}
+
+[data-theme='dark'] .landing-role-tab {
+  background: rgba(17, 26, 38, 0.7);
+  color: #C2CEDC;
+}
+
+[data-theme='dark'] .landing-role-tab[aria-pressed='true'] {
+  border-color: #5FCB97;
+  background: #5FCB97;
+  color: #05261b;
+}
+
+/* alur kerja */
+[data-theme='dark'] .landing-workflow-glow {
+  background: rgba(53, 168, 114, 0.28);
+  filter: blur(40px);
+}
+
+[data-theme='dark'] .landing-workflow-console {
+  border-color: #1D5240;
+  background: #101B27;
+  box-shadow: 24px 29px 0 rgba(0, 0, 0, 0.3), 0 28px 45px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme='dark'] .landing-console-head {
+  border-bottom-color: #26344A;
+  background: #162233;
+}
+
+[data-theme='dark'] .landing-console-head span {
+  background: #34455E;
+}
+
+[data-theme='dark'] .landing-console-head b {
+  color: #94A6BC;
+}
+
+[data-theme='dark'] .landing-console-head i {
+  background: #123629;
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-console-body aside {
+  border-right-color: #26344A;
+}
+
+[data-theme='dark'] .landing-console-body aside b {
+  background: #26344A;
+}
+
+[data-theme='dark'] .landing-console-body aside b:first-child {
+  background: #35A872;
+}
+
+[data-theme='dark'] .landing-console-main > p {
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-console-chart {
+  background: #162233;
+}
+
+[data-theme='dark'] .landing-console-rows span {
+  background: linear-gradient(90deg, #26344A 60%, transparent 60%);
+}
+
+[data-theme='dark'] .landing-console-rows span:nth-child(2) { background: linear-gradient(90deg, #26344A 47%, transparent 47%); }
+[data-theme='dark'] .landing-console-rows span:nth-child(3) { background: linear-gradient(90deg, #26344A 72%, transparent 72%); }
+
+[data-theme='dark'] .landing-workflow-chip {
+  border-color: rgba(111, 209, 163, 0.2);
+  background: rgba(17, 26, 38, 0.92);
+  box-shadow: 0 12px 22px rgba(0, 0, 0, 0.4);
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-workflow-chip svg {
+  background: #123629;
+}
+
+[data-theme='dark'] .landing-workflow-chip small,
+[data-theme='dark'] .landing-workflow-copy li p,
+[data-theme='dark'] .landing-footer p {
+  color: #94A6BC;
+}
+
+[data-theme='dark'] .landing-workflow-copy li > b {
+  background: #123629;
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-workflow-copy li.is-active > b {
+  background: #5FCB97;
+  color: #05261b;
+}
+
+[data-theme='dark'] .landing-workflow-copy h2,
+[data-theme='dark'] .landing-workflow-copy h3 {
+  color: #E6EDF5;
+}
+
+/* dock, ke atas, menu seluler */
+[data-theme='dark'] .landing-dock,
+[data-theme='dark'] .landing-top {
+  border-color: rgba(111, 209, 163, 0.18);
+  background: rgba(17, 26, 38, 0.86);
+  box-shadow: 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+}
+
+[data-theme='dark'] .landing-dock-links a {
+  color: #C2CEDC;
+}
+
+[data-theme='dark'] .landing-dock-links a:hover {
+  background: rgba(111, 209, 163, 0.1);
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-dock-links a[aria-current='true'] {
+  background: #5FCB97;
+  color: #05261b;
+}
+
+[data-theme='dark'] .landing-dock .landing-theme-button {
+  border-color: rgba(111, 209, 163, 0.2);
+  color: #E6EDF5;
+}
+
+[data-theme='dark'] .landing-dock .landing-theme-button:hover {
+  background: rgba(111, 209, 163, 0.1);
+}
+
+[data-theme='dark'] .landing-top {
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-top:hover {
+  background: #1B2A3D;
+}
+
+[data-theme='dark'] .landing-mobile-menu {
+  border-color: rgba(111, 209, 163, 0.18);
+  background: rgba(17, 26, 38, 0.97);
+  box-shadow: 0 19px 38px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme='dark'] .landing-mobile-menu a {
+  color: #E6EDF5;
+}
+
+[data-theme='dark'] .landing-mobile-menu a:hover {
+  background: #123629;
+}
+
+/* ------------------------------------------------------------ reduced motion */
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-dock,
+  .landing-top {
+    transition-duration: 0.01ms !important;
+  }
+
+  .landing-progress {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- kontras */
+
+/*
+ * `.landing-shell a { color: inherit }` (0,1,1) mengalahkan aturan kelas tunggal, sehingga
+ * tombol berlatar terang mewarisi teks terang di mode gelap. Naikkan spesifisitas.
+ */
+.landing-shell .landing-button-light,
+.landing-shell .landing-dock-cta {
+  color: #153a34;
+}
+
+.landing-shell .landing-dock-links a {
+  color: #3d5750;
+}
+
+.landing-shell .landing-dock-links a:hover {
+  color: var(--landing-forest);
+}
+
+.landing-shell .landing-dock-links a[aria-current='true'] {
+  color: #ffffff;
+}
+
+[data-theme='dark'] .landing-shell .landing-dock-links a {
+  color: #C2CEDC;
+}
+
+[data-theme='dark'] .landing-shell .landing-dock-links a:hover {
+  color: #6FD1A3;
+}
+
+[data-theme='dark'] .landing-shell .landing-dock-links a[aria-current='true'] {
+  color: #05261b;
+}
