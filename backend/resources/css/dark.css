@@ -1,0 +1,367 @@
+/*
+ * Mode gelap (backlog 159, fase R2).
+ *
+ * Aktif bila <html data-theme="dark">. Atribut dipasang oleh public/theme-init.js
+ * sebelum cat pertama dan diubah oleh ThemeToggle (lib/theme.js).
+ *
+ * Strategi: skala warna Tailwind (--color-neutral-*, --color-primary-*, dan palet
+ * status) dipetakan ulang di sini, sehingga seluruh utilitas yang sudah ada
+ * (text-neutral-500, border-neutral-200, bg-primary-50, ...) ikut berganti tanpa
+ * menyentuh JSX. Hanya komponen dengan warna hex literal yang perlu aturan sendiri.
+ *
+ * Kontras (WCAG AA, teks normal >= 4.5:1) yang diperiksa terhadap --surface #111A26:
+ *   --ink #E6EDF5 ~ 14:1, neutral-500 #94A6BC ~ 6.6:1, neutral-400 #7E91A9 ~ 5.0:1,
+ *   primary-700 #6FD1A3 ~ 9:1, tombol putih di atas #137A53 ~ 5.4:1.
+ * File ini unlayered sehingga menang atas @layer theme milik Tailwind.
+ */
+
+[data-theme='dark'] {
+    --color-neutral-50: #131D2A;
+    --color-neutral-100: #182434;
+    --color-neutral-200: #26344A;
+    --color-neutral-300: #34455E;
+    --color-neutral-400: #7E91A9;
+    --color-neutral-500: #94A6BC;
+    --color-neutral-600: #A9B8CB;
+    --color-neutral-700: #C2CEDC;
+    --color-neutral-800: #DAE3EE;
+    --color-neutral-900: #E9EFF6;
+    --color-gray-100: #182434;
+    --color-gray-200: #26344A;
+
+    --color-primary-50: #0E2A21;
+    --color-primary-100: #123629;
+    --color-primary-200: #1D5240;
+    --color-primary-300: #2B7459;
+    --color-primary-500: #4FBE88;
+    --color-primary-700: #6FD1A3;
+    --color-primary-800: #9AE0BF;
+    --color-primary-900: #C6F0DB;
+
+    --color-red-50: #2A1517;
+    --color-red-100: #3A1B1F;
+    --color-red-200: #5A262B;
+    --color-red-300: #7A3138;
+    --color-red-700: #F59A9A;
+    --color-red-900: #FBC4C4;
+    --color-green-50: #0F2A1D;
+    --color-green-200: #1D5238;
+    --color-green-700: #6FD1A3;
+    --color-amber-50: #2B2210;
+    --color-amber-200: #5C4515;
+    --color-amber-300: #7A5C1C;
+    --color-amber-700: #F2C46B;
+    --color-amber-800: #F7D690;
+    --color-blue-50: #11233B;
+    --color-blue-700: #8DBBF2;
+    --color-sky-50: #0F2535;
+    --color-sky-100: #163449;
+    --color-sky-700: #86C5EA;
+    --color-purple-50: #231A38;
+    --color-purple-700: #C3B1F0;
+
+    --lift: 0 14px 32px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+    --pk-lift: var(--lift);
+}
+
+/* Latar dan kanvas -------------------------------------------------------- */
+
+[data-theme='dark'] .bg-white {
+    background-color: var(--surface);
+}
+
+[data-theme='dark'] .bg-white\/95 {
+    background-color: color-mix(in oklab, var(--surface) 92%, transparent);
+}
+
+[data-theme='dark'] .bg-neutral-900\/50 {
+    background-color: rgba(2, 6, 12, 0.68);
+}
+
+[data-theme='dark'] .bg-primary-700,
+[data-theme='dark'] .hover\:bg-primary-700:hover {
+    background-color: #0D593E;
+}
+
+[data-theme='dark'] .bg-primary-600 {
+    background-color: #137A53;
+}
+
+[data-theme='dark'] .text-primary-600 {
+    color: var(--color-primary-400);
+}
+
+[data-theme='dark'] .text-red-600,
+[data-theme='dark'] .hover\:text-red-600:hover {
+    color: #F87171;
+}
+
+[data-theme='dark'] .app-shell {
+    background:
+        linear-gradient(180deg, rgba(18, 54, 41, 0.55) 0, rgba(10, 15, 22, 0) 15rem),
+        linear-gradient(90deg, rgba(111, 209, 163, 0.025) 1px, transparent 1px),
+        #0A0F16;
+    background-size: auto, 28px 28px, auto;
+}
+
+[data-theme='dark'] .app-shell .text-neutral-400 {
+    color: var(--color-neutral-400);
+}
+
+[data-theme='dark'] .app-sidebar {
+    box-shadow: 8px 0 28px rgba(0, 0, 0, 0.45);
+}
+
+[data-theme='dark'] .app-sidebar-dark {
+    background: linear-gradient(180deg, #0A3A2E 0%, #0E2E3A 55%, #101C2B 100%);
+}
+
+[data-theme='dark'] .app-sidebar-light {
+    background: linear-gradient(180deg, #111A26 0%, #0E1621 100%);
+    border-color: var(--border);
+    color: var(--ink);
+}
+
+[data-theme='dark'] .app-topbar {
+    box-shadow: 0 1px 0 rgba(0, 0, 0, 0.35);
+}
+
+/* Komponen dengan warna literal ------------------------------------------- */
+
+[data-theme='dark'] .icon-button,
+[data-theme='dark'] .ui-button-secondary,
+[data-theme='dark'] .data-table-wrap {
+    background: var(--surface);
+    color: var(--color-neutral-600);
+}
+
+[data-theme='dark'] .icon-button:hover,
+[data-theme='dark'] .ui-button-secondary:hover {
+    border-color: #2B7459;
+    background: #123629;
+    color: #9AE0BF;
+}
+
+[data-theme='dark'] .filter-grid label > span {
+    color: var(--color-neutral-500);
+}
+
+[data-theme='dark'] .profile-strip {
+    background:
+        linear-gradient(90deg, rgba(18, 54, 41, 0.8), rgba(17, 26, 38, 0) 48%),
+        var(--surface);
+}
+
+[data-theme='dark'] .data-table tbody tr:nth-child(even) td:not(.table-actions) {
+    background: rgba(24, 36, 52, 0.55);
+}
+
+[data-theme='dark'] .data-table tbody tr:hover td {
+    background: #12302A;
+}
+
+[data-theme='dark'] .app-shell .activity-row:hover {
+    background: rgba(18, 54, 41, 0.55);
+}
+
+[data-theme='dark'] .app-shell [role='dialog'][class~='z-50'] {
+    background: rgba(2, 6, 12, 0.72);
+}
+
+[data-theme='dark'] .app-shell [role='dialog'][class~='z-50'] > form,
+[data-theme='dark'] .app-shell [role='dialog'][class~='z-50'] > div {
+    border-color: var(--border);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+}
+
+[data-theme='dark'] .app-shell input:focus-visible,
+[data-theme='dark'] .app-shell select:focus-visible,
+[data-theme='dark'] .app-shell textarea:focus-visible,
+[data-theme='dark'] .app-shell button:focus-visible,
+[data-theme='dark'] .app-shell summary:focus-visible,
+[data-theme='dark'] .app-shell a:focus-visible {
+    outline-color: #4FBE88;
+}
+
+[data-theme='dark'] .app-shell input::placeholder,
+[data-theme='dark'] .app-shell textarea::placeholder {
+    color: var(--color-neutral-400);
+}
+
+[data-theme='dark'] .app-shell select option {
+    background: #111A26;
+    color: var(--ink);
+}
+
+/* Bagan native ------------------------------------------------------------ */
+
+[data-theme='dark'] .native-chart-grid {
+    stroke: #26344A;
+}
+
+[data-theme='dark'] .native-chart-axis {
+    stroke: #34455E;
+}
+
+[data-theme='dark'] .native-chart-axis-label,
+[data-theme='dark'] .native-chart-total-label {
+    fill: #94A6BC;
+}
+
+[data-theme='dark'] .native-chart-total {
+    fill: #E9EFF6;
+}
+
+[data-theme='dark'] .native-chart-legend {
+    color: #A9B8CB;
+}
+
+[data-theme='dark'] .native-chart-empty {
+    background: #131D2A;
+    color: #94A6BC;
+}
+
+[data-theme='dark'] .native-chart circle[stroke='#FFFFFF'] {
+    stroke: var(--surface);
+}
+
+[data-theme='dark'] .app-progress,
+[data-theme='dark'] .app-progress::-webkit-progress-bar,
+[data-theme='dark'] .pk-meter {
+    background: #1B2A3D;
+}
+
+[data-theme='dark'] .app-progress::-webkit-progress-value,
+[data-theme='dark'] .app-progress::-moz-progress-bar {
+    background: #35A872;
+}
+
+/* ui-kit ------------------------------------------------------------------ */
+
+[data-theme='dark'] .pk-skeleton {
+    background: linear-gradient(90deg, #162233 0%, #1F2F45 45%, #162233 90%);
+    background-size: 220% 100%;
+}
+
+[data-theme='dark'] .pk-badge-success {
+    border-color: #1D5240;
+    background: #0E2A21;
+    color: #6FD1A3;
+}
+
+[data-theme='dark'] .pk-badge-warning {
+    border-color: #5C4515;
+    background: #2B2210;
+    color: #F2C46B;
+}
+
+[data-theme='dark'] .pk-badge-danger {
+    border-color: #5A262B;
+    background: #2A1517;
+    color: #F59A9A;
+}
+
+[data-theme='dark'] .pk-badge-info {
+    border-color: #234A7A;
+    background: #11233B;
+    color: #8DBBF2;
+}
+
+[data-theme='dark'] .pk-badge-neutral {
+    border-color: #26344A;
+    background: #182434;
+    color: #A9B8CB;
+}
+
+[data-theme='dark'] .pk-spinner {
+    border-color: rgba(230, 237, 245, 0.2);
+    border-top-color: #35A872;
+}
+
+/* Scrollbar --------------------------------------------------------------- */
+
+[data-theme='dark'] * {
+    scrollbar-color: #34455E transparent;
+}
+
+/* Peralihan tema ----------------------------------------------------------- */
+
+@keyframes pk-theme-icon-in {
+    from {
+        opacity: 0;
+        transform: rotate(-70deg) scale(0.6);
+    }
+
+    to {
+        opacity: 1;
+        transform: rotate(0) scale(1);
+    }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .pk-theme-transition,
+    .pk-theme-transition *,
+    .pk-theme-transition *::before,
+    .pk-theme-transition *::after {
+        transition:
+            background-color 260ms ease,
+            border-color 260ms ease,
+            color 260ms ease,
+            fill 260ms ease,
+            stroke 260ms ease,
+            box-shadow 260ms ease !important;
+    }
+
+    .pk-theme-transition .pk-theme-icon {
+        animation: pk-theme-icon-in 420ms var(--pk-ease-out) both;
+    }
+}
+
+.pk-segmented {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 2px;
+    padding: 2px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface-muted);
+}
+
+.pk-segmented-item {
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-weight: 600;
+    transition: background-color var(--pk-fast) var(--pk-ease), color var(--pk-fast) var(--pk-ease), box-shadow var(--pk-fast) var(--pk-ease);
+}
+
+.pk-segmented-item:hover {
+    color: var(--ink);
+}
+
+.pk-segmented-item.is-active {
+    background: var(--surface);
+    color: var(--action);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.14);
+}
+
+[data-theme='dark'] .pk-segmented-item.is-active {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .pk-theme-transition,
+    .pk-theme-transition * {
+        transition: none !important;
+        animation: none !important;
+    }
+}
+
+[data-theme='dark'] .native-chart circle[stroke='#E2E8F0'] {
+    stroke: #1B2A3D;
+}

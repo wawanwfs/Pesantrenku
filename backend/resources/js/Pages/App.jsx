@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Link, router, icons } from '../lib/deps.jsx';
+import { ThemeSegmented, ThemeToggleButton } from '../components/ThemeToggle.jsx';
 import {
   apiJson, apiUpload, clampPercent, colors, defaultFormData, downloadAuthenticatedFile, exportResource,
   exportRowsToCsv, fieldsFor, formDataFromRow, moduleMeta, normalizePayload, optionsFor, panels,
@@ -1112,6 +1113,7 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
           </div>
         )}
         <div className="hidden max-w-56 rounded-md border border-primary-100 bg-primary-50 px-3 py-2 text-xs font-medium text-primary-800 lg:block">{academicYear}</div>
+        <ThemeToggleButton />
         <div className="relative">
           <button type="button" onClick={() => { setNotificationsOpen((open) => !open); setAccountOpen(false); }} className="icon-button relative" aria-label="Buka notifikasi" aria-expanded={notificationsOpen}>
             <icons.Bell className="h-5 w-5" />
@@ -1169,6 +1171,10 @@ function Topbar({ panel, auth, shared, app, onMenuOpen }) {
                 </div>
               )}
               {tenantError && <div className="mx-2 my-2 rounded-md bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{tenantError}</div>}
+              <div className="mx-1 border-b border-neutral-100 px-3 py-3">
+                <div className="mb-1.5 text-xs font-medium text-neutral-500">Tampilan</div>
+                <ThemeSegmented />
+              </div>
               <Link href={settingsHref} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-neutral-50" onClick={() => setAccountOpen(false)}><icons.Settings className="h-4 w-4" /> Pengaturan</Link>
               <button type="button" onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200"><icons.LogOut className="h-4 w-4" /> Logout</button>
             </div>
