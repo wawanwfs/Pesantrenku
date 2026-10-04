@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'core/network/api_client.dart';
 import 'core/theme/app_theme.dart';
+import 'core/widgets/app_widgets.dart';
 import 'features/dashboard/mobile_shell.dart';
 
 void main() {
@@ -18,6 +19,7 @@ class PesantenkuMobileApp extends StatefulWidget {
 
 class _PesantenkuMobileAppState extends State<PesantenkuMobileApp> {
   final navigatorKey = GlobalKey<NavigatorState>();
+  final themeController = ThemeController();
   SessionData? session;
   bool loading = true;
   String? bootstrapError;
@@ -26,6 +28,7 @@ class _PesantenkuMobileAppState extends State<PesantenkuMobileApp> {
   void initState() {
     super.initState();
     widget.client.setUnauthorizedHandler(_handleUnauthorized);
+    themeController.restore();
     _restore();
   }
 
@@ -45,6 +48,7 @@ class _PesantenkuMobileAppState extends State<PesantenkuMobileApp> {
   @override
   void dispose() {
     widget.client.setUnauthorizedHandler(null);
+    themeController.dispose();
     super.dispose();
   }
 
@@ -75,28 +79,35 @@ class _PesantenkuMobileAppState extends State<PesantenkuMobileApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      title: 'Pesantenku',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.light(),
-      home: loading
-          ? const _SplashScreen()
-          : session == null
-              ? LoginScreen(
-                  client: widget.client,
-                  initialError: bootstrapError,
-                  onAuthenticated: (value) => setState(() {
-                    session = value;
-                    bootstrapError = null;
-                  }),
-                )
-              : MobileShell(
-                  client: widget.client,
-                  session: session!,
-                  onSessionChanged: (value) => setState(() => session = value),
-                  onLoggedOut: () => setState(() => session = null),
-                ),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: themeController,
+      builder: (context, themeMode, _) => MaterialApp(
+        navigatorKey: navigatorKey,
+        title: 'Pesantenku',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: themeMode,
+        home: loading
+            ? const _SplashScreen()
+            : session == null
+                ? LoginScreen(
+                    client: widget.client,
+                    initialError: bootstrapError,
+                    onAuthenticated: (value) => setState(() {
+                      session = value;
+                      bootstrapError = null;
+                    }),
+                  )
+                : MobileShell(
+                    client: widget.client,
+                    session: session!,
+                    onSessionChanged: (value) => setState(() => session = value),
+                    onLoggedOut: () => setState(() => session = null),
+                    themeMode: themeMode,
+                    onThemeModeChanged: themeController.select,
+                  ),
+      ),
     );
   }
 }
@@ -180,11 +191,17 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const PesantenkuLogo(),
+                    const FadeSlideIn(child: PesantenkuLogo()),
                     const SizedBox(height: 36),
-                    Text('Masuk Pesantenku', style: Theme.of(context).textTheme.headlineMedium),
+                    FadeSlideIn(
+                      delay: const Duration(milliseconds: 80),
+                      child: Text('Masuk Pesantenku', style: Theme.of(context).textTheme.headlineMedium),
+                    ),
                     const SizedBox(height: 8),
-                    const Text('Gunakan akun yang terdaftar pada pesantren Anda.'),
+                    const FadeSlideIn(
+                      delay: Duration(milliseconds: 140),
+                      child: Text('Gunakan akun yang terdaftar pada pesantren Anda.'),
+                    ),
                     const SizedBox(height: 24),
                     TextFormField(
                       controller: loginController,
@@ -265,10 +282,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           : const Text('Masuk'),
                     ),
                     const SizedBox(height: 16),
-                    const Text(
+                    Text(
                       'Alamat API harus diatur saat build dengan --dart-define=API_BASE_URL=https://domain/api/v1.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 12, color: AppColors.neutral600),
+                      style: TextStyle(fontSize: 12, color: context.mutedText),
                     ),
                   ],
                 ),

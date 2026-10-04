@@ -1,4 +1,7 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -14,12 +17,18 @@ class MobileShell extends StatefulWidget {
     required this.session,
     required this.onSessionChanged,
     required this.onLoggedOut,
+    this.themeMode,
+    this.onThemeModeChanged,
   });
 
   final ApiClient client;
   final SessionData session;
   final ValueChanged<SessionData> onSessionChanged;
   final VoidCallback onLoggedOut;
+
+  /// Opsional: bila keduanya diberikan, halaman Akun menampilkan pemilih tema.
+  final ThemeMode? themeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
   State<MobileShell> createState() => _MobileShellState();
@@ -76,6 +85,8 @@ class _MobileShellState extends State<MobileShell> {
         session: widget.session,
         onSessionChanged: widget.onSessionChanged,
         onLoggedOut: widget.onLoggedOut,
+        themeMode: widget.themeMode,
+        onThemeModeChanged: widget.onThemeModeChanged,
       ),
     ];
 
@@ -115,7 +126,7 @@ class _DashboardPage extends StatelessWidget {
       future: dashboard,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return const DashboardSkeleton();
         }
         if (snapshot.hasError) {
           return _ErrorView(message: snapshot.error.toString(), onRetry: onRefresh);
@@ -145,19 +156,23 @@ class _DashboardPage extends StatelessWidget {
                       Wrap(
                         spacing: 10,
                         runSpacing: 10,
-                        children: summary.map((item) {
-                          return SizedBox(
-                            width: (MediaQuery.sizeOf(context).width - 42) / 2,
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(14),
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(item['label']?.toString() ?? 'Ringkasan', style: const TextStyle(fontSize: 12, color: AppColors.neutral600)),
-                                    const SizedBox(height: 6),
-                                    Text(item['value']?.toString() ?? '-', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
-                                  ],
+                        children: summary.indexed.map((entry) {
+                          final item = entry.$2;
+                          return FadeSlideIn(
+                            delay: Duration(milliseconds: 60 * entry.$1),
+                            child: SizedBox(
+                              width: (MediaQuery.sizeOf(context).width - 42) / 2,
+                              child: Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    children: [
+                                      Text(item['label']?.toString() ?? 'Ringkasan', style: TextStyle(fontSize: 12, color: context.mutedText)),
+                                      const SizedBox(height: 6),
+                                      Text(item['value']?.toString() ?? '-', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                                    ],
+                                  ),
                                 ),
                               ),
                             ),
@@ -178,10 +193,13 @@ class _DashboardPage extends StatelessWidget {
                         crossAxisSpacing: 10,
                         childAspectRatio: .95,
                       ),
-                      itemBuilder: (_, i) => MenuTile(
-                        icon: _moduleIcon(modules[i].resource),
-                        label: modules[i].label,
-                        onTap: () => onOpenModule(modules[i]),
+                      itemBuilder: (_, i) => FadeSlideIn(
+                        delay: Duration(milliseconds: 160 + 45 * i),
+                        child: MenuTile(
+                          icon: _moduleIcon(modules[i].resource),
+                          label: modules[i].label,
+                          onTap: () => onOpenModule(modules[i]),
+                        ),
                       ),
                     ),
                     if (modules.isEmpty)
@@ -218,7 +236,7 @@ class _ModulesPage extends StatelessWidget {
               separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (_, i) => Card(
                 child: ListTile(
-                  leading: Icon(_moduleIcon(modules[i].resource), color: AppColors.primary600),
+                  leading: Icon(_moduleIcon(modules[i].resource), color: context.accent),
                   title: Text(modules[i].label, style: const TextStyle(fontWeight: FontWeight.w700)),
                   subtitle: Text(modules[i].resource),
                   trailing: const Icon(Icons.chevron_right),
@@ -241,6 +259,8 @@ class ResourceScreen extends StatefulWidget {
 
 class _ResourceScreenState extends State<ResourceScreen> {
   late Future<List<Map<String, dynamic>>> rows;
+  final searchController = TextEditingController();
+  String query = '';
 
   @override
   void initState() {
@@ -248,7 +268,19 @@ class _ResourceScreenState extends State<ResourceScreen> {
     rows = widget.client.resource(widget.module.resource);
   }
 
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
   void retry() => setState(() => rows = widget.client.resource(widget.module.resource));
+
+  bool _matches(Map<String, dynamic> item) {
+    if (query.isEmpty) return true;
+    final needle = query.toLowerCase();
+    return item.values.any((value) => value != null && value.toString().toLowerCase().contains(needle));
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -258,19 +290,29 @@ class _ResourceScreenState extends State<ResourceScreen> {
         future: rows,
         builder: (context, snapshot) {
           if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
+            return const ListSkeleton();
           }
           if (snapshot.hasError) return _ErrorView(message: snapshot.error.toString(), onRetry: retry);
           final items = snapshot.data ?? const [];
-          if (items.isEmpty) return const Center(child: Text('Belum ada data.'));
+          if (items.isEmpty) return const _EmptyView(message: 'Belum ada data.');
+          final visible = items.where(_matches).toList();
           return RefreshIndicator(
             onRefresh: () async => retry(),
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
-              itemCount: items.length,
+              itemCount: visible.length + 1,
               separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (_, i) {
-                final item = items[i];
+              itemBuilder: (_, index) {
+                if (index == 0) {
+                  return _SearchHeader(
+                    controller: searchController,
+                    total: items.length,
+                    shown: visible.length,
+                    onChanged: (value) => setState(() => query = value.trim()),
+                  );
+                }
+                final i = index - 1;
+                final item = visible[i];
                 final title = _firstValue(item, const ['name', 'title', 'invoice_number', 'number', 'nis', 'complaint', 'queue_number']) ?? 'Data #${item['id'] ?? i + 1}';
                 final status = item['status']?.toString();
                 final subtitle = item.entries
@@ -278,11 +320,14 @@ class _ResourceScreenState extends State<ResourceScreen> {
                     .take(3)
                     .map((entry) => '${_fieldLabel(entry.key)}: ${entry.value ?? '-'}')
                     .join(' • ');
-                return Card(
-                  child: ListTile(
-                    title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
-                    subtitle: subtitle.isEmpty ? null : Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
-                    trailing: status == null ? null : StatusBadge(status),
+                return FadeSlideIn(
+                  delay: Duration(milliseconds: i < 10 ? 35 * i : 0),
+                  child: Card(
+                    child: ListTile(
+                      title: Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+                      subtitle: subtitle.isEmpty ? null : Text(subtitle, maxLines: 2, overflow: TextOverflow.ellipsis),
+                      trailing: status == null ? null : StatusBadge(status),
+                    ),
                   ),
                 );
               },
@@ -290,6 +335,63 @@ class _ResourceScreenState extends State<ResourceScreen> {
           );
         },
       ),
+    );
+  }
+}
+
+/// Kolom cari lokal di atas daftar: menyaring data yang sudah dimuat, tanpa permintaan jaringan baru.
+class _SearchHeader extends StatelessWidget {
+  const _SearchHeader({
+    required this.controller,
+    required this.total,
+    required this.shown,
+    required this.onChanged,
+  });
+  final TextEditingController controller;
+  final int total;
+  final int shown;
+  final ValueChanged<String> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextField(
+          controller: controller,
+          onChanged: onChanged,
+          textInputAction: TextInputAction.search,
+          decoration: InputDecoration(
+            hintText: 'Cari di daftar ini',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: controller.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: 'Hapus pencarian',
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      controller.clear();
+                      onChanged('');
+                    },
+                  ),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(14)),
+            isDense: true,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Semantics(
+          liveRegion: true,
+          child: Text(
+            shown == total ? '$total data' : '$shown dari $total data',
+            style: TextStyle(fontSize: 12, color: context.mutedText),
+          ),
+        ),
+        if (shown == 0)
+          const Padding(
+            padding: EdgeInsets.only(top: 24),
+            child: _EmptyView(message: 'Tidak ada hasil yang cocok.', icon: Icons.search_off),
+          ),
+      ],
     );
   }
 }
@@ -330,6 +432,31 @@ class _QrGeneratorState extends State<QrGenerator> {
   Map<String, dynamic>? data;
   bool loading = false;
   String? error;
+  Timer? _ticker;
+  DateTime _now = DateTime.now();
+  DateTime? _issuedAt;
+
+  DateTime? get _expiresAt => DateTime.tryParse(data?['expires_at']?.toString() ?? '')?.toLocal();
+
+  @override
+  void dispose() {
+    _ticker?.cancel();
+    super.dispose();
+  }
+
+  void _startCountdown() {
+    _ticker?.cancel();
+    _issuedAt = DateTime.now();
+    _now = _issuedAt!;
+    if (_expiresAt == null) return;
+    // Pewaktu hanya hidup selama QR berlaku, lalu berhenti sendiri.
+    _ticker = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) return;
+      setState(() => _now = DateTime.now());
+      final expiresAt = _expiresAt;
+      if (expiresAt == null || !_now.isBefore(expiresAt)) timer.cancel();
+    });
+  }
 
   Future<void> generate() async {
     setState(() { loading = true; error = null; });
@@ -339,7 +466,11 @@ class _QrGeneratorState extends State<QrGenerator> {
       if (code is! String || code.length != 64) {
         throw const ApiException('Server mengembalikan kode QR yang tidak valid.');
       }
-      if (mounted) setState(() => data = result);
+      if (mounted) {
+        HapticFeedback.mediumImpact();
+        setState(() => data = result);
+        _startCountdown();
+      }
     } on ApiException catch (exception) {
       if (mounted) setState(() => error = exception.message);
     } finally {
@@ -347,9 +478,21 @@ class _QrGeneratorState extends State<QrGenerator> {
     }
   }
 
+  String _remainingLabel(Duration remaining) {
+    final seconds = remaining.inSeconds.clamp(0, 86400 * 365);
+    return '${(seconds ~/ 60).toString().padLeft(2, '0')}:${(seconds % 60).toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final code = data?['code']?.toString();
+    final expiresAt = _expiresAt;
+    final remaining = expiresAt?.difference(_now);
+    final expired = remaining != null && remaining.isNegative;
+    final total = expiresAt != null && _issuedAt != null ? expiresAt.difference(_issuedAt!) : null;
+    final progress = (remaining != null && total != null && total.inMilliseconds > 0 && !expired)
+        ? (remaining.inMilliseconds / total.inMilliseconds).clamp(0.0, 1.0)
+        : 0.0;
     return ListView(
       padding: const EdgeInsets.all(24),
       children: [
@@ -358,26 +501,67 @@ class _QrGeneratorState extends State<QrGenerator> {
         if (code != null)
           Center(
             child: Card(
+              color: Colors.white,
               child: Padding(
                 padding: const EdgeInsets.all(20),
-                child: Semantics(
-                  image: true,
-                  label: widget.purpose == 'attendance'
-                      ? 'QR presensi Pesantenku'
-                      : 'QR identitas Pesantenku',
-                  child: ExcludeSemantics(
-                    child: QrImageView(data: code, size: 240),
-                  ),
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    AnimatedOpacity(
+                      duration: const Duration(milliseconds: 240),
+                      opacity: expired ? 0.1 : 1,
+                      child: Semantics(
+                        image: true,
+                        label: widget.purpose == 'attendance'
+                            ? 'QR presensi Pesantenku'
+                            : 'QR identitas Pesantenku',
+                        child: ExcludeSemantics(
+                          child: QrImageView(data: code, size: 240),
+                        ),
+                      ),
+                    ),
+                    if (expired)
+                      const Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.timer_off_outlined, size: 40, color: AppColors.warning),
+                          SizedBox(height: 8),
+                          Text('QR kedaluwarsa', style: TextStyle(fontWeight: FontWeight.w800, color: Colors.black87)),
+                          Text('Buat QR baru untuk melanjutkan.', style: TextStyle(color: Colors.black54, fontSize: 12)),
+                        ],
+                      ),
+                  ],
                 ),
               ),
             ),
           )
         else
-          const SizedBox(height: 280, child: Center(child: Icon(Icons.qr_code_2, size: 160, color: AppColors.neutral200))),
+          SizedBox(height: 280, child: Center(child: Icon(Icons.qr_code_2, size: 160, color: context.borderColor))),
         if (data?['expires_at'] != null)
           Padding(
             padding: const EdgeInsets.only(top: 12),
             child: Text('Berlaku sampai ${data!['expires_at']}', textAlign: TextAlign.center),
+          ),
+        if (remaining != null && !expired)
+          Padding(
+            padding: const EdgeInsets.only(top: 12),
+            child: Semantics(
+              label: 'Sisa masa berlaku QR ${_remainingLabel(remaining)}',
+              child: Column(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 6,
+                      color: remaining.inSeconds < 30 ? AppColors.error : context.accent,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text('Sisa ${_remainingLabel(remaining)}', style: TextStyle(fontSize: 12, color: context.mutedText)),
+                ],
+              ),
+            ),
           ),
         if (error != null)
           Padding(
@@ -416,9 +600,15 @@ class _QrScannerState extends State<QrScanner> {
     await controller.stop();
     try {
       final result = await widget.client.scanQr(code);
-      if (mounted) setState(() => message = result['message']?.toString() ?? 'QR berhasil diproses.');
+      if (mounted) {
+        HapticFeedback.mediumImpact();
+        setState(() => message = result['message']?.toString() ?? 'QR berhasil diproses.');
+      }
     } on ApiException catch (exception) {
-      if (mounted) setState(() => error = exception.message);
+      if (mounted) {
+        HapticFeedback.heavyImpact();
+        setState(() => error = exception.message);
+      }
     } finally {
       if (mounted) setState(() => processing = false);
     }
@@ -535,23 +725,32 @@ class _NotificationsPageState extends State<NotificationsPage> {
           Expanded(child: FutureBuilder<List<Map<String, dynamic>>>(
         future: notifications,
         builder: (_, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) return const Center(child: CircularProgressIndicator());
+          if (snapshot.connectionState != ConnectionState.done) return const ListSkeleton(count: 5);
           if (snapshot.hasError) return _ErrorView(message: snapshot.error.toString(), onRetry: retry);
           final rows = snapshot.data ?? const [];
-          if (rows.isEmpty) return const Center(child: Text('Tidak ada notifikasi.'));
+          if (rows.isEmpty) return const _EmptyView(message: 'Tidak ada notifikasi.', icon: Icons.notifications_off_outlined);
           return RefreshIndicator(
             onRefresh: () async => retry(),
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: rows.length,
               separatorBuilder: (_, _) => const SizedBox(height: 10),
-              itemBuilder: (_, i) => Card(
-                child: ListTile(
-                  leading: const Icon(Icons.notifications_outlined, color: AppColors.primary600),
-                  title: Text(_firstValue(rows[i], const ['title', 'subject', 'message']) ?? 'Notifikasi'),
-                  subtitle: Text(_firstValue(rows[i], const ['body', 'message', 'created_at']) ?? ''),
-                ),
-              ),
+              itemBuilder: (_, i) {
+                final unread = rows[i]['read_at'] == null;
+                return FadeSlideIn(
+                  delay: Duration(milliseconds: i < 8 ? 40 * i : 0),
+                  child: Card(
+                    child: ListTile(
+                      leading: Icon(unread ? Icons.notifications_active_outlined : Icons.notifications_outlined, color: context.accent),
+                      title: Text(
+                        _firstValue(rows[i], const ['title', 'subject', 'message']) ?? 'Notifikasi',
+                        style: TextStyle(fontWeight: unread ? FontWeight.w800 : FontWeight.w500),
+                      ),
+                      subtitle: Text(_firstValue(rows[i], const ['body', 'message', 'created_at']) ?? ''),
+                    ),
+                  ),
+                );
+              },
             ),
           );
         },
@@ -569,11 +768,15 @@ class AccountPage extends StatefulWidget {
     required this.session,
     required this.onSessionChanged,
     required this.onLoggedOut,
+    this.themeMode,
+    this.onThemeModeChanged,
   });
   final ApiClient client;
   final SessionData session;
   final ValueChanged<SessionData> onSessionChanged;
   final VoidCallback onLoggedOut;
+  final ThemeMode? themeMode;
+  final ValueChanged<ThemeMode>? onThemeModeChanged;
 
   @override
   State<AccountPage> createState() => _AccountPageState();
@@ -640,6 +843,23 @@ class _AccountPageState extends State<AccountPage> {
             liveRegion: true,
             child: Text(error!, style: const TextStyle(color: AppColors.error)),
           ),
+          if (widget.themeMode != null && widget.onThemeModeChanged != null) ...[
+            const Text('Tampilan', style: TextStyle(fontWeight: FontWeight.w800)),
+            const SizedBox(height: 8),
+            SegmentedButton<ThemeMode>(
+              segments: const [
+                ButtonSegment(value: ThemeMode.light, icon: Icon(Icons.light_mode_outlined), label: Text('Terang')),
+                ButtonSegment(value: ThemeMode.dark, icon: Icon(Icons.dark_mode_outlined), label: Text('Gelap')),
+                ButtonSegment(value: ThemeMode.system, icon: Icon(Icons.brightness_auto_outlined), label: Text('Sistem')),
+              ],
+              selected: {widget.themeMode!},
+              showSelectedIcon: false,
+              onSelectionChanged: (selection) {
+                HapticFeedback.selectionClick();
+                widget.onThemeModeChanged!(selection.first);
+              },
+            ),
+          ],
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: loading ? null : logout,
@@ -647,6 +867,29 @@ class _AccountPageState extends State<AccountPage> {
             label: const Text('Keluar'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _EmptyView extends StatelessWidget {
+  const _EmptyView({required this.message, this.icon = Icons.inbox_outlined});
+  final String message;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 48, color: context.borderColor),
+            const SizedBox(height: 10),
+            Text(message, style: TextStyle(color: context.mutedText)),
+          ],
+        ),
       ),
     );
   }

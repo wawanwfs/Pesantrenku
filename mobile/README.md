@@ -15,6 +15,14 @@ Untuk Android emulator lokal gunakan `http://10.0.2.2:8000/api/v1` hanya melalui
 
 Token disimpan dengan `flutter_secure_storage`. Kamera diperlukan untuk pemindaian QR. Login, dashboard, resource, notifikasi, perpindahan tenant, pembuatan QR, dan pemindaian QR semuanya memanggil API nyata.
 
+## Tampilan dan aksesibilitas
+
+- Tema terang/gelap/sistem (`AppTheme.light/dark`, `ThemeController`); pilihan tersimpan di penyimpanan aman dan bisa diubah dari tab Akun.
+- Status memuat memakai kerangka (`Skeleton`, `DashboardSkeleton`, `ListSkeleton`); kemunculan konten memakai `FadeSlideIn`. Semua animasi dimatikan bila sistem meminta animasi dikurangi (`MediaQuery.disableAnimations`).
+- Daftar modul memiliki pencarian lokal; QR menampilkan hitung mundur dan keadaan kedaluwarsa; haptic ringan pada aksi penting.
+
+Verifikasi yang dijalankan sesi 2026-10-04 (Flutter 3.44.7 seperti CI): `flutter analyze` bersih dan `flutter test` 23 lulus. Build APK/AAB tidak dijalankan.
+
 ## Build release Android
 
 1. Salin `android/key.properties.example` menjadi `android/key.properties`.
