@@ -8,6 +8,25 @@ use Illuminate\Support\Facades\DB;
 
 trait DashboardAnalyticsConcern
 {
+    /** SQL tahun/bulan lintas mesin basis data (produksi MySQL; SQLite untuk dev/e2e). */
+    private function sqlYear(string $column): string
+    {
+        return match (DB::connection()->getDriverName()) {
+            'sqlite' => "CAST(strftime('%Y', {$column}) AS INTEGER)",
+            'pgsql' => "EXTRACT(YEAR FROM {$column})::int",
+            default => "YEAR({$column})",
+        };
+    }
+
+    private function sqlMonth(string $column): string
+    {
+        return match (DB::connection()->getDriverName()) {
+            'sqlite' => "CAST(strftime('%m', {$column}) AS INTEGER)",
+            'pgsql' => "EXTRACT(MONTH FROM {$column})::int",
+            default => "MONTH({$column})",
+        };
+    }
+
     private function sharedWidgets(?Request $request = null): array
     {
         $activities = $this->query($request, 'audit_logs')
@@ -104,15 +123,15 @@ trait DashboardAnalyticsConcern
             ->where('status', 'success')
             ->whereNotNull('paid_at')
             ->whereBetween('paid_at', [$start, $end])
-            ->selectRaw('YEAR(paid_at) as yr, MONTH(paid_at) as mo, SUM(amount) as total')
-            ->groupByRaw('YEAR(paid_at), MONTH(paid_at)')
+            ->selectRaw($this->sqlYear('paid_at') . ' as yr, ' . $this->sqlMonth('paid_at') . ' as mo, SUM(amount) as total')
+            ->groupByRaw($this->sqlYear('paid_at') . ', ' . $this->sqlMonth('paid_at'))
             ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
 
         // 1 query: sum expenses per month
         $expenses = $this->query($request, 'expenses')
             ->whereBetween('date', [$start->toDateString(), $end->toDateString()])
-            ->selectRaw('YEAR(date) as yr, MONTH(date) as mo, SUM(amount) as total')
-            ->groupByRaw('YEAR(date), MONTH(date)')
+            ->selectRaw($this->sqlYear('date') . ' as yr, ' . $this->sqlMonth('date') . ' as mo, SUM(amount) as total')
+            ->groupByRaw($this->sqlYear('date') . ', ' . $this->sqlMonth('date'))
             ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
 
         return $buckets->map(fn (Carbon $month) => [
@@ -131,8 +150,8 @@ trait DashboardAnalyticsConcern
         // 1 query: new users per month
         $users = $this->query(null, 'users')
             ->whereBetween('created_at', [$start, $end])
-            ->selectRaw('YEAR(created_at) as yr, MONTH(created_at) as mo, COUNT(*) as cnt')
-            ->groupByRaw('YEAR(created_at), MONTH(created_at)')
+            ->selectRaw($this->sqlYear('created_at') . ' as yr, ' . $this->sqlMonth('created_at') . ' as mo, COUNT(*) as cnt')
+            ->groupByRaw($this->sqlYear('created_at') . ', ' . $this->sqlMonth('created_at'))
             ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
 
         // 1 query: successful payment count per month
@@ -140,8 +159,8 @@ trait DashboardAnalyticsConcern
             ->where('status', 'success')
             ->whereNotNull('paid_at')
             ->whereBetween('paid_at', [$start, $end])
-            ->selectRaw('YEAR(paid_at) as yr, MONTH(paid_at) as mo, COUNT(*) as cnt')
-            ->groupByRaw('YEAR(paid_at), MONTH(paid_at)')
+            ->selectRaw($this->sqlYear('paid_at') . ' as yr, ' . $this->sqlMonth('paid_at') . ' as mo, COUNT(*) as cnt')
+            ->groupByRaw($this->sqlYear('paid_at') . ', ' . $this->sqlMonth('paid_at'))
             ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
 
         return $buckets->map(fn (Carbon $month) => [
@@ -160,8 +179,8 @@ trait DashboardAnalyticsConcern
         // 1 query: new students per month
         $students = $this->query($request, 'students')
             ->whereBetween('created_at', [$start, $end])
-            ->selectRaw('YEAR(created_at) as yr, MONTH(created_at) as mo, COUNT(*) as cnt')
-            ->groupByRaw('YEAR(created_at), MONTH(created_at)')
+            ->selectRaw($this->sqlYear('created_at') . ' as yr, ' . $this->sqlMonth('created_at') . ' as mo, COUNT(*) as cnt')
+            ->groupByRaw($this->sqlYear('created_at') . ', ' . $this->sqlMonth('created_at'))
             ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
 
         // 1 query: successful payment count per month
@@ -169,8 +188,8 @@ trait DashboardAnalyticsConcern
             ->where('status', 'success')
             ->whereNotNull('paid_at')
             ->whereBetween('paid_at', [$start, $end])
-            ->selectRaw('YEAR(paid_at) as yr, MONTH(paid_at) as mo, COUNT(*) as cnt')
-            ->groupByRaw('YEAR(paid_at), MONTH(paid_at)')
+            ->selectRaw($this->sqlYear('paid_at') . ' as yr, ' . $this->sqlMonth('paid_at') . ' as mo, COUNT(*) as cnt')
+            ->groupByRaw($this->sqlYear('paid_at') . ', ' . $this->sqlMonth('paid_at'))
             ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
 
         return $buckets->map(fn (Carbon $month) => [
@@ -189,8 +208,8 @@ trait DashboardAnalyticsConcern
         // 1 query: new students per month
         $newByMonth = $this->query($request, 'students')
             ->whereBetween('created_at', [$start, $end])
-            ->selectRaw('YEAR(created_at) as yr, MONTH(created_at) as mo, COUNT(*) as cnt')
-            ->groupByRaw('YEAR(created_at), MONTH(created_at)')
+            ->selectRaw($this->sqlYear('created_at') . ' as yr, ' . $this->sqlMonth('created_at') . ' as mo, COUNT(*) as cnt')
+            ->groupByRaw($this->sqlYear('created_at') . ', ' . $this->sqlMonth('created_at'))
             ->get()->keyBy(fn ($r) => "{$r->yr}-{$r->mo}");
 
         // 1 query: all active student created_at values for cumulative count in PHP
