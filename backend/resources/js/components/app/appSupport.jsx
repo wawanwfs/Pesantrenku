@@ -690,17 +690,28 @@ function reportSubtitle(panel, title) {
 }
 
 function iconFor(name) {
-  if (name.includes('Dashboard')) return 'LayoutDashboard';
-  if (name.includes('Owner')) return 'Crown';
-  if (name.includes('Santri') || name.includes('User') || name.includes('Guru') || name.includes('Pengguna')) return 'Users';
-  if (name.includes('Kelas') || name.includes('Pesantren')) return 'School';
-  if (name.includes('Kamar')) return 'Bed';
-  if (name.includes('Surat') || name.includes('Laporan')) return 'FileText';
-  if (name.includes('Pembayaran') || name.includes('Tagihan') || name.includes('Keuangan')) return 'Wallet';
-  if (name.includes('Modul') || name.includes('Menu')) return 'Menu';
-  if (name.includes('Paket') || name.includes('Subscription')) return 'BadgeCheck';
-  if (name.includes('Audit')) return 'Shield';
-  return 'Settings';
+  const rules = [
+    ['Dashboard', 'LayoutDashboard'], ['Owner', 'Crown'], ['Pengaturan', 'Settings'], ['Profil', 'UserCog'],
+    ['Laporan', 'BarChart3'], ['Presensi', 'CheckSquare'], ['Absensi', 'CheckSquare'], ['Catatan', 'FileText'], ['Jadwal', 'CalendarDays'],
+    ['Mutasi', 'MoveHorizontal'], ['Rekam Medis', 'HeartPulse'], ['Riwayat', 'FileText'], ['Surat', 'FileText'],
+    ['Wali', 'Users'], ['Santri', 'Users'], ['User', 'Users'], ['Guru', 'GraduationCap'], ['Pengguna', 'Users'], ['Anak', 'Users'],
+    ['Kelas', 'School'], ['Pesantren', 'School'], ['Program', 'School'], ['Kurikulum', 'BookOpen'], ['Mata Pelajaran', 'BookOpen'],
+    ['Materi', 'BookOpen'], ['Tugas', 'ListChecks'], ['Kamar', 'Bed'], ['Asrama', 'Bed'], ['Piket', 'CheckSquare'],
+    ['Jadwal', 'CalendarDays'], ['Kalender', 'CalendarDays'], ['Presensi', 'CheckSquare'], ['Absensi', 'CheckSquare'],
+    ['Nilai', 'BarChart3'], ['Penilaian', 'BarChart3'], ['Rapor', 'FileText'], ['Raport', 'FileText'], ['Kelulusan', 'GraduationCap'],
+    ['Tahfidz', 'BookOpen'], ['Akademik', 'GraduationCap'], ['Tahun Ajaran', 'CalendarDays'],
+    ['Pelanggaran', 'TriangleAlert'], ['Perizinan', 'Send'], ['Mutasi', 'MoveHorizontal'], ['Alumni', 'GraduationCap'],
+    ['Pengumuman', 'Inbox'], ['Notifikasi', 'Bell'], ['QR', 'ScanLine'],
+    ['Antrian', 'ListChecks'], ['Rekam Medis', 'HeartPulse'], ['Pemeriksaan', 'HeartPulse'], ['Kesehatan', 'HeartPulse'],
+    ['Berobat', 'HeartPulse'], ['Obat', 'HeartPulse'], ['Rujukan', 'Send'], ['Dokter', 'HeartPulse'],
+    ['Surat', 'FileText'], ['Laporan', 'BarChart3'], ['Log', 'FileText'], ['Error', 'TriangleAlert'], ['Aktivitas', 'Activity'],
+    ['Login', 'Shield'], ['Audit', 'Shield'], ['Backup', 'Database'], ['Integrasi', 'Cable'], ['Cache', 'HardDrive'],
+    ['Pembayaran', 'CreditCard'], ['Tagihan', 'Wallet'], ['Tunggakan', 'TriangleAlert'], ['Diskon', 'BadgeCheck'],
+    ['Rekening', 'Banknote'], ['Biaya', 'Wallet'], ['Billing', 'Wallet'], ['Keuangan', 'Wallet'],
+    ['Paket', 'BadgeCheck'], ['Subscription', 'BadgeCheck'], ['Modul', 'Menu'], ['Menu', 'Menu'], ['Data Master', 'Database'],
+  ];
+  const match = rules.find(([needle]) => name.includes(needle));
+  return match ? match[1] : 'Settings';
 }
 
 function slug(value) {

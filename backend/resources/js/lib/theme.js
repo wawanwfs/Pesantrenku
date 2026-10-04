@@ -73,3 +73,21 @@ export function useTheme() {
 
   return { preference, resolved, setPreference, toggle: () => setPreference(resolved === 'dark' ? 'light' : 'dark') };
 }
+
+/**
+ * Cetak selalu memakai tema terang agar laporan hemat tinta dan terbaca; dipulihkan setelah selesai.
+ * Dipasang sekali dari entry aplikasi.
+ */
+export function installPrintTheme() {
+  if (typeof window === 'undefined') return;
+  let restore = null;
+  window.addEventListener('beforeprint', () => {
+    const root = document.documentElement;
+    restore = root.getAttribute('data-theme');
+    root.setAttribute('data-theme', 'light');
+  });
+  window.addEventListener('afterprint', () => {
+    if (restore) document.documentElement.setAttribute('data-theme', restore);
+    restore = null;
+  });
+}

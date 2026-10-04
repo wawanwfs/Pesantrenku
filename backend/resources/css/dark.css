@@ -365,3 +365,11 @@
 [data-theme='dark'] .native-chart circle[stroke='#E2E8F0'] {
     stroke: #1B2A3D;
 }
+
+[data-theme='dark'] .data-table tbody tr:nth-child(even) td.table-actions {
+    background: #141F2E;
+}
+
+[data-theme='dark'] .data-table tbody tr:hover td.table-actions {
+    background: #12302A;
+}

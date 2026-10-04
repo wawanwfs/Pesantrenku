@@ -437,6 +437,20 @@ export function CrudModule({ meta, shared }) {
     }
   };
 
+  const filtersActive = Boolean(search || status !== 'Semua Status' || dateFrom || dateTo || classFilter || studentFilter);
+  const resetFilters = () => {
+    setSearch('');
+    setStatus('Semua Status');
+    setDateFrom('');
+    setDateTo('');
+    setClassFilter('');
+    setStudentFilter('');
+  };
+  const emptyState = filtersActive
+    ? { icon: 'Search', title: 'Tidak ada hasil yang cocok', description: 'Ubah kata kunci atau atur ulang filter untuk melihat semua data.', action: { label: 'Atur ulang filter', onClick: resetFilters } }
+    : canCreate
+      ? { title: `Belum ada data ${String(meta.title || '').toLowerCase()}`, description: 'Mulai dengan menambahkan data pertama.', action: { label: 'Tambah data', onClick: createRow } }
+      : undefined;
   const resourceActions = [
     ...workflowActionsFor(meta).map((action) => ({ ...action, onClick: (row) => openWorkflow(row, action) })),
     ...(meta.resource === 'backups' ? [
@@ -451,7 +465,7 @@ export function CrudModule({ meta, shared }) {
       {(message || error) && <Alert tone={error ? 'error' : 'success'}>{error || message}</Alert>}
       <PanelCard>
         <div className="crud-command-bar mb-4 flex flex-col gap-4 border-b border-neutral-200 pb-4 2xl:flex-row 2xl:items-start 2xl:justify-between">
-          <div className="filter-grid grid min-w-0 flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-3">
+          <div className="filter-grid grid min-w-0 flex-1 gap-2.5 sm:grid-cols-2 xl:grid-cols-4">
             <div className="relative w-full"><icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" /><input value={search} onChange={(event) => setSearch(event.target.value)} className="w-full rounded-xl border border-neutral-200 bg-white py-2.5 pl-10 pr-3 text-sm shadow-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" placeholder={`Cari ${meta.title.toLowerCase()}...`} aria-label={`Cari ${meta.title.toLowerCase()}`} /></div>
             {supportsStatusFilter && <label className="grid gap-1 text-xs font-medium text-neutral-600"><span>Status</span><select value={status} onChange={(event) => setStatus(event.target.value)} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70"><option>Semua Status</option>{statusOptions.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}</select></label>}
             {meta.enableFilters !== false && supportsDateFilter && <label className="grid gap-1 text-xs font-medium text-neutral-600"><span>Dari tanggal</span><input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="min-h-11 rounded-xl border border-neutral-200 bg-white px-3 text-sm text-neutral-700 shadow-sm outline-none transition focus:border-primary-500 focus:ring-4 focus:ring-primary-100/70" /></label>}
@@ -481,7 +495,7 @@ export function CrudModule({ meta, shared }) {
             {canCreate && <button onClick={createRow} className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"><icons.Plus className="h-4 w-4" /> {meta.createLabel || 'Tambah Data'}</button>}
           </div>
         </div>
-        <Table rows={filteredRows} columns={meta.fields.map((field) => field.name)} meta={meta} shared={shared} loading={loading} selectable={canBulk} selectedIds={selectedIds} onToggleRow={toggleSelected} onToggleAll={setSelectedForPage} onView={canView ? viewRow : null} onEdit={canEdit ? editRow : null} onDelete={canDelete ? deleteRow : null} customActions={resourceActions} />
+        <Table rows={filteredRows} empty={emptyState} columns={meta.fields.map((field) => field.name)} meta={meta} shared={shared} loading={loading} selectable={canBulk} selectedIds={selectedIds} onToggleRow={toggleSelected} onToggleAll={setSelectedForPage} onView={canView ? viewRow : null} onEdit={canEdit ? editRow : null} onDelete={canDelete ? deleteRow : null} customActions={resourceActions} />
         <PaginationControls pagination={pagination} page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} />
       </PanelCard>
       {jobs.length > 0 && <JobStatusStrip jobs={jobs} onRefresh={loadJobs} />}

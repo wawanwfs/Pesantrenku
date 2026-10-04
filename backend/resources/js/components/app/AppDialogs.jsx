@@ -17,16 +17,18 @@ function PanelCard({ title, action, actionHref, onAction, children }) {
     </section>
   );
 }
-function StatePanel({ icon = 'Inbox', title, description, loading = false, compact = false }) {
+function StatePanel({ icon = 'Inbox', title, description, loading = false, compact = false, tone: panelTone = 'neutral', action }) {
   const Icon = icons[icon] || icons.Inbox;
+  const iconTone = panelTone === 'error' ? 'bg-red-50 text-red-600 ring-red-100' : 'bg-white text-neutral-500 ring-neutral-200';
   return (
-    <div className={`state-panel grid place-items-center border border-dashed border-neutral-200 bg-neutral-50/70 text-center ${compact ? 'min-h-28 p-4' : 'min-h-44 p-7'}`} role={loading ? 'status' : undefined} aria-live={loading ? 'polite' : undefined}>
+    <div className={`state-panel pk-state-panel grid place-items-center border border-dashed border-neutral-200 bg-neutral-50/70 text-center ${compact ? 'min-h-28 p-4' : 'min-h-44 p-7'}`} role={loading ? 'status' : panelTone === 'error' ? 'alert' : undefined} aria-live={loading ? 'polite' : undefined}>
       <div className="max-w-sm">
-        <div className="mx-auto grid h-9 w-9 place-items-center rounded-md border border-neutral-200 bg-white text-neutral-500">
+        <div className={`pk-state-icon mx-auto grid h-10 w-10 place-items-center rounded-full ring-1 ${iconTone}`}>
           <Icon className={`h-4 w-4 ${loading ? 'animate-spin text-primary-600' : ''}`} />
         </div>
-        <div className="mt-2.5 text-sm font-semibold text-neutral-700">{title}</div>
+        <div className="mt-3 text-sm font-semibold text-neutral-700">{title}</div>
         {description && <div className="mt-1 text-xs leading-5 text-neutral-500">{description}</div>}
+        {action && <button type="button" onClick={action.onClick} className="ui-button ui-button-secondary mt-4 min-h-9 text-xs">{action.label}</button>}
       </div>
     </div>
   );
@@ -64,6 +66,25 @@ const fieldLabels = {
   max_users: 'Batas Pengguna', is_enabled: 'Aktif', is_active: 'Aktif', role: 'Peran', module: 'Modul',
   invoice_number: 'Nomor Tagihan', due_date: 'Jatuh Tempo', paid_at: 'Waktu Bayar', created_at: 'Dibuat',
   pengguna: 'Pengguna', pesantren_name: 'Pesantren', plan_name: 'Paket', nama_modul: 'Modul', role_akses: 'Akses',
+  account_holder: 'Atas Nama', account_number: 'Nomor Rekening', activity: 'Kegiatan', assigned_at: 'Mulai Bertugas',
+  assignment_score: 'Nilai Tugas', attitude_score: 'Nilai Sikap', audience: 'Sasaran', average_score: 'Nilai Rata-rata',
+  ayat_range: 'Rentang Ayat', balance: 'Saldo', bank_name: 'Nama Bank', birth_date: 'Tanggal Lahir', birth_place: 'Tempat Lahir',
+  block: 'Blok', blood_pressure: 'Tekanan Darah', body: 'Isi', capacity: 'Kapasitas', category: 'Kategori', complaint: 'Keluhan',
+  completed_at: 'Selesai Pada', day: 'Hari', destination: 'Tujuan', diagnosis: 'Diagnosis', doctor_name: 'Dokter',
+  doctor_note: 'Catatan Dokter', dosage: 'Dosis', duration_days: 'Lama (Hari)', end_at: 'Selesai', end_date: 'Tanggal Selesai',
+  ended_at: 'Berakhir', estimated_time: 'Estimasi Waktu', file_path: 'Berkas', file_size: 'Ukuran Berkas', file_type: 'Jenis Berkas',
+  final_score: 'Nilai Akhir', from_room: 'Dari Kamar', gender: 'Jenis Kelamin', grade: 'Tingkat', graduation_year: 'Tahun Lulus',
+  homeroom_teacher: 'Wali Kelas', hospital_name: 'Rumah Sakit', is_primary: 'Utama', juz: 'Juz', key: 'Kunci', kkm: 'KKM',
+  level: 'Jenjang', midterm_score: 'Nilai UTS', minimum_stock: 'Stok Minimum', nip: 'NIP', nis: 'NIS', note: 'Catatan',
+  noted_at: 'Dicatat Pada', occupation: 'Pekerjaan', occupied: 'Terisi', password: 'Kata Sandi', period: 'Periode',
+  points: 'Poin', program: 'Program', progress_percent: 'Progres (%)', published_at: 'Terbit', pulse: 'Denyut Nadi',
+  quantity: 'Jumlah', queue_number: 'Nomor Antrian', reason: 'Alasan', recorded_at: 'Tanggal Catat', reference: 'Referensi',
+  room: 'Kamar', room_name: 'Ruang', schedule: 'Jadwal', semester: 'Semester', session: 'Sesi', specialization: 'Spesialisasi',
+  start_at: 'Mulai', start_date: 'Tanggal Mulai', stock: 'Stok', student_count: 'Jumlah Santri', subject: 'Perihal',
+  surah: 'Surah', teacher_name: 'Pengajar', temperature: 'Suhu', time: 'Jam', to_room: 'Ke Kamar', type: 'Jenis', unit: 'Satuan',
+  url: 'Tautan', username: 'Nama Pengguna', value: 'Nilai', number: 'Nomor', action: 'Aktivitas', module_name: 'Modul',
+  ip: 'Alamat IP', waktu: 'Waktu', aktivitas: 'Aktivitas', modul: 'Modul', nominal: 'Nominal', periode: 'Periode',
+  santri: 'Santri', jatuh_tempo: 'Jatuh Tempo', nomor_tagihan: 'Nomor Tagihan', graduation: 'Kelulusan',
 };
 
 function isVisibleTableColumn(key) {

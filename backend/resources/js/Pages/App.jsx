@@ -1,72 +1,110 @@
-import React, { Suspense, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, icons } from '../lib/deps.jsx';
 import { moduleMeta, panels, roleLabel, rowsOf, slug } from '../components/app/appSupport.jsx';
 import { PanelCard, useDialogLifecycle } from '../components/app/AppDialogs.jsx';
 import { CrudModule } from '../components/app/CrudModule.jsx';
 import { QrTool } from '../components/app/QrTool.jsx';
-import { Logo, SideItem } from '../components/app/Sidebar.jsx';
+import { DesktopSidebar, MobileSidebar } from '../components/app/Sidebar.jsx';
+import { ShellContext } from '../components/app/ShellContext.jsx';
+import CommandPalette from '../components/app/CommandPalette.jsx';
+import ShortcutsHelp from '../components/app/ShortcutsHelp.jsx';
+import ToastHost from '../components/app/ToastHost.jsx';
+import NavigationProgress from '../components/app/NavigationProgress.jsx';
+import { useTheme } from '../lib/theme.js';
 import { SystemModule } from '../components/app/SystemModule.jsx';
 import { Topbar } from '../components/app/Topbar.jsx';
 import { ActivityFeed, ChartCard, ChartLoading, DataPreview, Header, LegendList, ProgressList, QuickActions, StatCard, Table, activityHref } from '../components/app/Widgets.jsx';
 import { DashboardDonutVisualization, DashboardLineVisualization } from '../components/app/lazyCharts.jsx';
 import { dashboardPreview, roleActionMeta, roleModuleMeta, rolePrimaryRows, roleSummaryIcon, roleSummaryTone, tabbedModuleMeta } from '../components/app/moduleMeta.jsx';
 
+const SIDEBAR_KEY = 'pk-sidebar-collapsed';
+
+function readCollapsed() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function isTypingTarget(target) {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+}
+
 export default function App({ panel = 'super-admin', screen = 'dashboard', module, dashboard, shared, auth, app }) {
   const config = panels[panel] || panels['super-admin'];
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(readCollapsed);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  const [helpOpen, setHelpOpen] = useState(false);
   const mobileNavRef = useDialogLifecycle(() => setMobileNavOpen(false), mobileNavOpen);
+  const { toggle: toggleTheme } = useTheme();
+
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((current) => {
+      const next = !current;
+      try {
+        window.localStorage.setItem(SIDEBAR_KEY, next ? '1' : '0');
+      } catch {
+        // Preferensi sidebar bersifat opsional.
+      }
+      return next;
+    });
+  }, []);
+
+  const openPalette = useCallback(() => {
+    setHelpOpen(false);
+    setPaletteOpen(true);
+  }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+        return;
+      }
+      if (event.ctrlKey || event.metaKey || event.altKey || event.defaultPrevented || isTypingTarget(event.target)) return;
+      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return;
+      if (event.key === '/') {
+        event.preventDefault();
+        openPalette();
+      } else if (event.key === '?') {
+        event.preventDefault();
+        setHelpOpen(true);
+      } else if (event.key === '[') {
+        toggleCollapsed();
+      } else if (event.key.toLowerCase() === 't') {
+        toggleTheme();
+      }
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [openPalette, toggleCollapsed, toggleTheme]);
+
+  const shell = useMemo(() => ({ panel, auth, openPalette }), [panel, auth, openPalette]);
 
   return (
-    <div className="app-shell min-h-screen overflow-x-hidden text-neutral-900 selection:bg-primary-100 selection:text-primary-900">
-      <aside className={`app-sidebar ${collapsed ? 'w-20' : 'w-72'} fixed inset-y-0 left-0 z-30 hidden border-r transition-[width] duration-300 lg:block ${config.light ? 'app-sidebar-light border-neutral-200 bg-white text-neutral-900' : 'app-sidebar-dark border-white/10 text-white'}`}>
-        <div className="relative flex h-full flex-col p-3.5">
-          <div className="flex items-center gap-3 px-2 py-2">
-            <Logo />
-            {!collapsed && <div className="min-w-0"><div className="font-semibold">Pesantrenku</div><div className={`mt-0.5 text-[11px] font-medium uppercase ${config.light ? 'text-neutral-500' : 'text-white/60'}`}>{config.role}</div></div>}
-          </div>
-          <div className={`mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] ${collapsed ? 'sr-only' : config.light ? 'text-neutral-400' : 'text-white/45'}`}>Navigasi</div>
-          <nav aria-label="Navigasi utama" className="mt-3 flex-1 space-y-1 overflow-y-auto pr-1">
-            {config.menu.map(([label, icon, href]) => <SideItem key={label} label={label} icon={icon} href={label === 'Dashboard' ? `/dashboard/${panel}` : href} active={(screen === 'dashboard' && label === 'Dashboard') || href?.endsWith(`/module/${module}`) || module === slug(label)} light={config.light} collapsed={collapsed} />)}
-          </nav>
-          <button
-            type="button"
-            onClick={() => setCollapsed(!collapsed)}
-            aria-label={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
-            aria-expanded={!collapsed}
-            title={collapsed ? 'Perluas sidebar' : 'Ciutkan sidebar'}
-            className={`mt-3 inline-flex min-h-10 items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-primary-500/50 ${config.light ? 'bg-neutral-100 text-neutral-600 hover:bg-neutral-200' : 'bg-white/10 text-white/90 hover:bg-white/15'}`}
-          >
-            {collapsed ? <icons.ChevronRight className="h-4 w-4" /> : <span className="inline-flex items-center gap-2"><icons.ChevronLeft className="h-4 w-4" /> Ciutkan</span>}
-          </button>
-        </div>
-      </aside>
-      {mobileNavOpen && (
-        <div ref={mobileNavRef} className="fixed inset-0 z-40 lg:hidden" role="dialog" aria-modal="true" aria-label="Navigasi utama">
-          <button type="button" className="absolute inset-0 bg-neutral-950/45 backdrop-blur-[2px]" onClick={() => setMobileNavOpen(false)} aria-label="Tutup menu" tabIndex={-1} />
-          <aside className={`app-sidebar relative flex h-full w-80 max-w-[88vw] flex-col border-r p-4 shadow-2xl ${config.light ? 'app-sidebar-light border-neutral-200 bg-white text-neutral-900' : 'app-sidebar-dark border-white/10 text-white'}`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Logo />
-                <div><div className="font-semibold">Pesantrenku</div><div className={`mt-0.5 text-[11px] font-medium uppercase ${config.light ? 'text-neutral-500' : 'text-white/60'}`}>{config.role}</div></div>
-              </div>
-              <button type="button" onClick={() => setMobileNavOpen(false)} className={`rounded-lg p-2 ${config.light ? 'hover:bg-neutral-100' : 'hover:bg-white/10'}`} aria-label="Tutup menu" data-dialog-initial-focus><icons.X className="h-5 w-5" /></button>
-            </div>
-            <div className={`mt-7 px-3 text-[10px] font-semibold uppercase tracking-[0.16em] ${config.light ? 'text-neutral-400' : 'text-white/45'}`}>Navigasi</div>
-            <nav aria-label="Navigasi utama" className="mt-3 flex-1 space-y-1 overflow-y-auto">
-              {config.menu.map(([label, icon, href]) => <SideItem key={label} label={label} icon={icon} href={label === 'Dashboard' ? `/dashboard/${panel}` : href} active={(screen === 'dashboard' && label === 'Dashboard') || href?.endsWith(`/module/${module}`) || module === slug(label)} light={config.light} onClick={() => setMobileNavOpen(false)} />)}
-            </nav>
-          </aside>
-        </div>
-      )}
+    <ShellContext.Provider value={shell}>
+      <div className="app-shell min-h-screen overflow-x-hidden text-neutral-900 selection:bg-primary-100 selection:text-primary-900">
+        <a href="#konten-utama" className="pk-skip-link">Lewati ke konten utama</a>
+        <NavigationProgress />
+        <DesktopSidebar panel={panel} config={config} screen={screen} module={module} auth={auth} collapsed={collapsed} onToggle={toggleCollapsed} />
+        {mobileNavOpen && <MobileSidebar dialogRef={mobileNavRef} panel={panel} config={config} screen={screen} module={module} auth={auth} onClose={() => setMobileNavOpen(false)} />}
 
-      <main className={`workspace-main ${collapsed ? 'lg:pl-20' : 'lg:pl-72'} relative min-w-0 transition-[padding] duration-300`}>
-        <Topbar panel={panel} auth={auth} shared={shared} app={app} onMenuOpen={() => setMobileNavOpen(true)} />
-        <div className="workspace-content relative mx-auto max-w-[1800px] p-3.5 sm:p-5 lg:p-6">
-          {screen === 'dashboard' ? <Dashboard dashboard={dashboard} shared={shared} panel={panel} /> : <ModulePage panel={panel} module={module} shared={shared} dashboard={dashboard} />}
-        </div>
-      </main>
-    </div>
+        <main id="konten-utama" tabIndex={-1} className={`workspace-main ${collapsed ? 'lg:pl-20' : 'lg:pl-72'} relative min-w-0 transition-[padding] duration-300 focus:outline-none`}>
+          <Topbar panel={panel} auth={auth} shared={shared} app={app} onMenuOpen={() => setMobileNavOpen(true)} />
+          <div key={`${screen}:${module || ''}`} className="workspace-content relative mx-auto max-w-[1800px] p-3.5 sm:p-5 lg:p-6">
+            {screen === 'dashboard' ? <Dashboard dashboard={dashboard} shared={shared} panel={panel} /> : <ModulePage panel={panel} module={module} shared={shared} dashboard={dashboard} />}
+          </div>
+        </main>
+
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} panel={panel} auth={auth} />
+        <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+        <ToastHost />
+      </div>
+    </ShellContext.Provider>
   );
 }
 

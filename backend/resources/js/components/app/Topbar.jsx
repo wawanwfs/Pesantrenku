@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, router, icons } from '../../lib/deps.jsx';
 import { ThemeSegmented, ThemeToggleButton } from '../ThemeToggle.jsx';
+import { toast } from './toast.js';
 import { apiJson, panels, roleLabel, rowsOf, titleFromSlug } from './appSupport.jsx';
 
 export function Topbar({ panel, auth, shared, app, onMenuOpen }) {
@@ -14,6 +15,7 @@ export function Topbar({ panel, auth, shared, app, onMenuOpen }) {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [notificationState, setNotificationState] = useState({ data: rowsOf(shared?.notifications), unread: rowsOf(shared?.notifications).length });
   const [notificationAction, setNotificationAction] = useState({ loading: false, error: '' });
+  const lastUnread = useRef(null);
   const [accountOpen, setAccountOpen] = useState(false);
   const academicYear = app?.academic_year || 'Tahun ajaran belum diatur';
   const topbarRef = useRef(null);
@@ -69,10 +71,21 @@ export function Topbar({ panel, auth, shared, app, onMenuOpen }) {
     let mounted = true;
     let source = null;
     let unsubscribeRealtime = () => {};
+    const applyNotifications = (json) => {
+      if (!mounted) return;
+      const unread = json.unread ?? 0;
+      // Toast hanya untuk kenaikan setelah muatan awal, dan tanpa mengulang judul agar daftar tetap satu-satunya sumber isi.
+      if (lastUnread.current !== null && unread > lastUnread.current) {
+        const added = unread - lastUnread.current;
+        toast.info(added === 1 ? 'Ada 1 notifikasi baru.' : `Ada ${added} notifikasi baru.`, { title: 'Notifikasi' });
+      }
+      lastUnread.current = unread;
+      setNotificationState({ data: rowsOf(json.data), unread });
+    };
     const poll = async () => {
       try {
         const json = await apiJson('/web-actions/notifications', { method: 'GET' });
-        if (mounted) setNotificationState({ data: rowsOf(json.data), unread: json.unread ?? 0 });
+        applyNotifications(json);
       } catch {
         // Header polling is best-effort; page actions still surface request errors inline.
       }
@@ -82,8 +95,7 @@ export function Topbar({ panel, auth, shared, app, onMenuOpen }) {
       source = new EventSource('/web-actions/notifications/stream');
       source.addEventListener('notifications', (event) => {
         try {
-          const json = JSON.parse(event.data || '{}');
-          if (mounted) setNotificationState({ data: rowsOf(json.data), unread: json.unread ?? 0 });
+          applyNotifications(JSON.parse(event.data || '{}'));
         } catch {
           // Bad stream payload should not disable the polling fallback.
         }
@@ -151,6 +163,7 @@ export function Topbar({ panel, auth, shared, app, onMenuOpen }) {
         body: JSON.stringify({ ids: notifications.map((item) => item.id).filter(Boolean) }),
       });
       const fresh = await apiJson('/web-actions/notifications', { method: 'GET' });
+      lastUnread.current = fresh.unread ?? 0;
       setNotificationState({ data: rowsOf(fresh.data), unread: fresh.unread ?? 0 });
       setNotificationsOpen(false);
     } catch (error) {
@@ -164,7 +177,7 @@ export function Topbar({ panel, auth, shared, app, onMenuOpen }) {
     <header ref={topbarRef} className="app-topbar sticky top-0 z-10 border-b border-neutral-200 bg-white/95 px-3.5 py-2.5 backdrop-blur-lg sm:px-5 lg:px-6">
       <div className="flex items-center gap-2.5 sm:gap-4">
         <button type="button" onClick={onMenuOpen} className="icon-button lg:hidden" aria-label="Buka menu"><icons.Menu className="h-5 w-5" /></button>
-        <form onSubmit={submitSearch} className="relative flex-1">
+        <form onSubmit={submitSearch} className="relative max-w-xl flex-1">
           <icons.Search className="absolute left-3 top-3 h-4 w-4 text-neutral-400" />
           <input
             aria-label="Cari menu, modul, dan laporan"
@@ -177,6 +190,7 @@ export function Topbar({ panel, auth, shared, app, onMenuOpen }) {
             className="topbar-search w-full max-w-xl rounded-lg border border-neutral-200 bg-neutral-50 py-2.5 pl-10 pr-10 text-sm outline-none transition placeholder:text-neutral-400 focus:border-primary-500 focus:bg-white focus:ring-3 focus:ring-primary-100/70"
             placeholder="Cari menu, modul, laporan..."
           />
+          {!searchTerm && <kbd className="pk-kbd topbar-search-hint" aria-hidden="true">Ctrl K</kbd>}
           {searchTerm && <button type="button" onClick={() => setSearchTerm('')} className="absolute right-3 top-2.5 rounded-lg p-1 text-neutral-400 transition hover:bg-neutral-100 hover:text-neutral-700 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Bersihkan pencarian"><icons.X className="h-4 w-4" /></button>}
           {searchOpen && searchTerm && (
             <div className="floating-menu absolute left-0 top-12 z-30 w-full max-w-xl overflow-hidden border border-neutral-200 bg-white p-1.5 shadow-xl">
@@ -223,9 +237,14 @@ export function Topbar({ panel, auth, shared, app, onMenuOpen }) {
               {notificationAction.error && <div role="alert" className="mx-2 mt-2 rounded-md bg-red-50 px-3 py-2 text-xs font-medium text-red-700">{notificationAction.error}</div>}
               <div className="max-h-80 overflow-y-auto">
                 {notifications.length > 0 ? notifications.map((item) => (
-                  <div key={item.id || item.title} className="mx-1 border-b border-neutral-100 px-3 py-3 text-sm last:border-0">
-                    <div className="font-medium">{item.title}</div>
-                    <div className="mt-1 text-xs text-neutral-500">{item.body || item.description || 'Notifikasi sistem'}</div>
+                  <div key={item.id || item.title} className={`notification-item mx-1 flex gap-3 border-b border-neutral-100 px-3 py-3 text-sm last:border-0 ${item.read_at ? '' : 'is-unread'}`}>
+                    <span className={`notification-icon notification-icon-${item.type || 'info'} mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md`} aria-hidden="true">
+                      {(() => { const TypeIcon = item.type === 'warning' ? icons.TriangleAlert : item.type === 'success' ? icons.CircleCheck : icons.Bell; return <TypeIcon className="h-3.5 w-3.5" />; })()}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="font-medium">{item.title}</div>
+                      <div className="mt-1 text-xs text-neutral-500">{item.body || item.description || 'Notifikasi sistem'}</div>
+                    </div>
                   </div>
                 )) : <div className="px-4 py-6 text-center text-sm text-neutral-500">Belum ada notifikasi.</div>}
               </div>
