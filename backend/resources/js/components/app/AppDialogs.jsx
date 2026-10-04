@@ -97,11 +97,30 @@ function columnTitle(key) {
   return titleFromSlug(key.endsWith('_id') ? key.slice(0, -3) : key);
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+const DATE_TIME = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}/;
+const dateOnlyFormat = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeZone: 'UTC' });
+const dateTimeFormat = new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' });
+
+/** Tanggal ISO di sel tabel dibaca manusia ("10 Jan 2012"); nilai asli tetap di atribut dateTime. */
+function renderDateCell(value) {
+  const text = String(value);
+  const isDateOnly = DATE_ONLY.test(text);
+  if (!isDateOnly && !DATE_TIME.test(text)) return null;
+  const parsed = new Date(isDateOnly ? `${text}T00:00:00Z` : text.replace(' ', 'T'));
+  if (Number.isNaN(parsed.getTime())) return null;
+  return <time dateTime={text} className="whitespace-nowrap">{(isDateOnly ? dateOnlyFormat : dateTimeFormat).format(parsed)}</time>;
+}
+
 function renderCell(key, value, row = {}, shared = {}, field) {
   const displayValue = displayCellValue(key, value, row, shared, field);
   if (key === 'status' || key === 'level') return <Badge label={String(displayValue || 'Aktif')} />;
   if (typeof displayValue === 'boolean') return displayValue ? 'Ya' : 'Tidak';
   if (typeof displayValue === 'number' && (key.includes('amount') || key.includes('balance') || key.includes('price') || key.includes('nominal'))) return rupiah(displayValue);
+  if (typeof displayValue === 'string') {
+    const dateCell = renderDateCell(displayValue);
+    if (dateCell) return dateCell;
+  }
   return String(displayValue ?? '-');
 }
 

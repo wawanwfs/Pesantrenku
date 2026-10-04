@@ -1024,3 +1024,17 @@
 }
 .pk-colpicker-reset:disabled { color: var(--color-neutral-400); cursor: default; }
 @media print { .pk-colpicker { display: none; } }
+
+/* Sel tabel tidak boleh menyusut sampai teks terpotong per huruf pada layar sempit. */
+.data-table td:not(.table-actions):not(:has(> input[type='checkbox'])) { min-width: 5rem; }
+@media (max-width: 639px) {
+  .data-table td:not(.table-actions):not(:has(> input[type='checkbox'])) { min-width: 8rem; }
+}
+.data-table td:has(> time) { white-space: nowrap; }
+
+/* Filter pada layar sempit: tanggal berdampingan agar bar perintah tidak memanjang. */
+@media (max-width: 639px) {
+  .crud-command-bar .filter-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .crud-command-bar .filter-grid > * { grid-column: span 2; }
+  .crud-command-bar .filter-grid > label:has(input[type='date']) { grid-column: span 1; }
+}
