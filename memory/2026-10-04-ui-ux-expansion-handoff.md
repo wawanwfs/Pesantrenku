@@ -34,6 +34,7 @@ mobile Flutter (tema gelap/animasi), dan satu perbaikan backend kecil (SQL tahun
 | Login | token `--lg-*`, dark, Caps Lock, gerak masuk, getar saat gagal | `Pages/Login.jsx`, `css/login.css` |
 | Landing | progres scroll, dock, filter peran, alur aktif, tombol ke atas, dark | `Pages/Landing.jsx`, `css/landing-extras.css` |
 | Cetak | sembunyikan chrome, tabel penuh, tema terang otomatis | `css/shell.css`, `lib/theme.js` |
+| Tabel | pemilih kolom tersimpan, caption/scope/aria-rowcount, label aksi per baris, tanggal id-ID | `Widgets.jsx`, `AppDialogs.jsx`, `css/shell.css` |
 | Tes | tema, palet, pintasan, reduced motion, ketahanan chunk, landing | `tests/e2e/ux-shell.spec.js` |
 | Dokumen | sistem desain; backlog diperbarui | `docs/ui/design-system.md`, `docs/backlog/improvement-backlog.md` |
 | Alat | server preview Inertia tiruan, screenshot, crawl | `backend/scripts/ui-preview/` |
@@ -67,7 +68,7 @@ mobile Flutter (tema gelap/animasi), dan satu perbaikan backend kecil (SQL tahun
 ## Belum dikerjakan / saran lanjutan
 
 1. Jalankan `php artisan test` dan `npm run test:e2e` pada PHP 8.4 + MySQL asli sebelum menyebut perubahan
-   ini terverifikasi penuh (19 tes ux-shell sudah lulus dengan login nyata di php-wasm/SQLite; `pesantrenku.spec.js` belum dijalankan).
+   ini terverifikasi penuh (19 tes ux-shell sudah lulus dengan login nyata di php-wasm/SQLite; `pesantrenku.spec.js` TIDAK layak di php-wasm: tiap halaman ~27 dtk sehingga `page.goto` melewati batas 45 dtk; bukan kegagalan produk).
 2. ~~Audit kontras otomatis~~ Selesai: `scripts/ui-preview/a11y-audit.mjs` (axe-core) 0 temuan pada 90 halaman/keadaan; ulangi terhadap backend sungguhan.
 3. Mobile: tema gelap (`ThemeController`), skeleton, FadeSlideIn, pencarian menu, haptics sudah ada;
    belum diuji di perangkat/emulator (hanya `flutter test`/`analyze`).
