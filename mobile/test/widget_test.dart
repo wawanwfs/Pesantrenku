@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:pesantenku_mobile/core/network/api_client.dart';
+import 'package:pesantenku_mobile/features/dashboard/mobile_shell.dart';
 import 'package:pesantenku_mobile/main.dart';
 
 class FakeApiClient extends ApiClient {
@@ -54,6 +55,11 @@ class FakeApiClient extends ApiClient {
 
   @override
   Future<List<Map<String, dynamic>>> resource(String resource, {int limit = 30}) async => const [];
+
+  // MobileShell membangun semua tab (IndexedStack); tanpa override ini tab Notifikasi memanggil
+  // jaringan nyata dan spinner-nya membuat pumpAndSettle tidak pernah selesai.
+  @override
+  Future<List<Map<String, dynamic>>> notifications() async => const [];
 }
 
 SessionData testSession(int tenantId) => SessionData(

@@ -215,7 +215,7 @@ class _ModulesPage extends StatelessWidget {
           : ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: modules.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (_, i) => Card(
                 child: ListTile(
                   leading: Icon(_moduleIcon(modules[i].resource), color: AppColors.primary600),
@@ -268,7 +268,7 @@ class _ResourceScreenState extends State<ResourceScreen> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: items.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (_, i) {
                 final item = items[i];
                 final title = _firstValue(item, const ['name', 'title', 'invoice_number', 'number', 'nis', 'complaint', 'queue_number']) ?? 'Data #${item['id'] ?? i + 1}';
@@ -544,7 +544,7 @@ class _NotificationsPageState extends State<NotificationsPage> {
             child: ListView.separated(
               padding: const EdgeInsets.all(16),
               itemCount: rows.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 10),
+              separatorBuilder: (_, _) => const SizedBox(height: 10),
               itemBuilder: (_, i) => Card(
                 child: ListTile(
                   leading: const Icon(Icons.notifications_outlined, color: AppColors.primary600),
@@ -625,7 +625,8 @@ class _AccountPageState extends State<AccountPage> {
             const Text('Pesantren Aktif', style: TextStyle(fontWeight: FontWeight.w800)),
             const SizedBox(height: 8),
             DropdownButtonFormField<int>(
-              value: activeId,
+              key: ValueKey(activeId),
+              initialValue: activeId,
               decoration: const InputDecoration(border: OutlineInputBorder()),
               items: widget.session.memberships.map((membership) {
                 final id = (membership['id'] as num).toInt();
