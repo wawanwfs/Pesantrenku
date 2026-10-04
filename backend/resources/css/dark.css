@@ -382,3 +382,81 @@
 [data-theme='dark'] .native-chart circle[stroke='#FFFFFF'] {
     stroke: var(--surface);
 }
+
+/* Cetak selalu terang: kembalikan skala warna meski <html data-theme="dark"> (mis. emulasi print tanpa beforeprint). */
+@media print {
+    html[data-theme='dark'] {
+        color-scheme: light;
+        --surface: #FFFFFF;
+        --surface-muted: #F6F8FA;
+        --border: #DDE4EA;
+        --ink: #172033;
+        --muted: #566579;
+        --page-bg: #FFFFFF;
+        --action: var(--color-primary-600);
+        --color-neutral-50: #F8FAFC;
+        --color-neutral-100: #F1F5F9;
+        --color-neutral-200: #E2E8F0;
+        --color-neutral-300: #CBD5E1;
+        --color-neutral-400: #94A3B8;
+        --color-neutral-500: #5A6A7E;
+        --color-neutral-600: #475569;
+        --color-neutral-700: #334155;
+        --color-neutral-800: #1E293B;
+        --color-neutral-900: #0F172A;
+        --color-gray-100: #f3f4f6;
+        --color-gray-200: #e5e7eb;
+        --color-primary-50: #E8F5EF;
+        --color-primary-100: #CDEBDD;
+        --color-primary-200: #A7D7C2;
+        --color-primary-300: #6FC29B;
+        --color-primary-500: #17875B;
+        --color-primary-700: #0D593E;
+        --color-primary-800: #0B4935;
+        --color-primary-900: #073A2B;
+        --color-red-50: #fef2f2;
+        --color-red-100: #ffe2e2;
+        --color-red-200: #ffc9c9;
+        --color-red-300: #ffa2a2;
+        --color-red-700: #c10007;
+        --color-red-900: #82181a;
+        --color-green-50: #f0fdf4;
+        --color-green-200: #b9f8cf;
+        --color-green-700: #008236;
+        --color-amber-50: #fffbeb;
+        --color-amber-200: #fee685;
+        --color-amber-300: #ffd230;
+        --color-amber-700: #b75000;
+        --color-amber-800: #953d00;
+        --color-blue-50: #eff6ff;
+        --color-blue-700: #1447e6;
+        --color-sky-50: #f0f9ff;
+        --color-sky-100: #dff2fe;
+        --color-sky-700: #0069a8;
+        --color-purple-50: #faf5ff;
+        --color-purple-700: #8200db;
+    }
+
+    html[data-theme='dark'] .bg-white,
+    html[data-theme='dark'] .bg-white\/95 {
+        background-color: #FFFFFF;
+    }
+
+    html[data-theme='dark'] .data-table td,
+    html[data-theme='dark'] .data-table th,
+    html[data-theme='dark'] .data-table-wrap {
+        background: transparent !important;
+    }
+
+    html[data-theme='dark'] .surface-panel,
+    html[data-theme='dark'] .stat-card {
+        background: #FFFFFF;
+    }
+
+    .crud-command-bar,
+    .pk-density,
+    .pk-greeting,
+    .pk-offline {
+        display: none !important;
+    }
+}
