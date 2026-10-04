@@ -590,3 +590,141 @@ td.sticky.right-0 > div {
         animation-iteration-count: 1 !important;
     }
 }
+
+/* Interaksi bagan native (hover/fokus, legenda, animasi masuk) */
+
+.native-chart-interactive {
+    touch-action: pan-y;
+    cursor: crosshair;
+}
+
+.native-chart-interactive:focus-visible {
+    outline: 2px solid var(--action);
+    outline-offset: 2px;
+    border-radius: 8px;
+}
+
+.native-chart-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    min-height: 1.75rem;
+    padding: 0 0.5rem;
+    border-radius: 6px;
+    color: inherit;
+    transition: opacity 160ms ease, background-color 160ms ease;
+}
+
+.native-chart-legend-item:hover {
+    background: var(--surface-muted);
+}
+
+.native-chart-legend-item.is-off {
+    opacity: 0.45;
+    text-decoration: line-through;
+}
+
+.native-chart-axis-label.is-active {
+    fill: var(--ink);
+    font-weight: 600;
+}
+
+.native-chart-crosshair {
+    stroke: var(--muted);
+    stroke-dasharray: 3 3;
+    stroke-width: 1;
+    opacity: 0.6;
+}
+
+.native-chart-point {
+    transition: r 120ms ease;
+}
+
+.native-chart-bar {
+    transition: filter 140ms ease, opacity 140ms ease;
+}
+
+.native-chart-bar.is-active {
+    filter: brightness(1.12) saturate(1.1);
+}
+
+.native-chart-interactive:has(.native-chart-bar.is-active) .native-chart-bar:not(.is-active) {
+    opacity: 0.55;
+}
+
+.native-donut-segment {
+    cursor: pointer;
+    transition: stroke-width 160ms ease, opacity 160ms ease;
+}
+
+.native-donut-segment.is-dim {
+    opacity: 0.45;
+}
+
+.native-chart-tip-box {
+    fill: var(--surface);
+    stroke: var(--border);
+    filter: drop-shadow(0 6px 14px rgba(15, 23, 42, 0.18));
+}
+
+.native-chart-tip-title {
+    fill: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 11px;
+    font-weight: 600;
+}
+
+.native-chart-tip-text {
+    fill: var(--muted);
+    font-family: var(--font-sans);
+    font-size: 11px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .native-chart .native-chart-line {
+        stroke-dasharray: 1;
+        animation: pk-line-draw 1100ms var(--pk-ease-out) both;
+    }
+
+    .native-chart .native-chart-area {
+        animation: pk-fade-in 900ms ease 300ms both;
+    }
+
+    .native-chart .native-chart-point {
+        animation: pk-fade-in 400ms ease 700ms both;
+    }
+
+    .native-chart .native-chart-bar {
+        transform-box: fill-box;
+        transform-origin: bottom;
+        animation: pk-bar-rise 700ms var(--pk-ease-out) both;
+    }
+
+    .native-chart .native-donut-sweep {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation: pk-donut-sweep 900ms var(--pk-ease-out) both;
+    }
+}
+
+@keyframes pk-line-draw {
+    from { stroke-dashoffset: 1; }
+    to { stroke-dashoffset: 0; }
+}
+
+@keyframes pk-bar-rise {
+    from { transform: scaleY(0); }
+    to { transform: scaleY(1); }
+}
+
+@keyframes pk-donut-sweep {
+    from {
+        opacity: 0;
+        transform: rotate(-70deg) scale(0.92);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}

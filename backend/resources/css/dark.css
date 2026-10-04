@@ -373,3 +373,12 @@
 [data-theme='dark'] .data-table tbody tr:hover td.table-actions {
     background: #12302A;
 }
+
+[data-theme='dark'] .native-chart-tip-box {
+    filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5));
+}
+
+[data-theme='dark'] .native-chart-point,
+[data-theme='dark'] .native-chart circle[stroke='#FFFFFF'] {
+    stroke: var(--surface);
+}
