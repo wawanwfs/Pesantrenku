@@ -5,6 +5,8 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <meta name="csrf-token" content="{{ csrf_token() }}">
         <meta name="color-scheme" content="light dark">
+        <meta name="theme-color" content="#126D4A" media="(prefers-color-scheme: light)">
+        <meta name="theme-color" content="#0A0F16" media="(prefers-color-scheme: dark)">
         <title inertia>Pesantrenku</title>
         <script src="/theme-init.js"></script>
         @viteReactRefresh
@@ -12,6 +14,7 @@
         @inertiaHead
     </head>
     <body class="font-sans antialiased">
+        <noscript>Pesantrenku membutuhkan JavaScript. Aktifkan JavaScript di peramban Anda untuk melanjutkan.</noscript>
         @inertia
     </body>
 </html>

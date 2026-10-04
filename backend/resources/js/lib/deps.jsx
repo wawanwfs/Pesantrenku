@@ -1,4 +1,4 @@
-import { Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import {
   Activity,
   BadgeCheck,
@@ -117,4 +117,4 @@ export const icons = {
   Upload,
 };
 
-export { Link, router, useForm };
+export { Head, Link, router, useForm };

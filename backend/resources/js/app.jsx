@@ -14,6 +14,7 @@ const pages = {
 
 createInertiaApp({
   resolve: async (name) => (await pages[name]()).default,
+  title: (title) => (title ? `${title} · Pesantrenku` : 'Pesantrenku'),
   progress: false,
   setup({ el, App, props }) {
     createRoot(el).render(<App {...props} />);

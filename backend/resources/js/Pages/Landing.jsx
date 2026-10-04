@@ -23,6 +23,7 @@ import {
   WalletCards,
   X,
 } from 'lucide-react';
+import { Head } from '@inertiajs/react';
 import { ThemeToggleButton } from '../components/ThemeToggle.jsx';
 import '../../css/landing.css';
 import '../../css/landing-extras.css';
@@ -211,6 +212,10 @@ export default function Landing({ auth }) {
 
   return (
     <main className="landing-shell">
+      <Head>
+        <title>Sistem manajemen pesantren</title>
+        <meta name="description" content="Pesantrenku menyatukan akademik, keuangan, asrama, kesehatan, dan komunikasi wali dalam satu ruang kerja berbasis peran." />
+      </Head>
       <div className="landing-progress" aria-hidden="true"><span /></div>
       <div className="landing-noise" aria-hidden="true" />
       <header className="landing-header">

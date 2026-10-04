@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { EyeOff } from 'lucide-react';
-import { router, useForm, icons } from '../lib/deps.jsx';
+import { Head, router, useForm, icons } from '../lib/deps.jsx';
 import { ThemeToggleButton } from '../components/ThemeToggle.jsx';
 import '../../css/login.css';
 
@@ -58,6 +58,7 @@ export default function Login({ auth, app }) {
 
   return (
     <main className="login-shell relative overflow-x-hidden">
+      <Head title="Masuk" />
       <div className="login-backdrop" aria-hidden="true">
         <div className="login-stripe"><span /><span /><span /></div>
       </div>

@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
-import { Link, icons } from '../lib/deps.jsx';
-import { moduleMeta, panels, roleLabel, rowsOf, slug } from '../components/app/appSupport.jsx';
+import { Head, Link, icons } from '../lib/deps.jsx';
+import { moduleMeta, panels, roleLabel, rowsOf, slug, titleFromSlug } from '../components/app/appSupport.jsx';
 import { PanelCard, useDialogLifecycle } from '../components/app/AppDialogs.jsx';
 import { CrudModule } from '../components/app/CrudModule.jsx';
 import { QrTool } from '../components/app/QrTool.jsx';
@@ -102,11 +102,14 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
     return () => window.clearTimeout(timer);
   }, [panel]);
 
+  const pageTitle = `${screen === 'dashboard' ? 'Dashboard' : titleFromSlug(module || '')} · ${roleLabel(panel)}`;
+
   const shell = useMemo(() => ({ panel, auth, app, openPalette, openGuide }), [panel, auth, app, openPalette, openGuide]);
 
   return (
     <ShellContext.Provider value={shell}>
       <div className="app-shell min-h-screen overflow-x-hidden text-neutral-900 selection:bg-primary-100 selection:text-primary-900">
+        <Head title={pageTitle} />
         <a href="#konten-utama" className="pk-skip-link">Lewati ke konten utama</a>
         <NavigationProgress />
         <DesktopSidebar panel={panel} config={config} screen={screen} module={module} auth={auth} collapsed={collapsed} onToggle={toggleCollapsed} />
