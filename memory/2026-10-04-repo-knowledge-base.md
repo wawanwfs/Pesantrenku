@@ -33,7 +33,7 @@ backend/app/Support            ResourceCatalog, DashboardModuleRegistry, Privile
 backend/app/Jobs               ProcessResourceImportJob, BuildResourceExportJob, Create/RestoreTenantBackupJob, CanaryRoundTripJob
 backend/routes                 web.php (panel + web-actions + web-api), api.php (/api/v1 untuk mobile), console.php (scheduler)
 backend/resources/js           app.jsx (entry Inertia), Pages/{App,Landing,Login}.jsx, components/*, lib/*
-backend/resources/css          app.css (token+shell), motion.css, ui-kit.css, landing*.css, dark.css (baru)
+backend/resources/css          app.css (token+shell), motion.css, ui-kit.css, landing*.css, dark.css, shell.css, login.css, landing-extras.css (sesi 2026-10-04)
 backend/tests                  Feature/Unit/Integration (PHPUnit), e2e (Playwright, butuh server+DB)
 backend/scripts                lint CSP, anggaran performa, OpenAPI, hardening, e2e prep
 docs/                          architecture, openapi.yaml, production-deployment, disaster-recovery, backlog (232 butir)
@@ -113,7 +113,7 @@ tabel, batas 25.000 baris/50 MB. Scheduler memulihkan job yang kehilangan heartb
 ## 7. Frontend web (yang paling sering diubah)
 
 - Entry `resources/js/app.jsx`: `createInertiaApp` dengan tiga halaman lazy: `App`, `Landing`, `Login`.
-- `Pages/App.jsx` (~1.7k baris) memuat seluruh shell: sidebar role-based (`panels` di
+- `Pages/App.jsx` (263 baris sejak 2026-10-04) kini hanya merakit shell; isinya dipecah ke `components/app/`. Sebelumnya (~1.7k baris) memuat seluruh shell: sidebar role-based (`panels` di
   `components/app/appSupport.jsx`), `Topbar` (pencarian menu, switcher tenant, notifikasi, akun),
   `Dashboard`/`RoleDashboard`, `CrudModule` (tabel+filter+import/export+modal), `SystemModule`,
   `QrTool`. Dialog dan modal besar ada di `components/app/AppDialogs.jsx`.
@@ -123,6 +123,7 @@ tabel, batas 25.000 baris/50 MB. Scheduler memulihkan job yang kehilangan heartb
   untuk komponen shell, `motion.css` (reveal, hover, dialog, skeleton), `ui-kit.css`
   (`pk-badge`, `pk-meter`, `pk-track`, `pk-figure`), `landing*.css`.
 - Merek: primary `#126D4A`; font Poppins (`--font-sans`); radius 8px.
+- Sistem desain lengkap (token, tema gelap, gerak, komponen, jebakan CSS): `docs/ui/design-system.md`.
 
 ### Kendala keras (dijaga gate; jangan dilanggar)
 

@@ -202,7 +202,7 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 
 ## 11. Frontend web: arsitektur dan performa
 
-143. **[V][P0]** Pecah `App.jsx`, 101 KB. Ini satu berkas untuk seluruh aplikasi.
+143. **[V][P0]** ~~Pecah `App.jsx`, 101 KB. Ini satu berkas untuk seluruh aplikasi.~~ Selesai 2026-10-04: `Pages/App.jsx` 1.738 → 263 baris; Topbar, Sidebar, Widgets, CrudModule, SystemModule, QrTool, moduleMeta dipindah ke `components/app/`. Bundel App tidak berubah (174,8 kB). Diverifikasi build + eslint no-undef + crawl 148 halaman pada server preview.
 144. **[V][P1]** Pisah kode per rute agar dasbor tidak memuat seluruh aplikasi.
 145. **[V][P1]** Muat ikon lucide secara selektif; impor besar mahal.
 146. **[?][P1]** Audit ukuran bundel per rute terhadap anggaran 550 KB JS.
@@ -212,8 +212,8 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 150. **[V][P2]** Runtime Three.js hanya dimuat setelah cat pertama; pastikan juga tidak dimuat di perangkat hemat data.
 151. **[N][P2]** Hormati `prefers-reduced-data` untuk adegan 3D.
 152. **[N][P2]** Virtualisasi tabel panjang di dasbor.
-153. **[N][P2]** Status memuat berbasis kerangka, bukan pemintal kosong.
-154. **[N][P2]** Penanganan galat per komponen dengan error boundary.
+153. **[N][P2]** ~~Status memuat berbasis kerangka, bukan pemintal kosong.~~ Selesai sebagian 2026-10-04: skeleton untuk bagan (`ChartLoading`) dan tabel (`TableSkeleton`). Pemintal masih dipakai pada tombol/aksi.
+154. **[N][P2]** ~~Penanganan galat per komponen dengan error boundary.~~ Selesai 2026-10-04: `ErrorBoundary` membungkus konten halaman dan tiap bagan; ada tes e2e pemutusan chunk.
 155. **[N][P3]** Dukungan luring dasar untuk data yang sering dibaca.
 156. **[N][P3]** Service worker untuk aset statis.
 157. **[V][P2]** Konsolidasikan tiga berkas CSS motion menjadi satu sistem yang terdokumentasi.
@@ -221,20 +221,20 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 
 ## 12. UI/UX dan sistem desain
 
-159. **[V][P1]** Mode gelap; sudah dua kali ditunda dan token prototipe sudah tersedia.
+159. **[V][P1]** ~~Mode gelap; sudah dua kali ditunda dan token prototipe sudah tersedia.~~ Selesai 2026-10-04: `dark.css`, `public/theme-init.js`, `ThemeToggle`, login dan landing berpalet gelap. Audit kontras otomatis (axe) belum dijalankan.
 160. **[V][P2]** Terapkan primitif `ui-kit.css` ke dasbor; kini baru tersedia, belum dipakai luas.
-161. **[N][P2]** Dokumentasikan sistem desain: token, jarak, radius, bayangan, dalam satu halaman hidup.
-162. **[N][P2]** Keadaan kosong yang membimbing, bukan sekadar tulisan tidak ada data.
+161. **[N][P2]** ~~Dokumentasikan sistem desain: token, jarak, radius, bayangan, dalam satu halaman hidup.~~ Selesai 2026-10-04: `docs/ui/design-system.md`.
+162. **[N][P2]** ~~Keadaan kosong yang membimbing, bukan sekadar tulisan tidak ada data.~~ Selesai 2026-10-04 untuk modul CRUD: keadaan kosong menawarkan "Atur ulang filter" atau "Tambah data".
 163. **[N][P2]** Keadaan galat yang menawarkan tindakan, bukan kode status.
 164. **[N][P2]** Konfirmasi destruktif yang menyebutkan dampak, misalnya jumlah baris terhapus.
 165. **[N][P2]** Umpan balik optimistis untuk aksi cepat.
 166. **[N][P2]** Pola pencarian global lintas modul.
-167. **[N][P3]** Palet perintah untuk pengguna mahir.
-168. **[N][P2]** Pintasan papan tik untuk aksi yang sering.
+167. **[N][P3]** ~~Palet perintah untuk pengguna mahir.~~ Selesai 2026-10-04: `CommandPalette` (Ctrl/Cmd+K).
+168. **[N][P2]** ~~Pintasan papan tik untuk aksi yang sering.~~ Selesai 2026-10-04: `/`, `[`, `T`, `?`, `Esc`; tidak aktif saat mengetik.
 169. **[N][P2]** Onboarding untuk pesantren baru: langkah pertama yang jelas setelah login.
 170. **[N][P2]** Tur singkat per peran saat pertama masuk.
-171. **[V][P2]** Landing: tambahkan indikator progres scroll; butuh satu elemen baru di JSX.
-172. **[V][P2]** Landing: transisi antar section saat ini seragam; beri satu momen puncak agar tidak monoton.
+171. **[V][P2]** ~~Landing: tambahkan indikator progres scroll; butuh satu elemen baru di JSX.~~ Selesai 2026-10-04: `.landing-progress` memakai `animation-timeline: scroll(root)` (tanpa JS; tersembunyi di peramban tanpa dukungan).
+172. **[V][P2]** ~~Landing: transisi antar section saat ini seragam; beri satu momen puncak agar tidak monoton.~~ Selesai 2026-10-04: dock navigasi muncul setelah hero, bar konsol alur kerja tumbuh saat terlihat, langkah alur yang sedang dibaca disorot.
 173. **[N][P3]** Landing: dukungan Firefox lewat fallback IntersectionObserver, jika angka pengunjungnya besar.
 174. **[N][P2]** Konsistensi mikrokopi Indonesia: satu daftar istilah untuk santri, wali, musyrif, dan seterusnya.
 175. **[N][P3]** Cetak yang rapi untuk rapor, kuitansi, dan surat.
@@ -251,7 +251,7 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 183. **[N][P2]** Target sentuh minimum 44 piksel di seluruh aplikasi.
 184. **[N][P2]** Jangan sampaikan makna hanya lewat warna, terutama pada status.
 185. **[N][P2]** Uji dengan pembaca layar berbahasa Indonesia.
-186. **[V][P2]** Pastikan animasi baru benar-benar mati saat reduced-motion aktif; verifikasi di peramban.
+186. **[V][P2]** ~~Pastikan animasi baru benar-benar mati saat reduced-motion aktif; verifikasi di peramban.~~ Selesai 2026-10-04: `tests/e2e/ux-shell.spec.js` ("kebijakan reduced motion") menegaskan tidak ada animasi berulang di app shell dan landing. Dijalankan terhadap server preview; belum terhadap backend sungguhan.
 187. **[N][P3]** Dukungan pembesaran teks hingga 200 persen tanpa kehilangan konten.
 188. **[N][P3]** Pernyataan aksesibilitas publik.
 

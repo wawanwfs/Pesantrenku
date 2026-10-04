@@ -10,6 +10,7 @@ import CommandPalette from '../components/app/CommandPalette.jsx';
 import ShortcutsHelp from '../components/app/ShortcutsHelp.jsx';
 import ToastHost from '../components/app/ToastHost.jsx';
 import NavigationProgress from '../components/app/NavigationProgress.jsx';
+import ErrorBoundary from '../components/app/ErrorBoundary.jsx';
 import { useTheme } from '../lib/theme.js';
 import { SystemModule } from '../components/app/SystemModule.jsx';
 import { Topbar } from '../components/app/Topbar.jsx';
@@ -18,6 +19,8 @@ import { DashboardDonutVisualization, DashboardLineVisualization } from '../comp
 import { dashboardPreview, roleActionMeta, roleModuleMeta, rolePrimaryRows, roleSummaryIcon, roleSummaryTone, tabbedModuleMeta } from '../components/app/moduleMeta.jsx';
 
 const SIDEBAR_KEY = 'pk-sidebar-collapsed';
+
+const reloadPage = () => window.location.reload();
 
 function readCollapsed() {
   try {
@@ -96,7 +99,9 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
         <main id="konten-utama" tabIndex={-1} className={`workspace-main ${collapsed ? 'lg:pl-20' : 'lg:pl-72'} relative min-w-0 transition-[padding] duration-300 focus:outline-none`}>
           <Topbar panel={panel} auth={auth} shared={shared} app={app} onMenuOpen={() => setMobileNavOpen(true)} />
           <div key={`${screen}:${module || ''}`} className="workspace-content relative mx-auto max-w-[1800px] p-3.5 sm:p-5 lg:p-6">
-            {screen === 'dashboard' ? <Dashboard dashboard={dashboard} shared={shared} panel={panel} /> : <ModulePage panel={panel} module={module} shared={shared} dashboard={dashboard} />}
+            <ErrorBoundary resetKey={`${screen}:${module || ''}`} title="Halaman ini gagal ditampilkan">
+              {screen === 'dashboard' ? <Dashboard dashboard={dashboard} shared={shared} panel={panel} /> : <ModulePage panel={panel} module={module} shared={shared} dashboard={dashboard} />}
+            </ErrorBoundary>
           </div>
         </main>
 
@@ -123,10 +128,10 @@ function Dashboard({ dashboard, shared, panel }) {
       </section>
       <section className="grid items-start gap-5 xl:grid-cols-[1.35fr_0.65fr]">
         <ChartCard title={panel === 'akademik' ? 'Statistik Siswa' : panel === 'keuangan' ? 'Grafik Pemasukan & Pengeluaran' : 'Grafik Pengguna & Transaksi'}>
-          <Suspense fallback={<ChartLoading />}><DashboardLineVisualization data={dashboard.lineChart || []} /></Suspense>
+          <ErrorBoundary compact title="Grafik gagal dimuat" onRetry={reloadPage}><Suspense fallback={<ChartLoading />}><DashboardLineVisualization data={dashboard.lineChart || []} /></Suspense></ErrorBoundary>
         </ChartCard>
         <ChartCard title={panel === 'akademik' ? 'Distribusi Kelas' : panel === 'keuangan' ? 'Pemasukan per Kategori' : 'Pengguna berdasarkan Role'}>
-          <Suspense fallback={<ChartLoading />}><DashboardDonutVisualization data={dashboard.donut || []} /></Suspense>
+          <ErrorBoundary compact title="Grafik gagal dimuat" onRetry={reloadPage}><Suspense fallback={<ChartLoading />}><DashboardDonutVisualization data={dashboard.donut || []} /></Suspense></ErrorBoundary>
           <LegendList items={dashboard.donut || []} />
         </ChartCard>
         <div className="min-w-0 xl:col-span-2">

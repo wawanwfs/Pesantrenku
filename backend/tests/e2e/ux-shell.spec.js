@@ -14,6 +14,8 @@ async function login(page, panel, email) {
   await page.getByRole('button', { name: /Masuk/ }).click();
   await expect(page).toHaveURL(new RegExp(`/dashboard/${panel.replace('-', '\\-')}`), { timeout: 45_000 });
   await expect(page.getByLabel('Buka menu akun')).toBeVisible({ timeout: 15_000 });
+  // Pastikan efek React (pendengar pintasan keyboard) sudah terpasang sebelum menekan tombol.
+  await page.waitForLoadState('networkidle');
 }
 
 const theme = (page) => page.evaluate(() => document.documentElement.dataset.theme);
@@ -144,6 +146,22 @@ test.describe('kebijakan reduced motion', () => {
       .filter((animation) => animation.effect?.getTiming().iterations === Infinity && animation.playState === 'running')
       .map((animation) => animation.animationName || ''));
     expect(infinite).toEqual([]);
+  });
+});
+
+test.describe('ketahanan', () => {
+  test('kegagalan memuat bagan ditangani error boundary dan dapat dicoba lagi', async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', 'Cukup diuji di desktop.');
+    let failChunks = true;
+    await page.route(/(DashboardCharts|NativeCharts)[^/]*\.js/, (route) => (failChunks ? route.abort() : route.continue()));
+    await login(page, 'keuangan', 'keuangan@pesantenku.test');
+    await expect(page.getByText('Grafik gagal dimuat').first()).toBeVisible({ timeout: 15_000 });
+    // Bagian lain halaman tetap hidup.
+    await expect(page.getByLabel('Buka menu akun')).toBeVisible();
+
+    failChunks = false;
+    await page.getByRole('button', { name: 'Coba lagi' }).first().click();
+    await expect(page.locator('svg[aria-roledescription^="grafik"]').first()).toBeVisible({ timeout: 15_000 });
   });
 });
 
