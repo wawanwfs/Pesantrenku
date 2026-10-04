@@ -1,8 +1,8 @@
-import React, { Suspense, useEffect, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { router, icons } from '../../lib/deps.jsx';
 import { apiJson, apiUpload, defaultFormData, downloadAuthenticatedFile, exportResource, formDataFromRow, normalizePayload, requestStepUpMfa, rowsOf, statusOptions } from './appSupport.jsx';
-import { Alert, BulkModal, CrudModal, CustomRoleModal, DownloadManagerModal, ImportModal, JobStatusStrip, PanelCard, PaginationControls, PdfTemplateModal, PermissionMatrixModal, QueueMonitorModal, RestoreApprovalModal, RestoreBackupModal, statusLabel, WorkflowModal } from './AppDialogs.jsx';
-import { ChartLoading, DensityToggle, Header, Table } from './Widgets.jsx';
+import { Alert, BulkModal, CrudModal, CustomRoleModal, DownloadManagerModal, ImportModal, JobStatusStrip, PanelCard, PaginationControls, PdfTemplateModal, isVisibleTableColumn, PermissionMatrixModal, QueueMonitorModal, RestoreApprovalModal, RestoreBackupModal, statusLabel, WorkflowModal } from './AppDialogs.jsx';
+import { ChartLoading, ColumnPicker, DensityToggle, Header, Table, useColumnPrefs } from './Widgets.jsx';
 import { AnalyticsPanel } from './lazyCharts.jsx';
 import { workflowActionsFor } from './moduleMeta.jsx';
 
@@ -451,6 +451,8 @@ export function CrudModule({ meta, shared }) {
     : canCreate
       ? { title: `Belum ada data ${String(meta.title || '').toLowerCase()}`, description: 'Mulai dengan menambahkan data pertama.', action: { label: 'Tambah data', onClick: createRow } }
       : undefined;
+  const tableColumns = useMemo(() => meta.fields.map((field) => field.name).filter(isVisibleTableColumn), [meta]);
+  const columnPrefs = useColumnPrefs(meta.resource || meta.title, tableColumns);
   const resourceActions = [
     ...workflowActionsFor(meta).map((action) => ({ ...action, onClick: (row) => openWorkflow(row, action) })),
     ...(meta.resource === 'backups' ? [
@@ -495,8 +497,8 @@ export function CrudModule({ meta, shared }) {
             {canCreate && <button onClick={createRow} className="inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:bg-primary-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"><icons.Plus className="h-4 w-4" /> {meta.createLabel || 'Tambah Data'}</button>}
           </div>
         </div>
-        <div className="mb-3 flex items-center justify-end"><DensityToggle /></div>
-        <Table rows={filteredRows} empty={emptyState} columns={meta.fields.map((field) => field.name)} meta={meta} shared={shared} loading={loading} selectable={canBulk} selectedIds={selectedIds} onToggleRow={toggleSelected} onToggleAll={setSelectedForPage} onView={canView ? viewRow : null} onEdit={canEdit ? editRow : null} onDelete={canDelete ? deleteRow : null} customActions={resourceActions} />
+        <div className="mb-3 flex flex-wrap items-center justify-end gap-2"><ColumnPicker available={tableColumns} hidden={columnPrefs.hidden} onToggle={columnPrefs.toggle} onReset={columnPrefs.reset} /><DensityToggle /></div>
+        <Table rows={filteredRows} empty={emptyState} columns={columnPrefs.visible} meta={meta} shared={shared} loading={loading} selectable={canBulk} selectedIds={selectedIds} onToggleRow={toggleSelected} onToggleAll={setSelectedForPage} onView={canView ? viewRow : null} onEdit={canEdit ? editRow : null} onDelete={canDelete ? deleteRow : null} customActions={resourceActions} />
         <PaginationControls pagination={pagination} page={page} setPage={setPage} perPage={perPage} setPerPage={setPerPage} />
       </PanelCard>
       {jobs.length > 0 && <JobStatusStrip jobs={jobs} onRefresh={loadJobs} />}

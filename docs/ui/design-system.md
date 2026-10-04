@@ -113,3 +113,11 @@ npm i --no-save @axe-core/playwright && node scripts/ui-preview/a11y-audit.mjs l
 ```
 
 Ini **bukan** pengganti `npm run test:e2e` terhadap backend sungguhan (login, CRUD, workflow).
+
+## Tabel data: kolom dan aksesibilitas
+
+- `ColumnPicker` + `useColumnPrefs` (`components/app/Widgets.jsx`) memungkinkan pengguna menyembunyikan kolom;
+  pilihan disimpan per sumber daya di `localStorage['pk-cols:<resource>']`, gagal tulis tidak mengganggu.
+  Minimal satu kolom selalu tampil. Disembunyikan saat cetak.
+- Tabel punya `<caption class="sr-only">`, `scope="col"` di header, dan setiap tombol aksi baris memuat
+  identitas baris (`rowLabelOf`: name/title/nomor/kode/email, jatuh ke `#id`).

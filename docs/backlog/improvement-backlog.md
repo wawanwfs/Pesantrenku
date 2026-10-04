@@ -238,7 +238,7 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 173. **[N][P3]** Landing: dukungan Firefox lewat fallback IntersectionObserver, jika angka pengunjungnya besar.
 174. **[N][P2]** Konsistensi mikrokopi Indonesia: satu daftar istilah untuk santri, wali, musyrif, dan seterusnya.
 175. **[N][P3]** Cetak yang rapi untuk rapor, kuitansi, dan surat.
-176. **[N][P2]** Tampilan tabel yang dapat dikonfigurasi per pengguna, kolom mana yang tampil.
+~~176. **[N][P2]** Tampilan tabel yang dapat dikonfigurasi per pengguna, kolom mana yang tampil.~~ Selesai: pemilih kolom per sumber daya (`ColumnPicker`, disimpan di `localStorage["pk-cols:<resource>"]`, minimal satu kolom tetap tampil).
 
 ## 13. Aksesibilitas
 
@@ -246,7 +246,7 @@ sini: `routes/`, `app/Models/`, `app/Policies/`, `app/Providers/`,
 178. **[N][P1]** Pastikan seluruh alur bisa diselesaikan dengan papan tik saja.
 179. **[N][P1]** Kelola fokus saat dialog dibuka dan ditutup.
 180. **[V][P2]** Menu seluler landing sudah mengelola fokus; terapkan pola yang sama di dasbor.
-181. **[N][P2]** Label ARIA untuk tabel data dan aksi barisnya.
+~~181. **[N][P2]** Label ARIA untuk tabel data dan aksi barisnya.~~ Selesai: `<caption>` sr-only, `scope="col"`, `aria-rowcount`, dan tombol aksi baris menyebut barisnya ("Edit data: Nama").
 182. **[N][P2]** Umumkan perubahan asinkron lewat live region.
 183. **[N][P2]** Target sentuh minimum 44 piksel di seluruh aplikasi.
 184. **[N][P2]** Jangan sampaikan makna hanya lewat warna, terutama pada status.

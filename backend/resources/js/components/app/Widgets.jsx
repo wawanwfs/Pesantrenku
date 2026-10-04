@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Link, router, icons } from '../../lib/deps.jsx';
 import AnimatedNumber from '../AnimatedNumber.jsx';
 import { useShell } from './ShellContext.jsx';
@@ -51,6 +51,71 @@ export function DataPreview({ title, rows, columns, shared, href }) {
   return <PanelCard title={title} action="Lihat Semua" actionHref={href}><Table rows={rows} columns={columns} shared={shared} compact /></PanelCard>;
 }
 
+const ROW_LABEL_KEYS = ['name', 'title', 'invoice_number', 'number', 'code', 'email', 'username', 'subject'];
+
+export function rowLabelOf(row) {
+  for (const key of ROW_LABEL_KEYS) {
+    const value = row?.[key];
+    if (value !== null && value !== undefined && value !== '' && typeof value !== 'object') return String(value).slice(0, 60);
+  }
+  return row?.id ? `#${row.id}` : '';
+}
+
+const COLUMN_PREF_PREFIX = 'pk-cols:';
+
+function readHiddenColumns(resource) {
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(COLUMN_PREF_PREFIX + resource) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((item) => typeof item === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Kolom yang disembunyikan pengguna per sumber daya; disimpan di peramban, gagal tulis tidak mengganggu. */
+export function useColumnPrefs(resource, available) {
+  const [hidden, setHidden] = useState(() => (typeof window === 'undefined' ? [] : readHiddenColumns(resource)));
+  const persist = useCallback((next) => {
+    setHidden(next);
+    try {
+      if (next.length) window.localStorage.setItem(COLUMN_PREF_PREFIX + resource, JSON.stringify(next));
+      else window.localStorage.removeItem(COLUMN_PREF_PREFIX + resource);
+    } catch { /* penyimpanan tidak tersedia */ }
+  }, [resource]);
+  const effectiveHidden = hidden.filter((name) => available.includes(name));
+  const toggle = useCallback((name) => {
+    const current = hidden.filter((item) => available.includes(item));
+    if (current.includes(name)) return persist(current.filter((item) => item !== name));
+    // Selalu sisakan minimal satu kolom agar tabel tidak kosong.
+    if (available.length - current.length <= 1) return undefined;
+    return persist([...current, name]);
+  }, [hidden, available, persist]);
+  const reset = useCallback(() => persist([]), [persist]);
+  return { hidden: effectiveHidden, visible: available.filter((name) => !effectiveHidden.includes(name)), toggle, reset };
+}
+
+export function ColumnPicker({ available, hidden, onToggle, onReset }) {
+  if (available.length < 3) return null;
+  const shown = available.length - hidden.length;
+  return (
+    <details className="pk-colpicker">
+      <summary className="pk-colpicker-trigger"><icons.Columns className="h-4 w-4" aria-hidden="true" /> Kolom <span className="pk-colpicker-count">{shown}/{available.length}</span></summary>
+      <div className="pk-colpicker-menu" role="group" aria-label="Pilih kolom yang ditampilkan">
+        {available.map((name) => {
+          const checked = !hidden.includes(name);
+          return (
+            <label key={name} className="pk-colpicker-item">
+              <input type="checkbox" checked={checked} disabled={checked && shown <= 1} onChange={() => onToggle(name)} />
+              <span>{columnTitle(name)}</span>
+            </label>
+          );
+        })}
+        <button type="button" className="pk-colpicker-reset" onClick={onReset} disabled={!hidden.length}>Tampilkan semua</button>
+      </div>
+    </details>
+  );
+}
+
 export function Table({ rows = [], empty, compact = false, columns: preferredColumns, shared = {}, meta, loading = false, selectable = false, selectedIds = [], onToggleRow, onToggleAll, onView, onEdit, onDelete, customActions = [] }) {
   const normalized = Array.isArray(rows) ? rows : Object.values(rows || {});
   const fieldMap = useMemo(() => Object.fromEntries((meta?.fields || []).map((field) => [field.name, field])), [meta]);
@@ -68,18 +133,21 @@ export function Table({ rows = [], empty, compact = false, columns: preferredCol
     <div className="min-w-0">
       <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-neutral-500 md:hidden" aria-hidden="true"><icons.MoveHorizontal className="h-3.5 w-3.5" /> Geser untuk melihat kolom lainnya</div>
       <div className="data-table-wrap relative min-w-0 overflow-x-auto border border-neutral-200 [scrollbar-width:thin]" role="region" aria-label="Tabel data; geser dengan panah keyboard bila kolom terpotong" tabIndex={0}>
-      <table className="data-table w-full min-w-[640px] table-auto text-left text-sm">
-        <thead><tr className="border-b border-neutral-200 bg-neutral-50 text-[11px] font-semibold uppercase text-neutral-500">{selectable && <th className="w-10 px-3 py-2.5"><input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll?.(selectableIds, event.target.checked)} className="h-4 w-4 rounded accent-primary-600" aria-label="Pilih semua baris halaman ini" /></th>}{columns.map((c) => <th key={c} className="whitespace-nowrap px-3 py-2.5 font-semibold">{columnTitle(c)}</th>)}{hasActions && <th className="px-3 py-2.5 text-right font-semibold">Aksi</th>}</tr></thead>
+      <table className="data-table w-full min-w-[640px] table-auto text-left text-sm" aria-rowcount={normalized.length}>
+        <caption className="sr-only">{meta?.title ? `${meta.title}: ${normalized.length} baris` : `${normalized.length} baris data`}</caption>
+        <thead><tr className="border-b border-neutral-200 bg-neutral-50 text-[11px] font-semibold uppercase text-neutral-500">{selectable && <th scope="col" className="w-10 px-3 py-2.5"><input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll?.(selectableIds, event.target.checked)} className="h-4 w-4 rounded accent-primary-600" aria-label="Pilih semua baris halaman ini" /></th>}{columns.map((c) => <th key={c} scope="col" className="whitespace-nowrap px-3 py-2.5 font-semibold">{columnTitle(c)}</th>)}{hasActions && <th scope="col" className="px-3 py-2.5 text-right font-semibold">Aksi</th>}</tr></thead>
         <tbody>{visibleRows.map((row, i) => {
           const visibleCustomActions = customActions.filter((action) => !action.show || action.show(row));
+          const rowLabel = rowLabelOf(row);
+          const forRow = (text) => (rowLabel ? `${text}: ${rowLabel}` : text);
           return (
             <tr key={row.id || i} className="border-b border-neutral-100 transition-colors last:border-b-0 hover:bg-primary-50/35">
-              {selectable && <td className="px-3 py-2.5"><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => onToggleRow?.(row.id)} className="h-4 w-4 rounded accent-primary-600" aria-label={`Pilih baris ${row.id}`} /></td>}
+              {selectable && <td className="px-3 py-2.5"><input type="checkbox" checked={selectedIds.includes(row.id)} onChange={() => onToggleRow?.(row.id)} className="h-4 w-4 rounded accent-primary-600" aria-label={forRow('Pilih baris')} /></td>}
               <>{columns.map((c) => <td key={c} className="max-w-72 px-3 py-2.5 align-top text-neutral-700">{renderCell(c, row[c], row, shared, fieldMap[c])}</td>)}</>
               {hasActions && <td className="table-actions sticky right-0 bg-white/95 px-3 py-2 shadow-[-10px_0_18px_-18px_rgba(15,23,42,0.8)] backdrop-blur-sm"><div className="flex flex-nowrap justify-end gap-1">{visibleCustomActions.map((action) => {
                 const Icon = icons[action.icon] || icons.CircleCheck;
-                return <button key={action.key} type="button" title={action.label} aria-label={action.label} onClick={() => action.onClick(row)} className={`grid min-h-9 min-w-9 place-items-center rounded-lg border transition focus:outline-none focus:ring-2 ${action.tone === 'danger' ? 'border-red-200 text-red-600 hover:border-red-500 hover:bg-red-50 focus:ring-red-200' : 'border-neutral-200 bg-white hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:ring-primary-200'}`}><Icon className="h-4 w-4" /></button>;
-              })}{onView && <button type="button" title="Lihat" aria-label="Lihat detail" onClick={() => onView(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Eye className="h-4 w-4" /></button>}{onEdit && <button type="button" title="Edit" aria-label="Edit data" onClick={() => onEdit(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Edit2 className="h-4 w-4" /></button>}{onDelete && <button type="button" title="Hapus" aria-label="Hapus data" onClick={() => onDelete(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200"><icons.Trash2 className="h-4 w-4" /></button>}</div></td>}
+                return <button key={action.key} type="button" title={action.label} aria-label={forRow(action.label)} onClick={() => action.onClick(row)} className={`grid min-h-9 min-w-9 place-items-center rounded-lg border transition focus:outline-none focus:ring-2 ${action.tone === 'danger' ? 'border-red-200 text-red-600 hover:border-red-500 hover:bg-red-50 focus:ring-red-200' : 'border-neutral-200 bg-white hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:ring-primary-200'}`}><Icon className="h-4 w-4" /></button>;
+              })}{onView && <button type="button" title="Lihat" aria-label={forRow('Lihat detail')} onClick={() => onView(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Eye className="h-4 w-4" /></button>}{onEdit && <button type="button" title="Edit" aria-label={forRow('Edit data')} onClick={() => onEdit(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-primary-300 hover:bg-primary-50 hover:text-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.Edit2 className="h-4 w-4" /></button>}{onDelete && <button type="button" title="Hapus" aria-label={forRow('Hapus data')} onClick={() => onDelete(row)} className="grid min-h-9 min-w-9 place-items-center rounded-lg border border-neutral-200 bg-white transition hover:border-red-400 hover:bg-red-50 hover:text-red-600 focus:outline-none focus:ring-2 focus:ring-red-200"><icons.Trash2 className="h-4 w-4" /></button>}</div></td>}
             </tr>
           );
         })}</tbody>

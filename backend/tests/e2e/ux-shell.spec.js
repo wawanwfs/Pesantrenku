@@ -217,6 +217,31 @@ test.describe('kenyamanan', () => {
     await page.getByRole('button', { name: 'Nyaman' }).click();
     await expect.poll(() => page.evaluate(() => document.documentElement.dataset.density)).toBeUndefined();
   });
+
+  test('pemilih kolom menyembunyikan kolom, bertahan setelah muat ulang, dan menyisakan satu kolom', async ({ page }) => {
+    await page.goto('/keuangan/module/santri', { waitUntil: 'domcontentloaded' });
+    const headers = page.locator('table.data-table thead th[scope="col"]');
+    await expect(headers.first()).toBeVisible();
+    const before = await headers.count();
+    await page.locator('.pk-colpicker-trigger').click();
+    const items = page.locator('.pk-colpicker-item input');
+    const name = await page.locator('.pk-colpicker-item span').first().innerText();
+    await items.first().uncheck();
+    await expect(headers).toHaveCount(before - 1);
+    await expect(page.locator('table.data-table thead')).not.toContainText(new RegExp(`^${name}$`, 'm'));
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(headers).toHaveCount(before - 1);
+    await page.locator('.pk-colpicker-trigger').click();
+    await page.getByRole('button', { name: 'Tampilkan semua' }).click();
+    await expect(headers).toHaveCount(before);
+  });
+
+  test('tombol aksi baris menyebut baris yang dimaksud', async ({ page }) => {
+    await page.goto('/keuangan/module/santri', { waitUntil: 'domcontentloaded' });
+    const edit = page.locator('table.data-table tbody tr').first().getByRole('button', { name: /^Edit data: / });
+    await expect(edit).toBeVisible();
+    await expect(page.locator('table.data-table caption')).toContainText('baris');
+  });
 });
 
 test.describe('ketahanan', () => {

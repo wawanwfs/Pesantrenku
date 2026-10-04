@@ -455,6 +455,7 @@
 
     .crud-command-bar,
     .pk-density,
+    .pk-colpicker,
     .pk-greeting,
     .pk-offline {
         display: none !important;
