@@ -8,6 +8,11 @@
  * - Seluruh gerak dinonaktifkan pada prefers-reduced-motion: reduce.
  */
 
+/*
+ * Penting: keyframe `to` memakai `transform: none`, bukan translate3d(0,0,0). Transform non-none
+ * yang bertahan (fill-mode both/forwards) membuat elemen menjadi containing block bagi turunan
+ * `position: fixed`, sehingga overlay dialog terpotong di area konten alih-alih menutupi layar.
+ */
 @keyframes pk-fade-up {
     from {
         opacity: 0;
@@ -16,7 +21,7 @@
 
     to {
         opacity: 1;
-        transform: translate3d(0, 0, 0);
+        transform: none;
     }
 }
 
@@ -33,7 +38,7 @@
 
     to {
         opacity: 1;
-        transform: translate3d(0, 0, 0) scale(1);
+        transform: none;
     }
 }
 
@@ -45,7 +50,7 @@
 
     to {
         opacity: 1;
-        transform: translate3d(0, 0, 0);
+        transform: none;
     }
 }
 
@@ -130,7 +135,6 @@
         transform var(--pk-normal) var(--pk-ease),
         box-shadow var(--pk-normal) var(--pk-ease),
         border-color var(--pk-normal) var(--pk-ease);
-    will-change: transform;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -171,7 +175,7 @@
     }
 
     .app-shell .workspace-content > * {
-        animation: pk-fade-up 420ms var(--pk-ease-out) both;
+        animation: pk-fade-up 420ms var(--pk-ease-out) backwards;
     }
 
     .app-shell .workspace-content > *:nth-child(2) { animation-delay: 60ms; }

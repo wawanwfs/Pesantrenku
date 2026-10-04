@@ -427,7 +427,7 @@ function BulkModal({ count, canDelete, loading, onSubmit, onClose }) {
             <label className="block text-sm">
               <span className="mb-1 block font-medium">Status Baru</span>
               <select value={status} onChange={(event) => setStatus(event.target.value)} className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm">
-                {statusOptions.map((item) => <option key={item} value={item}>{item}</option>)}
+                {statusOptions.map((item) => <option key={item} value={item}>{statusLabel(item)}</option>)}
               </select>
             </label>
           )}

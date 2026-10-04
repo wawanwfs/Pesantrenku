@@ -132,6 +132,16 @@ const resourceFields = {
   backups: ['name', 'status', 'file_path', ['completed_at', 'datetime-local']],
 };
 
+const statusTexts = {
+  active: 'Aktif', inactive: 'Tidak Aktif', pending: 'Menunggu', paid: 'Lunas', unpaid: 'Belum Lunas', success: 'Berhasil',
+  waiting: 'Menunggu', draft: 'Draf', published: 'Terbit', done: 'Selesai', approved: 'Disetujui', rejected: 'Ditolak',
+  cancelled: 'Dibatalkan', in_progress: 'Diproses',
+};
+
+function statusText(value) {
+  return statusTexts[String(value ?? '').toLowerCase()] || titleFromSlug(String(value ?? ''));
+}
+
 const statusOptions = ['active', 'inactive', 'pending', 'paid', 'unpaid', 'success', 'waiting', 'draft', 'published', 'done', 'approved', 'rejected', 'cancelled', 'in_progress'];
 
 const relationSelectTypes = {
@@ -394,7 +404,7 @@ function optionsFor(field, shared = {}) {
     invoices: rowsOf(shared.invoices).map((item) => ({ value: item.id, label: item.invoice_number || item.id })),
     paymentMethods: rowsOf(shared.paymentMethods).map((item) => ({ value: item.id, label: item.name })),
     gender: [{ value: 'Laki-laki', label: 'Laki-laki' }, { value: 'Perempuan', label: 'Perempuan' }],
-    status: statusOptions.map((item) => ({ value: item, label: item })),
+    status: statusOptions.map((item) => ({ value: item, label: statusText(item) })),
     cashflowType: [{ value: 'pemasukan', label: 'Pemasukan' }, { value: 'pengeluaran', label: 'Pengeluaran' }],
     letterType: [{ value: 'incoming', label: 'Surat Masuk' }, { value: 'outgoing', label: 'Surat Keluar' }],
     stockType: [{ value: 'in', label: 'Masuk' }, { value: 'out', label: 'Keluar' }, { value: 'adjustment', label: 'Penyesuaian' }],
