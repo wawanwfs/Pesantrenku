@@ -35,7 +35,7 @@ komponen; buat kelas modifier; (2) `dark.css` memanfaatkan sifat ini untuk menim
 | `--page-bg` | `#EEF3F5` | `#0A0F16` | latar halaman |
 | `--border` | `#DDE4EA` | `#26344A` | garis |
 | `--ink` | `#172033` | `#E6EDF5` | teks utama |
-| `--muted` | `#5F6E82` | `#8CA0B8` | teks sekunder |
+| `--muted` | `#566579` | `#8CA0B8` | teks sekunder |
 | `--action` | `primary-600` | `primary-400` | warna aksi/tautan |
 | `--focus` | `rgba(23,135,91,.2)` | `rgba(53,168,114,.35)` | ring fokus |
 
@@ -52,8 +52,10 @@ dan dialog. Landing memakai token sendiri `--landing-*`, login `--lg-*` (keduany
   `text-neutral-*`, `border-neutral-*`, `bg-primary-50`, dst. otomatis ikut. Komponen dengan hex literal
   butuh aturan `[data-theme='dark'] ...` sendiri.
 - Cetak selalu terang (`beforeprint`/`afterprint` di `lib/theme.js`).
-- Kontras: nilai teks utama/sekunder di atas dipilih ≥ 4.5:1 terhadap `--surface` gelap (hitungan
-  manual, lihat komentar di `dark.css`). **Belum** diaudit dengan alat otomatis (axe/Lighthouse).
+- Kontras: nilai teks utama/sekunder dipilih ≥ 4.5:1 (lihat komentar di `dark.css`). Diaudit dengan axe-core
+  (WCAG 2.1 A/AA) lewat `scripts/ui-preview/a11y-audit.mjs`: 90 halaman/keadaan interaktif, terang dan gelap,
+  desktop dan seluler, 0 temuan pada 2026-10-04. Skala `neutral-500` terang digelapkan ke `#5A6A7E` demi kontras di atas
+  latar tinted.
 
 ## 3. Gerak
 
@@ -107,6 +109,7 @@ node scripts/ui-preview/server.mjs 4173 &
 node scripts/ui-preview/crawl.mjs light      # 148 halaman, laporkan error runtime
 node scripts/ui-preview/shoot.mjs shots dark # screenshot desktop+mobile
 node scripts/ui-preview/shoot-scroll.mjs shots dark / 1440 900 900
+npm i --no-save @axe-core/playwright && node scripts/ui-preview/a11y-audit.mjs light,dark
 ```
 
 Ini **bukan** pengganti `npm run test:e2e` terhadap backend sungguhan (login, CRUD, workflow).

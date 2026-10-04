@@ -59,7 +59,7 @@ tes e2e. Backend, migrasi, dan mobile **tidak diubah**.
 1. Jalankan `php artisan test` dan `npm run test:e2e` pada PHP 8.4 sebelum menyebut perubahan ini terverifikasi
    end-to-end. Khusus: alur login pada halaman Login yang ditulis ulang (selector `input[autocomplete=username]`,
    `input[type=password]`, tombol `/Masuk/` dipertahankan), dan pintasan keyboard setelah login nyata.
-2. Audit kontras otomatis (axe-core via Playwright) untuk mode gelap; saat ini hanya hitungan manual.
+2. ~~Audit kontras otomatis~~ Selesai: `scripts/ui-preview/a11y-audit.mjs` (axe-core) 0 temuan pada 90 halaman/keadaan; ulangi terhadap backend sungguhan.
 3. Mobile Flutter belum disentuh (tidak ada SDK di sesi). Tema gelap mobile adalah kelanjutan alami.
 4. `CrudController` (~930 baris) masih monolit (backlog 87).
 5. Pencarian lintas modul (backlog 166) baru mencakup menu, bukan isi data.

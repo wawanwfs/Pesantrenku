@@ -166,7 +166,7 @@ function PaginationControls({ pagination, page, setPage, perPage, setPerPage }) 
     <div className="pagination-bar mt-4 flex flex-col gap-3 border-t border-neutral-200 pt-4 text-sm text-neutral-600 md:flex-row md:items-center md:justify-between">
       <div><span className="font-semibold text-neutral-700">{total}</span> data <span className="text-neutral-300">/</span> halaman {currentPage} dari {lastPage}</div>
       <div className="flex flex-wrap items-center gap-2">
-        <select value={perPage} onChange={(event) => setPerPage(Number(event.target.value))} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100">
+        <select value={perPage} aria-label="Baris per halaman" onChange={(event) => setPerPage(Number(event.target.value))} className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm shadow-sm outline-none transition focus:border-primary-500 focus:ring-2 focus:ring-primary-100">
           {[10, 20, 50, 100].map((value) => <option key={value} value={value}>{value} / halaman</option>)}
         </select>
         <button type="button" disabled={currentPage <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))} className="inline-flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 font-medium shadow-sm transition hover:border-primary-200 hover:bg-primary-50 hover:text-primary-700 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-primary-200"><icons.ChevronLeft className="h-4 w-4" /> Sebelumnya</button>
@@ -231,7 +231,7 @@ function ImportModal({ title, resource, loading, onSubmit, onClose }) {
             <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
               <div className="rounded-xl border border-neutral-200">
                 <div className="border-b border-neutral-100 px-4 py-3 text-sm font-semibold">Mapping Kolom</div>
-                <div className="max-h-80 space-y-3 overflow-y-auto p-4">
+                <div className="max-h-80 space-y-3 overflow-y-auto p-4" tabIndex={0} role="region" aria-label="Pratinjau data">
                   {rowsOf(preview.headers).map((header) => (
                     <label key={header} className="grid gap-1 text-sm">
                       <span className="font-medium">{header}</span>
@@ -700,7 +700,7 @@ function CrudModal({ meta, shared, formData, setFormData, editing, mode, saving,
           <button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 bg-white p-2 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
-          <div className="grid gap-4 overflow-y-auto p-5 md:grid-cols-2">
+          <div className="grid gap-4 overflow-y-auto p-5 md:grid-cols-2" tabIndex={0} role="region" aria-label="Detail data">
             {meta.fields.map((field) => <FieldInput key={field.name} field={field} shared={shared} value={formData[field.name]} disabled={viewOnly || (mode === 'edit' && ['permits', 'payments', 'medical-queues'].includes(meta.resource) && field.name === 'status')} error={formErrors[field.name]} onChange={(value) => setFormData((current) => ({ ...current, [field.name]: value }))} />)}
             {viewOnly && <div className="md:col-span-2"><TimelineList timeline={timeline} loading={timelineLoading} shared={shared} /></div>}
           </div>
@@ -775,7 +775,7 @@ function TimelineList({ timeline, loading, shared }) {
   return (
     <div className="rounded-xl border border-neutral-200">
       <div className="border-b border-neutral-100 px-4 py-3 text-sm font-semibold">Timeline Perubahan</div>
-      <div className="max-h-64 overflow-y-auto p-4">
+      <div className="max-h-64 overflow-y-auto p-4" tabIndex={0} role="region" aria-label="Riwayat perubahan">
         {timeline.map((item) => (
           <div key={item.id} className="border-l-2 border-primary-100 pb-4 pl-4 last:pb-0">
             <div className="flex flex-wrap items-center gap-2 text-sm font-semibold">
@@ -826,7 +826,7 @@ function AuditLogModal({ row, shared, onClose }) {
           {metadata.note && <Alert tone="info">{metadata.note}</Alert>}
           <div className="rounded-xl border border-neutral-200">
             <div className="border-b border-neutral-100 px-4 py-3 text-sm font-semibold">Diff Perubahan</div>
-            <div className="max-h-80 overflow-y-auto p-4">
+            <div className="max-h-80 overflow-y-auto p-4" tabIndex={0} role="region" aria-label="Daftar hasil">
               {changes.length > 0 ? changes.map((change) => (
                 <div key={change.field} className="border-b border-neutral-100 py-2 text-sm last:border-0">
                   <div className="font-medium">{columnTitle(change.field)}</div>

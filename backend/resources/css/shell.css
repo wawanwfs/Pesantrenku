@@ -219,6 +219,10 @@
     font-size: 0.75rem;
 }
 
+.pk-palette-item.is-active .pk-palette-hint {
+    color: var(--ink);
+}
+
 .pk-palette-mark {
     border-radius: 3px;
     background: rgba(243, 201, 96, 0.4);

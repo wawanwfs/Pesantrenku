@@ -66,7 +66,7 @@ export function Table({ rows = [], empty, compact = false, columns: preferredCol
   return (
     <div className="min-w-0">
       <div className="mb-2 flex items-center gap-2 text-[11px] font-medium text-neutral-500 md:hidden" aria-hidden="true"><icons.MoveHorizontal className="h-3.5 w-3.5" /> Geser untuk melihat kolom lainnya</div>
-      <div className="data-table-wrap relative min-w-0 overflow-x-auto border border-neutral-200 [scrollbar-width:thin]">
+      <div className="data-table-wrap relative min-w-0 overflow-x-auto border border-neutral-200 [scrollbar-width:thin]" role="region" aria-label="Tabel data; geser dengan panah keyboard bila kolom terpotong" tabIndex={0}>
       <table className="data-table w-full min-w-[640px] table-auto text-left text-sm">
         <thead><tr className="border-b border-neutral-200 bg-neutral-50 text-[11px] font-semibold uppercase text-neutral-500">{selectable && <th className="w-10 px-3 py-2.5"><input type="checkbox" checked={allSelected} onChange={(event) => onToggleAll?.(selectableIds, event.target.checked)} className="h-4 w-4 rounded accent-primary-600" aria-label="Pilih semua baris halaman ini" /></th>}{columns.map((c) => <th key={c} className="whitespace-nowrap px-3 py-2.5 font-semibold">{columnTitle(c)}</th>)}{hasActions && <th className="px-3 py-2.5 text-right font-semibold">Aksi</th>}</tr></thead>
         <tbody>{visibleRows.map((row, i) => {

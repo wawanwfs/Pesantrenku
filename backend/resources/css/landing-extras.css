@@ -697,3 +697,8 @@
 [data-theme='dark'] .landing-shell .landing-dock-links a[aria-current='true'] {
   color: #05261b;
 }
+
+.landing-shell .landing-header-cta,
+.landing-shell .landing-header-cta:hover {
+  color: #153a34;
+}

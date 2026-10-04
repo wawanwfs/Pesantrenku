@@ -67,7 +67,7 @@ function TenantCard({ auth, config, collapsed }) {
       <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-md text-[11px] font-bold ${config.light ? 'bg-primary-100 text-primary-800' : 'bg-white/15 text-white'}`} aria-hidden="true">{initials}</span>
       {!collapsed && (
         <div className="min-w-0">
-          <div className={`text-[10px] font-medium uppercase ${config.light ? 'text-neutral-500' : 'text-white/55'}`}>Pesantren aktif</div>
+          <div className={`text-[10px] font-medium uppercase ${config.light ? 'text-neutral-600' : 'text-white/60'}`}>Pesantren aktif</div>
           <div className="truncate text-xs font-semibold">{tenant.name}</div>
         </div>
       )}
