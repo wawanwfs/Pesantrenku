@@ -78,7 +78,48 @@ const activities = [
   { title: 'Backup tenant dibuat', description: 'Snapshot harian terenkripsi', time: '3 jam lalu' },
 ];
 
+const profilePanels = ['santri', 'wali-murid', 'guru', 'musyrif', 'klinik'];
+
+function profileDashboard(panel) {
+  const subtitles = {
+    santri: 'Asrama A-1 - 26-0381',
+    'wali-murid': 'Wali dari Muhammad Zaid',
+    guru: 'Guru Fikih',
+    musyrif: 'Pendamping asrama',
+    klinik: 'Petugas layanan kesehatan',
+  };
+  return {
+    role: panelRole[panel],
+    profile: { name: 'Ahmad Fauzan', subtitle: subtitles[panel] },
+    summary: [
+      { label: 'Nilai Rata-rata', value: '86,4' },
+      { label: 'Hafalan', value: '3 Juz' },
+      { label: 'Pelanggaran', value: '0' },
+      { label: 'Tagihan Aktif', value: 'Rp 450.000' },
+    ],
+    menu: [],
+    announcements: [
+      { id: 1, title: 'Libur akhir semester', body: 'Kegiatan belajar diliburkan mulai 20 Desember.', category: 'Akademik', published_at: '2026-10-01' },
+      { id: 2, title: 'Pemeriksaan kesehatan rutin', body: 'Klinik membuka pemeriksaan untuk seluruh santri kelas 7.', category: 'Kesehatan', published_at: '2026-10-02' },
+    ],
+    students: studentRows(5).map((row) => ({ id: row.id, nis: row.nis, name: row.name, gender: row.gender, kelas: '7A', kamar: row.room, status: row.status })),
+    schedules: [
+      { id: 1, kelas: '7A', mata_pelajaran: 'Fikih', hari: 'Senin', waktu: '07.00-08.30', guru: 'Ust. Hasan', ruang: 'R-01', jenis: 'Reguler' },
+      { id: 2, kelas: '7A', mata_pelajaran: 'Nahwu', hari: 'Selasa', waktu: '09.00-10.30', guru: 'Ust. Ali', ruang: 'R-02', jenis: 'Reguler' },
+    ],
+    violations: [],
+    invoices: [
+      { id: 1, nomor_tagihan: 'INV-2026-0142', santri: 'Muhammad Zaid', periode: 'Oktober 2026', nominal: 450000, jatuh_tempo: '2026-10-10', status: 'unpaid' },
+      { id: 2, nomor_tagihan: 'INV-2026-0098', santri: 'Muhammad Zaid', periode: 'September 2026', nominal: 450000, jatuh_tempo: '2026-09-10', status: 'paid' },
+    ],
+    medical: [
+      { id: 1, santri: 'Muhammad Zaid', keluhan: 'Demam ringan', diagnosis: 'Flu', tanggal: '2026-09-21', dokter: 'dr. Rahma' },
+    ],
+  };
+}
+
 export function dashboardFor(panel) {
+  if (profilePanels.includes(panel)) return profileDashboard(panel);
   const base = {
     title: 'Dashboard',
     subtitle: 'Ringkasan aktivitas pesantren',
@@ -166,7 +207,9 @@ export function sharedData(panel) {
     classes: [],
     letters: [],
     rooms: [],
-    medicalQueues: [],
+    medicalQueues: [
+      { id: 1, queue_number: 'A-001', student_id: 1, complaint: 'Demam', status: 'waiting' },
+    ],
     users: [],
   };
 }

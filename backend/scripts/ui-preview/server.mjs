@@ -94,6 +94,14 @@ const server = createServer(async (req, res) => {
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({ data: notifications, unread: notifications.length }));
     return;
   }
+  if (req.method === 'POST' && url.pathname === '/web-actions/qr/generate') {
+    // ?ttl=detik pada Referer tidak tersedia; gunakan PREVIEW_QR_TTL untuk menguji keadaan kedaluwarsa.
+    const ttl = Number(process.env.PREVIEW_QR_TTL || 300);
+    res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({
+      code: 'a'.repeat(32) + 'b'.repeat(32), expires_at: new Date(Date.now() + ttl * 1000).toISOString(),
+    }));
+    return;
+  }
   if (url.pathname.startsWith('/web-api/')) {
     const rows = studentRows(8);
     res.writeHead(200, { 'Content-Type': 'application/json' }).end(JSON.stringify({

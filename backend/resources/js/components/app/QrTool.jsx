@@ -1,9 +1,32 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { QRCodeSVG } from 'qrcode.react';
 import { router, icons } from '../../lib/deps.jsx';
 import { apiJson, rowsOf } from './appSupport.jsx';
 import { Alert, PanelCard } from './AppDialogs.jsx';
 import { Table, formatCell } from './Widgets.jsx';
+
+function useCountdown(expiresAt) {
+  const target = expiresAt ? new Date(expiresAt).getTime() : NaN;
+  const totalRef = useRef(0);
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!Number.isFinite(target)) return undefined;
+    totalRef.current = Math.max(1000, target - Date.now());
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [target]);
+
+  if (!Number.isFinite(target)) return null;
+  const remaining = Math.max(0, target - now);
+  return { remaining, total: totalRef.current || remaining || 1, expired: remaining <= 0 };
+}
+
+function formatRemaining(milliseconds) {
+  const seconds = Math.ceil(milliseconds / 1000);
+  return `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`;
+}
 
 export function QrTool({ panel, rows, shared }) {
   const initialQr = rowsOf(rows)[0] || {};
@@ -15,6 +38,7 @@ export function QrTool({ panel, rows, shared }) {
   const [loading, setLoading] = useState(false);
   const QrIcon = icons.QrCode || icons.Box;
   const purpose = panel === 'santri' ? 'attendance' : 'identity';
+  const countdown = useCountdown(code ? expiresAt : '');
   const canScan = ['guru', 'musyrif', 'klinik', 'tu', 'akademik', 'keuangan', 'owner'].includes(panel);
 
   const generate = async () => {
@@ -46,10 +70,28 @@ export function QrTool({ panel, rows, shared }) {
         <p className="mb-4 text-sm leading-6 text-neutral-600">
           QR berlaku singkat dan sekali pakai. Jangan membagikannya melalui tangkapan layar.
         </p>
-        <div className="grid aspect-square max-w-xs place-items-center rounded-2xl border border-neutral-200 bg-white p-6">
-          {code ? <QRCodeSVG value={code} size={240} level="M" marginSize={2} title={purpose === 'attendance' ? 'QR presensi Pesantrenku' : 'QR identitas Pesantrenku'} /> : <div className="text-center text-sm text-neutral-500">Generate kode untuk menampilkan QR yang dapat dipindai.</div>}
+        <div className={`pk-qr-frame ${code ? 'has-code' : ''} ${countdown?.expired ? 'is-expired' : ''}`}>
+          {code ? (
+            <>
+              <QRCodeSVG value={code} size={240} level="M" marginSize={2} title={purpose === 'attendance' ? 'QR presensi Pesantrenku' : 'QR identitas Pesantrenku'} />
+              {countdown?.expired && <div className="pk-qr-expired" role="status"><icons.TriangleAlert className="h-5 w-5" aria-hidden="true" /><strong>QR kedaluwarsa</strong><span>Buat QR baru untuk melanjutkan.</span></div>}
+            </>
+          ) : (
+            <div className="pk-qr-placeholder">
+              <QrIcon className="h-10 w-10" aria-hidden="true" />
+              <div className="text-center text-sm text-neutral-500">Generate kode untuk menampilkan QR yang dapat dipindai.</div>
+            </div>
+          )}
         </div>
-        {expiresAt && <div className="mt-2 text-xs text-neutral-500">Berlaku sampai {formatCell(expiresAt, 'expires_at', shared)}</div>}
+        {countdown && (
+          <div className="pk-qr-timer mt-3 max-w-xs">
+            <div className="mb-1 flex items-center justify-between text-xs font-medium text-neutral-600">
+              <span>{countdown.expired ? 'Sudah kedaluwarsa' : 'Berlaku untuk'}</span>
+              <span className="font-mono tabular-nums" aria-hidden="true">{formatRemaining(countdown.remaining)}</span>
+            </div>
+            <progress className={`app-progress ${countdown.remaining < 30000 ? 'app-progress-tone-4' : ''}`} max={countdown.total} value={countdown.remaining} aria-label="Sisa masa berlaku QR" />
+          </div>
+        )}
         <button type="button" onClick={generate} disabled={loading} className="mt-4 inline-flex items-center gap-2 rounded-xl bg-primary-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
           {loading ? <icons.Loader2 className="h-4 w-4 animate-spin" /> : <QrIcon className="h-4 w-4" />}
           {code ? 'Perbarui QR' : 'Buat QR'}

@@ -923,3 +923,76 @@
     padding: 0.75rem 1.25rem 1rem;
     border-top: 1px solid var(--border);
 }
+
+/* -------------------------------------------------------------------- QR */
+
+.pk-qr-frame {
+    position: relative;
+    display: grid;
+    aspect-ratio: 1;
+    max-width: 20rem;
+    place-items: center;
+    padding: 1.5rem;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: #FFFFFF;
+    overflow: hidden;
+}
+
+.pk-qr-frame svg {
+    max-width: 100%;
+    height: auto;
+    transition: opacity 240ms ease, filter 240ms ease;
+}
+
+.pk-qr-frame:not(.has-code) {
+    border-style: dashed;
+    background: var(--surface-muted);
+}
+
+.pk-qr-placeholder {
+    display: grid;
+    justify-items: center;
+    gap: 0.75rem;
+    color: var(--muted);
+}
+
+.pk-qr-frame.is-expired svg {
+    opacity: 0.12;
+    filter: blur(3px);
+}
+
+.pk-qr-expired {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    align-content: center;
+    justify-items: center;
+    gap: 0.25rem;
+    padding: 1rem;
+    color: #8A5A0B;
+    text-align: center;
+}
+
+.pk-qr-expired span {
+    font-size: 0.8125rem;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    .pk-qr-frame.has-code:not(.is-expired) svg {
+        animation: pk-scale-in 360ms var(--pk-ease-out) both;
+    }
+
+    .pk-qr-placeholder svg {
+        animation: pk-pulse-soft 2.4s ease-in-out infinite;
+    }
+}
+
+[data-theme='dark'] .pk-qr-frame.has-code {
+    /* QR harus tetap hitam-di-atas-putih agar terbaca pemindai */
+    background: #FFFFFF;
+}
+
+[data-theme='dark'] .pk-qr-expired {
+    color: #8A5A0B;
+}
