@@ -149,6 +149,76 @@ test.describe('kebijakan reduced motion', () => {
   });
 });
 
+test.describe('kenyamanan', () => {
+  test.beforeEach(async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name !== 'chromium', 'Cukup diuji di desktop.');
+    await login(page, 'keuangan', 'keuangan@pesantenku.test');
+  });
+
+  test('sapaan personal dan pintasan halaman tampil di dashboard', async ({ page }) => {
+    await expect(page.getByRole('region', { name: 'Sapaan' })).toContainText(/Selamat (pagi|siang|sore|malam),/);
+    await expect(page.getByRole('group', { name: 'Pintasan halaman' }).getByRole('link').first()).toBeVisible();
+  });
+
+  test('kurangi animasi manual menyetel atribut dan bertahan', async ({ page }) => {
+    await page.getByLabel('Buka menu akun').click();
+    await page.getByRole('switch', { name: /Kurangi animasi/ }).click();
+    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.motion)).toBe('reduce');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    expect(await page.evaluate(() => document.documentElement.dataset.motion)).toBe('reduce');
+    const running = await page.evaluate(() => document.getAnimations().filter((a) => a.playState === 'running' && a.effect?.getTiming().iterations === Infinity).length);
+    expect(running).toBe(0);
+  });
+
+  test('banner offline muncul saat koneksi hilang dan pulih saat kembali', async ({ page, context }) => {
+    await context.setOffline(true);
+    await expect(page.getByText(/Anda sedang offline/)).toBeVisible();
+    await context.setOffline(false);
+    await expect(page.getByText('Koneksi pulih.')).toBeVisible();
+  });
+
+  test('panduan singkat dapat dibuka dari palet dan ditutup', async ({ page }) => {
+    await page.keyboard.press('Control+k');
+    await page.keyboard.type('panduan');
+    await page.keyboard.press('Enter');
+    const guide = page.getByRole('dialog', { name: 'Panduan singkat' });
+    await expect(guide).toBeVisible();
+    await guide.getByRole('button', { name: 'Mulai bekerja' }).click();
+    await expect(guide).toBeHidden();
+  });
+
+  test('menutup formulir yang sudah diisi meminta konfirmasi sebelum membuang', async ({ page }) => {
+    await page.goto('/keuangan/module/santri', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: /Tambah Santri/ }).click();
+    const dialog = page.getByRole('dialog', { name: /Tambah Santri/ });
+    await expect(dialog).toBeVisible();
+
+    // Tanpa perubahan: langsung tutup.
+    await page.getByLabel('Tutup modal').click();
+    await expect(dialog).toBeHidden();
+
+    await page.getByRole('button', { name: /Tambah Santri/ }).click();
+    await dialog.getByRole('textbox').first().fill('26-9999');
+    await page.getByLabel('Tutup modal').click();
+    await expect(page.getByText('Perubahan belum disimpan. Tutup tanpa menyimpan?')).toBeVisible();
+    await page.getByRole('button', { name: 'Lanjut mengedit' }).click();
+    await expect(dialog.getByRole('textbox').first()).toHaveValue('26-9999');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Buang perubahan' }).click();
+    await expect(dialog).toBeHidden();
+  });
+
+  test('kepadatan tabel dapat diubah dan disimpan', async ({ page }) => {
+    await page.goto('/keuangan/module/santri', { waitUntil: 'domcontentloaded' });
+    await page.getByRole('button', { name: 'Ringkas' }).click();
+    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.density)).toBe('compact');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    expect(await page.evaluate(() => document.documentElement.dataset.density)).toBe('compact');
+    await page.getByRole('button', { name: 'Nyaman' }).click();
+    await expect.poll(() => page.evaluate(() => document.documentElement.dataset.density)).toBeUndefined();
+  });
+});
+
 test.describe('ketahanan', () => {
   test('kegagalan memuat bagan ditangani error boundary dan dapat dicoba lagi', async ({ page }, testInfo) => {
     test.skip(testInfo.project.name !== 'chromium', 'Cukup diuji di desktop.');

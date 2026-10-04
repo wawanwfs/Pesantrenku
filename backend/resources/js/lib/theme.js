@@ -91,3 +91,46 @@ export function installPrintTheme() {
     restore = null;
   });
 }
+
+/* ----------------------------------------------------------- gerak & kepadatan */
+
+function useStoredAttribute(storageKey, attribute, activeValue) {
+  const [active, setActive] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem(storageKey) === activeValue;
+    } catch {
+      return false;
+    }
+  });
+
+  const set = useCallback((next) => {
+    try {
+      if (next) window.localStorage.setItem(storageKey, activeValue);
+      else window.localStorage.removeItem(storageKey);
+    } catch {
+      // Tetap berlaku untuk sesi ini walau penyimpanan diblokir.
+    }
+    if (next) document.documentElement.setAttribute(attribute, activeValue);
+    else document.documentElement.removeAttribute(attribute);
+    setActive(next);
+  }, [storageKey, attribute, activeValue]);
+
+  return [active, set];
+}
+
+/** Kurangi animasi secara manual (di luar pengaturan OS). Atribut: <html data-motion="reduce">. */
+export function useReducedMotionPreference() {
+  return useStoredAttribute('pk-motion', 'data-motion', 'reduce');
+}
+
+/** Kepadatan tabel: 'compact' memadatkan baris. Atribut: <html data-density="compact">. */
+export function useCompactDensity() {
+  return useStoredAttribute('pk-density', 'data-density', 'compact');
+}
+
+export function motionReduced() {
+  if (typeof window === 'undefined') return false;
+  return document.documentElement.getAttribute('data-motion') === 'reduce'
+    || (typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
+}

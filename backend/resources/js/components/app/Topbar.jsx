@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, router, icons } from '../../lib/deps.jsx';
-import { ThemeSegmented, ThemeToggleButton } from '../ThemeToggle.jsx';
+import { MotionSwitch, ThemeSegmented, ThemeToggleButton } from '../ThemeToggle.jsx';
 import { toast } from './toast.js';
 import { apiJson, panels, roleLabel, rowsOf, titleFromSlug } from './appSupport.jsx';
 
@@ -288,6 +288,7 @@ export function Topbar({ panel, auth, shared, app, onMenuOpen }) {
               <div className="mx-1 border-b border-neutral-100 px-3 py-3">
                 <div className="mb-1.5 text-xs font-medium text-neutral-500">Tampilan</div>
                 <ThemeSegmented />
+                <MotionSwitch />
               </div>
               <Link href={settingsHref} className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition hover:bg-neutral-50" onClick={() => setAccountOpen(false)}><icons.Settings className="h-4 w-4" /> Pengaturan</Link>
               <button type="button" onClick={logout} className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-red-600 transition hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200"><icons.LogOut className="h-4 w-4" /> Logout</button>

@@ -1,11 +1,8 @@
 import React, { useLayoutEffect, useRef } from 'react';
+import { motionReduced } from '../lib/theme.js';
 
 const NUMBER_PATTERN = /(\d{1,3}(?:\.\d{3})+|\d+)/g;
 const DATE_LIKE = /\d[-/:]\d|\d[-/:]$|^[-/:]\d/;
-
-function prefersReducedMotion() {
-  return typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-}
 
 function formatGrouped(number, grouped) {
   const digits = String(Math.round(number));
@@ -24,7 +21,7 @@ export default function AnimatedNumber({ value, className = '', duration = 900 }
 
   useLayoutEffect(() => {
     const element = ref.current;
-    if (!element || prefersReducedMotion() || DATE_LIKE.test(text)) return undefined;
+    if (!element || motionReduced() || DATE_LIKE.test(text)) return undefined;
     const tokens = [...text.matchAll(NUMBER_PATTERN)];
     if (!tokens.length || tokens.length > 2) return undefined;
     const targets = tokens.map((token) => ({

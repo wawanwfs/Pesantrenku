@@ -10,11 +10,13 @@ import CommandPalette from '../components/app/CommandPalette.jsx';
 import ShortcutsHelp from '../components/app/ShortcutsHelp.jsx';
 import ToastHost from '../components/app/ToastHost.jsx';
 import NavigationProgress from '../components/app/NavigationProgress.jsx';
+import OfflineBanner from '../components/app/OfflineBanner.jsx';
+import WelcomeGuide, { guideAlreadySeen } from '../components/app/WelcomeGuide.jsx';
 import ErrorBoundary from '../components/app/ErrorBoundary.jsx';
 import { useTheme } from '../lib/theme.js';
 import { SystemModule } from '../components/app/SystemModule.jsx';
 import { Topbar } from '../components/app/Topbar.jsx';
-import { ActivityFeed, ChartCard, ChartLoading, DataPreview, Header, LegendList, ProgressList, QuickActions, StatCard, Table, activityHref } from '../components/app/Widgets.jsx';
+import { ActivityFeed, ChartCard, ChartLoading, DataPreview, GreetingStrip, Header, LegendList, ProgressList, QuickActions, StatCard, Table, activityHref } from '../components/app/Widgets.jsx';
 import { DashboardDonutVisualization, DashboardLineVisualization } from '../components/app/lazyCharts.jsx';
 import { dashboardPreview, roleActionMeta, roleModuleMeta, rolePrimaryRows, roleSummaryIcon, roleSummaryTone, tabbedModuleMeta } from '../components/app/moduleMeta.jsx';
 
@@ -41,6 +43,7 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [guideOpen, setGuideOpen] = useState(false);
   const mobileNavRef = useDialogLifecycle(() => setMobileNavOpen(false), mobileNavOpen);
   const { toggle: toggleTheme } = useTheme();
 
@@ -86,7 +89,20 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [openPalette, toggleCollapsed, toggleTheme]);
 
-  const shell = useMemo(() => ({ panel, auth, openPalette }), [panel, auth, openPalette]);
+  const openGuide = useCallback(() => {
+    setPaletteOpen(false);
+    setGuideOpen(true);
+  }, []);
+
+  // Panduan otomatis sekali per peran; tidak pada peramban otomatis (uji e2e) kecuali diminta lewat ?guide=1.
+  useEffect(() => {
+    const forced = new URLSearchParams(window.location.search).get('guide') === '1';
+    if (!forced && (navigator.webdriver || guideAlreadySeen(panel))) return undefined;
+    const timer = window.setTimeout(() => setGuideOpen(true), 900);
+    return () => window.clearTimeout(timer);
+  }, [panel]);
+
+  const shell = useMemo(() => ({ panel, auth, app, openPalette, openGuide }), [panel, auth, app, openPalette, openGuide]);
 
   return (
     <ShellContext.Provider value={shell}>
@@ -107,6 +123,8 @@ export default function App({ panel = 'super-admin', screen = 'dashboard', modul
 
         <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} panel={panel} auth={auth} />
         <ShortcutsHelp open={helpOpen} onClose={() => setHelpOpen(false)} />
+        <WelcomeGuide open={guideOpen} onClose={() => setGuideOpen(false)} panel={panel} auth={auth} />
+        <OfflineBanner />
         <ToastHost />
       </div>
     </ShellContext.Provider>
@@ -123,6 +141,7 @@ function Dashboard({ dashboard, shared, panel }) {
   return (
     <div className="space-y-5">
       <Header title={dashboard.title} subtitle={dashboard.subtitle} />
+      <GreetingStrip />
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
         {dashboard.stats?.map((item) => <StatCard key={item.label} item={item} />)}
       </section>

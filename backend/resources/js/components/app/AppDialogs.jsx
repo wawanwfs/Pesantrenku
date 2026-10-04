@@ -687,7 +687,16 @@ function PdfTemplateModal({ shared, onClose, onSaved }) {
 function CrudModal({ meta, shared, formData, setFormData, editing, mode, saving, formErrors = {}, onSubmit, onClose, timeline = [], timelineLoading = false }) {
   const viewOnly = mode === 'view';
   const title = viewOnly ? `Detail ${meta.title}` : `${editing && mode === 'edit' ? 'Edit' : 'Tambah'} ${meta.title}`;
-  const dialogRef = useDialogLifecycle(onClose);
+  const initialSnapshot = useRef(null);
+  if (initialSnapshot.current === null) initialSnapshot.current = JSON.stringify(formData);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
+  const dirty = !viewOnly && !saving && JSON.stringify(formData) !== initialSnapshot.current;
+  // Tutup lewat Escape, latar, atau tombol: bila ada isian yang belum disimpan, minta konfirmasi dulu.
+  const requestClose = () => {
+    if (dirty) setConfirmingDiscard(true);
+    else onClose();
+  };
+  const dialogRef = useDialogLifecycle(requestClose);
 
   return (
     <div ref={dialogRef} className="fixed inset-0 z-50 grid place-items-center bg-neutral-950/45 p-4 backdrop-blur-sm" role="dialog" aria-modal="true" aria-label={title}>
@@ -697,15 +706,24 @@ function CrudModal({ meta, shared, formData, setFormData, editing, mode, saving,
             <h2 className="font-semibold tracking-tight">{title}</h2>
             <p className="text-xs text-neutral-500">{viewOnly ? 'Baca data tanpa mengubah isi.' : 'Isi data lalu simpan. Data langsung tersambung ke API.'}</p>
           </div>
-          <button type="button" onClick={onClose} className="rounded-xl border border-neutral-200 bg-white p-2 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button>
+          <button type="button" onClick={requestClose} className="rounded-xl border border-neutral-200 bg-white p-2 transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40" aria-label="Tutup modal"><icons.X className="h-4 w-4" /></button>
         </div>
         <form onSubmit={onSubmit} className="flex min-h-0 flex-1 flex-col">
           <div className="grid gap-4 overflow-y-auto p-5 md:grid-cols-2" tabIndex={0} role="region" aria-label="Detail data">
             {meta.fields.map((field) => <FieldInput key={field.name} field={field} shared={shared} value={formData[field.name]} disabled={viewOnly || (mode === 'edit' && ['permits', 'payments', 'medical-queues'].includes(meta.resource) && field.name === 'status')} error={formErrors[field.name]} onChange={(value) => setFormData((current) => ({ ...current, [field.name]: value }))} />)}
             {viewOnly && <div className="md:col-span-2"><TimelineList timeline={timeline} loading={timelineLoading} shared={shared} /></div>}
           </div>
+          {confirmingDiscard && (
+            <div className="pk-discard-bar flex flex-col gap-2 border-t border-amber-200 bg-amber-50 px-5 py-3 text-sm text-amber-800 sm:flex-row sm:items-center sm:justify-between" role="alertdialog" aria-label="Konfirmasi buang perubahan">
+              <span className="font-medium">Perubahan belum disimpan. Tutup tanpa menyimpan?</span>
+              <span className="flex gap-2">
+                <button type="button" onClick={() => setConfirmingDiscard(false)} className="ui-button ui-button-secondary min-h-9 text-xs" data-dialog-initial-focus>Lanjut mengedit</button>
+                <button type="button" onClick={onClose} className="ui-button min-h-9 bg-red-600 text-xs text-white hover:bg-red-700">Buang perubahan</button>
+              </span>
+            </div>
+          )}
           <div className="flex flex-col gap-2 border-t border-neutral-100 bg-neutral-50/80 px-5 py-4 sm:flex-row sm:justify-end">
-            <button type="button" onClick={onClose} className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium shadow-sm transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.X className="h-4 w-4" /> {viewOnly ? 'Tutup' : 'Batal'}</button>
+            <button type="button" onClick={requestClose} className="inline-flex items-center justify-center gap-2 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-medium shadow-sm transition hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-primary-500/40"><icons.X className="h-4 w-4" /> {viewOnly ? 'Tutup' : 'Batal'}</button>
             {!viewOnly && (
               <button type="submit" disabled={saving} className="inline-flex items-center justify-center gap-2 rounded-xl bg-primary-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2">
                 {saving ? <icons.Loader2 className="h-4 w-4 animate-spin" /> : <icons.Save className="h-4 w-4" />}

@@ -67,6 +67,11 @@ for (const theme of themes) {
     await ui.waitForTimeout(1000);
     await ui.keyboard.press('Control+k'); await scan('palet'); await ui.keyboard.press('Escape');
     await ui.keyboard.press('?'); await scan('bantuan'); await ui.keyboard.press('Escape');
+    await ui.goto(`${base}/dashboard/keuangan?guide=1`, { waitUntil: 'networkidle' });
+    await ui.waitForTimeout(1800);
+    await scan('panduan singkat'); await ui.keyboard.press('Escape');
+    await ui.goto(`${base}/keuangan/module/santri`, { waitUntil: 'networkidle' });
+    await ui.waitForTimeout(800);
     await ui.getByLabel('Buka menu akun').click(); await scan('menu akun'); await ui.keyboard.press('Escape'); await ui.mouse.click(5, 5);
     await ui.getByLabel('Buka notifikasi').click(); await scan('notifikasi'); await ui.mouse.click(5, 5);
     await ui.getByRole('button', { name: /Tambah Santri/ }).click(); await scan('modal tambah'); await ui.keyboard.press('Escape');

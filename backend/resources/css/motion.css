@@ -380,3 +380,16 @@
         scroll-behavior: auto !important;
     }
 }
+
+/* ---------------------------------------------------------------------------
+ * Preferensi manual "Kurangi animasi" (<html data-motion="reduce">)
+ * ------------------------------------------------------------------------ */
+
+[data-motion='reduce'] *,
+[data-motion='reduce'] *::before,
+[data-motion='reduce'] *::after {
+    animation: none !important;
+    animation-timeline: auto !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+}

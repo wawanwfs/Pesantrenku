@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { Link, router, icons } from '../../lib/deps.jsx';
 import AnimatedNumber from '../AnimatedNumber.jsx';
 import { useShell } from './ShellContext.jsx';
+import { useCompactDensity } from '../../lib/theme.js';
 import { clampPercent, colors, panels, roleLabel, rowsOf, rupiah, tone } from './appSupport.jsx';
 import { columnTitle, isVisibleTableColumn, PanelCard, renderCell, StatePanel } from './AppDialogs.jsx';
 
@@ -202,6 +203,50 @@ function TableSkeleton({ columns = 4, rows = 5 }) {
           {Array.from({ length: columns }, (_, index) => <i key={index} className={`pk-skeleton pk-w-${(row * 3 + index * 5) % 4}`} />)}
         </div>
       ))}
+    </div>
+  );
+}
+
+function greetingFor(date = new Date()) {
+  const hour = date.getHours();
+  if (hour < 4) return 'Selamat malam';
+  if (hour < 11) return 'Selamat pagi';
+  if (hour < 15) return 'Selamat siang';
+  if (hour < 18) return 'Selamat sore';
+  return 'Selamat malam';
+}
+
+/** Sapaan personal + pintasan ke tiga halaman pertama panel; murni presentasi dari data yang sudah ada. */
+export function GreetingStrip() {
+  const { panel, auth, app } = useShell();
+  const name = String(auth?.user?.name || '').trim().split(/\s+/)[0] || roleLabel(panel);
+  const today = new Intl.DateTimeFormat('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+  const shortcuts = (panels[panel]?.menu || []).filter(([label]) => label !== 'Dashboard').slice(0, 3);
+  return (
+    <section className="pk-greeting surface-panel p-4 sm:px-5" aria-label="Sapaan">
+      <div>
+        <p className="pk-greeting-title">{greetingFor()}, {name}.</p>
+        <p className="pk-greeting-meta">{today}{app?.academic_year ? ` · ${app.academic_year}` : ''}</p>
+      </div>
+      {shortcuts.length > 0 && (
+        <div className="pk-chips" role="group" aria-label="Pintasan halaman">
+          {shortcuts.map(([label, icon, href]) => {
+            const Icon = icons[icon] || icons.CircleCheck;
+            return <Link key={label} href={href} className="pk-chip"><Icon className="h-3.5 w-3.5" aria-hidden="true" />{label}</Link>;
+          })}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** Pilih kepadatan baris tabel; preferensi tersimpan di peramban. */
+export function DensityToggle() {
+  const [compact, setCompact] = useCompactDensity();
+  return (
+    <div className="pk-density" role="group" aria-label="Kepadatan tabel">
+      <button type="button" aria-pressed={!compact} onClick={() => setCompact(false)}>Nyaman</button>
+      <button type="button" aria-pressed={compact} onClick={() => setCompact(true)}>Ringkas</button>
     </div>
   );
 }

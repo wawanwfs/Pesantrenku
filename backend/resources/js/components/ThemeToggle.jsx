@@ -1,6 +1,6 @@
 import React from 'react';
 import { icons } from '../lib/deps.jsx';
-import { useTheme } from '../lib/theme.js';
+import { useReducedMotionPreference, useTheme } from '../lib/theme.js';
 
 const options = [
   ['light', 'Terang', 'Sun'],
@@ -36,5 +36,19 @@ export function ThemeSegmented() {
         );
       })}
     </div>
+  );
+}
+
+/** Sakelar "Kurangi animasi": menambah preferensi OS, tersimpan per peramban. */
+export function MotionSwitch() {
+  const [reduced, setReduced] = useReducedMotionPreference();
+  return (
+    <button type="button" role="switch" aria-checked={reduced} onClick={() => setReduced(!reduced)} className="pk-switch-row">
+      <span>
+        <span className="pk-switch-label">Kurangi animasi</span>
+        <span className="pk-switch-hint">Matikan gerak dekoratif</span>
+      </span>
+      <span className={`pk-switch ${reduced ? 'is-on' : ''}`} aria-hidden="true"><span /></span>
+    </button>
   );
 }

@@ -3,6 +3,7 @@ import { router, icons } from '../../lib/deps.jsx';
 import { panels } from './appSupport.jsx';
 import { useDialogLifecycle } from './AppDialogs.jsx';
 import { useTheme } from '../../lib/theme.js';
+import { useShell } from './ShellContext.jsx';
 
 const RECENT_KEY = 'pk-palette-recent';
 const MAX_RECENT = 5;
@@ -68,6 +69,7 @@ export default function CommandPalette({ open, onClose, panel, auth }) {
   const listRef = useRef(null);
   const dialogRef = useDialogLifecycle(onClose, open);
   const { resolved, toggle } = useTheme();
+  const { openGuide } = useShell();
   const memberships = Array.isArray(auth?.memberships) ? auth.memberships : Object.values(auth?.memberships || {});
   const activeTenantId = auth?.active_pesantren?.id;
 
@@ -85,6 +87,7 @@ export default function CommandPalette({ open, onClose, panel, auth }) {
         id: 'action:theme', group: 'Tindakan', label: resolved === 'dark' ? 'Beralih ke mode terang' : 'Beralih ke mode gelap',
         icon: resolved === 'dark' ? 'Sun' : 'Moon', keywords: 'tema tampilan gelap terang dark light', hint: 'T', run: toggle, keepOpen: false,
       },
+      { id: 'action:guide', group: 'Tindakan', label: 'Tampilkan panduan singkat', icon: 'Inbox', keywords: 'bantuan tutorial panduan onboarding', hint: 'Pengenalan', run: openGuide },
       { id: 'action:logout', group: 'Tindakan', label: 'Keluar dari akun', icon: 'LogOut', keywords: 'logout keluar sign out', hint: 'Akhiri sesi', run: () => router.post('/logout') },
     ];
     const tenants = memberships
@@ -95,7 +98,7 @@ export default function CommandPalette({ open, onClose, panel, auth }) {
         run: () => router.post('/tenant/switch', { pesantren_id: Number(item.id) }, { preserveScroll: true }),
       }));
     return [...pages, ...tenants, ...actions];
-  }, [panel, memberships.length, activeTenantId, resolved, toggle]);
+  }, [panel, memberships.length, activeTenantId, resolved, toggle, openGuide]);
 
   const tokens = useMemo(() => query.trim().toLowerCase().split(/\s+/).filter(Boolean), [query]);
 
